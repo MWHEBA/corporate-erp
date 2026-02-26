@@ -1,0 +1,175 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}تسجيل إذن جديد{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  {% include "shared/page_header.html" %}
+
+  <div class="row">
+    <div class="col-md-8">
+        <div class="section-container">
+            <h5 class="mb-3"><i class="fas fa-edit me-2"></i>بيانات الإذن</h5>
+            
+            <form method="post" id="permissionRequestForm">
+                {% csrf_token %}
+                
+                {% if form.non_field_errors %}
+                <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+                {% endif %}
+                
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <label class="form-label">الموظف *</label>
+                        {{ form.employee }}
+                        {% if form.employee.errors %}
+                        <div class="text-danger small">{{ form.employee.errors }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <label class="form-label">نوع الإذن *</label>
+                        {{ form.permission_type }}
+                        {% if form.permission_type.errors %}
+                        <div class="text-danger small">{{ form.permission_type.errors }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <label class="form-label">التاريخ *</label>
+                        {{ form.date }}
+                        {% if form.date.errors %}
+                        <div class="text-danger small">{{ form.date.errors }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">وقت البداية *</label>
+                        {{ form.start_time }}
+                        {% if form.start_time.errors %}
+                        <div class="text-danger small">{{ form.start_time.errors }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">وقت النهاية *</label>
+                        {{ form.end_time }}
+                        {% if form.end_time.errors %}
+                        <div class="text-danger small">{{ form.end_time.errors }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <div class="alert alert-info" id="durationInfo" style="display:none;">
+                            <i class="fas fa-clock me-2"></i>
+                            <strong>المدة:</strong> <span id="durationValue">0</span> ساعة
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <label class="form-label">السبب *</label>
+                        {{ form.reason }}
+                        {% if form.reason.errors %}
+                        <div class="text-danger small">{{ form.reason.errors }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <div class="form-check">
+                            {{ form.is_emergency }}
+                            <label class="form-check-label" for="{{ form.is_emergency.id_for_label }}">
+                                ظرف طارئ
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <div class="row">
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-2"></i>تسجيل الإذن
+                        </button>
+                        <a href="{% url 'hr:permission_list' %}" class="btn btn-secondary">
+                            <i class="fas fa-times me-2"></i>إلغاء
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="section-container">
+            <h5 class="mb-3"><i class="fas fa-info-circle me-2"></i>معلومات الحصة الشهرية</h5>
+            <div class="alert alert-info">
+                <p><strong>الحد الأقصى الشهري:</strong></p>
+                <ul class="mb-0">
+                    <li>4 أذونات في الشهر</li>
+                    <li>12 ساعة في الشهر</li>
+                    <li>4 ساعات كحد أقصى للإذن الواحد</li>
+                </ul>
+            </div>
+            <div id="quotaInfo" style="display:none;">
+                <p><strong>الاستخدام الحالي:</strong></p>
+                <ul>
+                    <li>الأذونات: <span id="usedCount">0</span> / 4</li>
+                    <li>الساعات: <span id="usedHours">0</span> / 12</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // حساب المدة تلقائياً
+    function calculateDuration() {
+        const startTime = $('#id_start_time').val();
+        const endTime = $('#id_end_time').val();
+        
+        if (startTime && endTime) {
+            const start = new Date('2000-01-01 ' + startTime);
+            const end = new Date('2000-01-01 ' + endTime);
+            const diff = (end - start) / (1000 * 60 * 60);
+            
+            if (diff > 0) {
+                $('#durationValue').text(diff.toFixed(2));
+                $('#durationInfo').show();
+            } else {
+                $('#durationInfo').hide();
+            }
+        }
+    }
+    
+    $('#id_start_time, #id_end_time').on('change', calculateDuration);
+    
+    // جلب معلومات الحصة عند اختيار الموظف
+    $('#id_employee').on('change', function() {
+        const employeeId = $(this).val();
+        const date = $('#id_date').val() || new Date().toISOString().split('T')[0];
+        
+        if (employeeId) {
+            // يمكن إضافة AJAX call هنا لجلب معلومات الحصة
+            $('#quotaInfo').show();
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,13 @@
+[
+  {
+    "model": "product.category",
+    "pk": 1,
+    "fields": {
+      "name": "أجبان",
+      "code": null,
+      "description": "",
+      "parent": null,
+      "is_active": true
+    }
+  }
+]

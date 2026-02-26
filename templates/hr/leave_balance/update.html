@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load i18n %}
+{% load custom_filters %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block extra_css %}
+<!-- جميع الستايلات موجودة في shared-components.css و components.css -->
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header المركزي -->
+    {% include "shared/page_header.html" %}
+
+  <div class="row">
+      <div class="col-lg-6">
+          <div class="section-container">
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label class="form-label">الموظف</label>
+                            <select class="form-select" name="employee_id" required>
+                                <option value="">اختر الموظف</option>
+                                {% for employee in employees %}
+                                <option value="{{ employee.pk }}">{{ employee.get_full_name_ar }} - {{ employee.employee_number }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">نوع الإجازة</label>
+                            <select class="form-select" name="leave_type_id" required>
+                                <option value="">اختر نوع الإجازة</option>
+                                {% for leave_type in leave_types %}
+                                <option value="{{ leave_type.pk }}">{{ leave_type.name_ar }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">السنة</label>
+                            <input type="number" class="form-control" name="year" value="{{ current_year }}" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">إجمالي الأيام</label>
+                            <input type="number" class="form-control" name="total_days" required>
+                        </div>
+
+                        <div class="mt-4">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i>
+                                حفظ
+                            </button>
+                            <a href="{% url 'hr:leave_balance_list' %}" class="btn btn-secondary">
+                                <i class="fas fa-times me-2"></i>
+                                إلغاء
+                            </a>
+                        </div>
+                    </form>
+          </div>
+      </div>
+
+      <div class="col-lg-6">
+          <div class="section-container">
+              <h5 class="section-title"><i class="fas fa-info-circle me-2"></i>ملاحظات</h5>
+                    <ul class="list-unstyled">
+                        <li class="mb-2">
+                            <i class="fas fa-info-circle text-info me-2"></i>
+                            سيتم إنشاء رصيد جديد إذا لم يكن موجوداً
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-info-circle text-info me-2"></i>
+                            سيتم تحديث الرصيد المتبقي تلقائياً
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-info-circle text-info me-2"></i>
+                            الأيام المستخدمة لن تتأثر بالتحديث
+                        </li>
+                    </ul>
+          </div>
+      </div>
+  </div>
+</div>
+{% endblock %}

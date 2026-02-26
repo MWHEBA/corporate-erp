@@ -1,0 +1,314 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load i18n %}
+{% load utils_extras %}
+
+{% block title %}{{ title }} | {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/shared-components.css' %}">
+<link rel="stylesheet" href="{% static 'css/unified-components.css' %}">
+<link rel="stylesheet" href="{% static 'css/governance.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    {% csrf_token %}
+    
+    <!-- Page Header -->
+    {% include "shared/page_header.html" with title=title subtitle=subtitle icon=icon header_buttons=header_buttons %}
+    
+    <!-- Breadcrumb -->
+    {% include "shared/breadcrumb.html" with items=breadcrumb_items %}
+    
+    <!-- Quick Stats Cards -->
+    <div class="section-container">
+        <h5 class="section-title"><i class="fas fa-chart-bar me-2"></i>الإحصائيات السريعة</h5>
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <div class="stats-card stats-card-primary">
+                    <div class="stats-card-body">
+                        <div class="stats-card-icon"><i class="fas fa-shield-alt"></i></div>
+                        <div class="stats-card-title">صحة النظام</div>
+                        <div class="stats-card-value">{{ system_health_score|default:85 }}%</div>
+                        <div class="stats-card-unit">نقطة</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="stats-card stats-card-info">
+                    <div class="stats-card-body">
+                        <div class="stats-card-icon"><i class="fas fa-clipboard-list"></i></div>
+                        <div class="stats-card-title">سجلات التدقيق</div>
+                        <div class="stats-card-value">{{ total_audit_records|smart_float }}</div>
+                        <div class="stats-card-unit">سجل</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="stats-card stats-card-warning">
+                    <div class="stats-card-body">
+                        <div class="stats-card-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                        <div class="stats-card-title">التنبيهات النشطة</div>
+                        <div class="stats-card-value">{{ active_alerts|default:0 }}</div>
+                        <div class="stats-card-unit">تنبيه</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Governance Overview -->
+    <div class="section-container mb-4">
+        <h5 class="section-title" data-bs-toggle="collapse" data-bs-target="#governanceOverview" aria-expanded="true">
+            <i class="fas fa-cogs me-2"></i>نظرة عامة على الحوكمة<i class="fas fa-chevron-down float-end"></i>
+        </h5>
+        <div class="collapse show" id="governanceOverview">
+            <div class="row">
+                <div class="col-lg-6 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">
+                                <i class="fas fa-clipboard-check me-2"></i>إدارة التدقيق والسجلات
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted mb-3">تتبع جميع العمليات والتغييرات في النظام</p>
+                            <div class="row text-center">
+                                <div class="col-6">
+                                    <div class="metric-box">
+                                        <div class="metric-value">{{ recent_audit_records|default:0 }}</div>
+                                        <div class="metric-label">سجلات حديثة</div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="metric-box">
+                                        <div class="metric-value">{{ quarantined_items|default:0 }}</div>
+                                        <div class="metric-label">عناصر محجورة</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-3">
+                                <a href="{% url 'governance:audit_management' %}" class="btn btn-outline-primary btn-sm">
+                                    <i class="fas fa-eye me-1"></i>عرض التفاصيل
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-6 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">
+                                <i class="fas fa-heartbeat me-2"></i>صحة النظام والأداء
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted mb-3">مراقبة شاملة لحالة النظام ومؤشرات الأداء</p>
+                            <div class="row text-center">
+                                <div class="col-6">
+                                    <div class="metric-box">
+                                        <div class="metric-value text-danger">{{ system_errors|default:0 }}</div>
+                                        <div class="metric-label">أخطاء النظام</div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="metric-box">
+                                        <div class="metric-value text-success">99.5%</div>
+                                        <div class="metric-label">وقت التشغيل</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-3">
+                                <a href="{% url 'governance:system_health' %}" class="btn btn-outline-success btn-sm">
+                                    <i class="fas fa-chart-line me-1"></i>عرض التفاصيل
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Security and Backup -->
+    <div class="section-container mb-4">
+        <h5 class="section-title" data-bs-toggle="collapse" data-bs-target="#securityBackup" aria-expanded="false">
+            <i class="fas fa-lock me-2"></i>الأمان والنسخ الاحتياطي<i class="fas fa-chevron-down float-end"></i>
+        </h5>
+        <div class="collapse" id="securityBackup">
+            <div class="row">
+                <div class="col-lg-6 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">
+                                <i class="fas fa-shield-alt me-2"></i>مركز الأمان والحوادث
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted mb-3">مراقبة الانتهاكات الأمنية وإدارة الحوادث</p>
+                            <div class="alert alert-success" role="alert">
+                                <i class="fas fa-check-circle me-2"></i>
+                                لا توجد انتهاكات أمنية حديثة
+                            </div>
+                            <div class="mt-3">
+                                <a href="{% url 'governance:security_center' %}" class="btn btn-outline-warning btn-sm">
+                                    <i class="fas fa-shield-alt me-1"></i>مركز الأمان
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-6 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">
+                                <i class="fas fa-database me-2"></i>النسخ الاحتياطي والاستعادة
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted mb-3">حماية البيانات والاستعادة السريعة</p>
+                            <div class="row text-center">
+                                <div class="col-6">
+                                    <div class="metric-box">
+                                        <div class="metric-value text-success">اليوم</div>
+                                        <div class="metric-label">آخر نسخة</div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="metric-box">
+                                        <div class="metric-value">15</div>
+                                        <div class="metric-label">نسخة متاحة</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-3">
+                                <a href="{% url 'core:backup_management' %}" class="btn btn-outline-info btn-sm">
+                                    <i class="fas fa-database me-1"></i>إدارة النسخ
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Advanced Management -->
+    <div class="section-container mb-4">
+        <h5 class="section-title" data-bs-toggle="collapse" data-bs-target="#advancedManagement" aria-expanded="false">
+            <i class="fas fa-tools me-2"></i>الإدارة المتقدمة<i class="fas fa-chevron-down float-end"></i>
+        </h5>
+        <div class="collapse" id="advancedManagement">
+            <div class="row">
+                <div class="col-lg-4 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">
+                                <i class="fas fa-broadcast-tower me-2"></i>الإشارات والأذونات
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted mb-3">مراقبة العمليات التلقائية وإدارة الصلاحيات</p>
+                            <div class="mt-3">
+                                <a href="{% url 'governance:signals_management' %}" class="btn btn-outline-primary btn-sm">
+                                    <i class="fas fa-cogs me-1"></i>إدارة الإشارات
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">
+                                <i class="fas fa-chart-line me-2"></i>التقارير المتقدمة
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted mb-3">إنشاء تقارير مخصصة وجدولة التقارير</p>
+                            <div class="mt-3">
+                                <a href="{% url 'governance:reports_builder' %}" class="btn btn-outline-success btn-sm">
+                                    <i class="fas fa-chart-bar me-1"></i>بناء التقارير
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">
+                                <i class="fas fa-bell me-2"></i>الإشعارات المتقدمة
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted mb-3">إدارة شاملة للإشعارات والقوالب</p>
+                            <div class="mt-3">
+                                <a href="{% url 'governance:notifications_center' %}" class="btn btn-outline-warning btn-sm">
+                                    <i class="fas fa-bell me-1"></i>مركز الإشعارات
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Quick Actions -->
+    <div class="section-container">
+        <h5 class="section-title"><i class="fas fa-bolt me-2"></i>إجراءات سريعة</h5>
+        <div class="row">
+            <div class="col-md-3 mb-2">
+                <a href="{% url 'governance:system_health' %}" class="btn btn-outline-success w-100">
+                    <i class="fas fa-heartbeat me-2"></i>فحص صحة النظام
+                </a>
+            </div>
+            <div class="col-md-3 mb-2">
+                <a href="{% url 'core:backup_management' %}" class="btn btn-outline-info w-100">
+                    <i class="fas fa-database me-2"></i>نسخة احتياطية
+                </a>
+            </div>
+            <div class="col-md-3 mb-2">
+                <a href="{% url 'governance:security_center' %}" class="btn btn-outline-warning w-100">
+                    <i class="fas fa-shield-alt me-2"></i>فحص الأمان
+                </a>
+            </div>
+            <div class="col-md-3 mb-2">
+                <a href="{% url 'governance:audit_management' %}" class="btn btn-outline-primary w-100">
+                    <i class="fas fa-clipboard-list me-2"></i>سجلات التدقيق
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/global-table.js' %}"></script>
+<script>
+$(document).ready(function() {
+    // Auto-refresh health score every 30 seconds
+    setInterval(function() {
+        // This could be enhanced to fetch real-time data
+    }, 30000);
+    
+    // Initialize collapsible sections
+    $('.section-title[data-bs-toggle="collapse"]').on('click', function() {
+        const icon = $(this).find('.fa-chevron-down');
+        const isExpanded = $(this).attr('aria-expanded') === 'true';
+        
+        if (isExpanded) {
+            icon.removeClass('fa-chevron-down').addClass('fa-chevron-up');
+        } else {
+            icon.removeClass('fa-chevron-up').addClass('fa-chevron-down');
+        }
+    });
+});
+</script>
+{% endblock %}

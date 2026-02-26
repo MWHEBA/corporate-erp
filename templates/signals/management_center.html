@@ -1,0 +1,471 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load i18n %}
+{% load utils_extras %}
+
+{% block title %}{{ title }} | {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/shared-components.css' %}">
+<link rel="stylesheet" href="{% static 'css/unified-components.css' %}">
+<link rel="stylesheet" href="{% static 'css/governance.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    {% csrf_token %}
+    
+    <!-- Page Header -->
+    {% include "shared/page_header.html" with title=title subtitle=subtitle icon=icon %}
+    
+    <!-- Breadcrumb -->
+    {% include "shared/breadcrumb.html" with items=breadcrumb_items %}
+    
+    <!-- Signals Overview -->
+    <div class="section-container">
+        <h5 class="section-title"><i class="fas fa-broadcast-tower me-2"></i>نظرة عامة على الإشارات</h5>
+        <div class="row">
+            <div class="col-md-3 mb-3">
+                <div class="stats-card stats-card-primary">
+                    <div class="stats-card-body">
+                        <div class="stats-card-icon"><i class="fas fa-signal"></i></div>
+                        <div class="stats-card-title">إشارات نشطة</div>
+                        <div class="stats-card-value">47</div>
+                        <div class="stats-card-unit">إشارة</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stats-card stats-card-success">
+                    <div class="stats-card-body">
+                        <div class="stats-card-icon"><i class="fas fa-check-circle"></i></div>
+                        <div class="stats-card-title">إشارات ناجحة</div>
+                        <div class="stats-card-value">1,234</div>
+                        <div class="stats-card-unit">اليوم</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stats-card stats-card-danger">
+                    <div class="stats-card-body">
+                        <div class="stats-card-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                        <div class="stats-card-title">إشارات فاشلة</div>
+                        <div class="stats-card-value">3</div>
+                        <div class="stats-card-unit">اليوم</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stats-card stats-card-warning">
+                    <div class="stats-card-body">
+                        <div class="stats-card-icon"><i class="fas fa-pause-circle"></i></div>
+                        <div class="stats-card-title">إشارات معطلة</div>
+                        <div class="stats-card-value">2</div>
+                        <div class="stats-card-unit">إشارة</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Active Signals Management -->
+    <div class="section-container mb-4">
+        <h5 class="section-title" data-bs-toggle="collapse" data-bs-target="#activeSignals" aria-expanded="true">
+            <i class="fas fa-list me-2"></i>إدارة الإشارات النشطة<i class="fas fa-chevron-down float-end"></i>
+        </h5>
+        <div class="collapse show" id="activeSignals">
+            <div class="card">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="signalsTable">
+                            <thead>
+                                <tr>
+                                    <th class="text-center">اسم الإشارة</th>
+                                    <th class="text-center">الموديول</th>
+                                    <th class="text-center">النوع</th>
+                                    <th class="text-center">الأولوية</th>
+                                    <th class="text-center">آخر تنفيذ</th>
+                                    <th class="text-center">معدل النجاح</th>
+                                    <th class="text-center">الحالة</th>
+                                    <th class="text-center">الإجراءات</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="text-center"><code>customer_account_creation</code></td>
+                                    <td class="text-center">Clients</td>
+                                    <td class="text-center"><span class="badge bg-info">post_save</span></td>
+                                    <td class="text-center"><span class="badge bg-danger">حرج</span></td>
+                                    <td class="text-center">منذ 5 دقائق</td>
+                                    <td class="text-center">
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar bg-success" style="width: 98%">98%</div>
+                                        </div>
+                                    </td>
+                                    <td class="text-center"><span class="badge bg-success">نشط</span></td>
+                                    <td class="text-center">
+                                        <button class="btn btn-outline-warning btn-sm" onclick="toggleSignal('customer_account_creation', false)">
+                                            <i class="fas fa-pause"></i>
+                                        </button>
+                                        <button class="btn btn-outline-info btn-sm" onclick="viewSignalDetails('customer_account_creation')">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="text-center"><code>payment_processing</code></td>
+                                    <td class="text-center">Financial</td>
+                                    <td class="text-center"><span class="badge bg-info">post_save</span></td>
+                                    <td class="text-center"><span class="badge bg-danger">حرج</span></td>
+                                    <td class="text-center">منذ دقيقتين</td>
+                                    <td class="text-center">
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar bg-success" style="width: 100%">100%</div>
+                                        </div>
+                                    </td>
+                                    <td class="text-center"><span class="badge bg-success">نشط</span></td>
+                                    <td class="text-center">
+                                        <button class="btn btn-outline-warning btn-sm" onclick="toggleSignal('payment_processing', false)">
+                                            <i class="fas fa-pause"></i>
+                                        </button>
+                                        <button class="btn btn-outline-info btn-sm" onclick="viewSignalDetails('payment_processing')">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="text-center"><code>activity_enrollment</code></td>
+                                    <td class="text-center">Activities</td>
+                                    <td class="text-center"><span class="badge bg-primary">pre_save</span></td>
+                                    <td class="text-center"><span class="badge bg-warning">متوسط</span></td>
+                                    <td class="text-center">منذ 15 دقيقة</td>
+                                    <td class="text-center">
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar bg-warning" style="width: 85%">85%</div>
+                                        </div>
+                                    </td>
+                                    <td class="text-center"><span class="badge bg-warning">معطل</span></td>
+                                    <td class="text-center">
+                                        <button class="btn btn-outline-success btn-sm" onclick="toggleSignal('activity_enrollment', true)">
+                                            <i class="fas fa-play"></i>
+                                        </button>
+                                        <button class="btn btn-outline-info btn-sm" onclick="viewSignalDetails('activity_enrollment')">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Signal Performance Monitoring -->
+    <div class="section-container mb-4">
+        <h5 class="section-title" data-bs-toggle="collapse" data-bs-target="#signalPerformance" aria-expanded="false">
+            <i class="fas fa-chart-line me-2"></i>مراقبة أداء الإشارات<i class="fas fa-chevron-down float-end"></i>
+        </h5>
+        <div class="collapse" id="signalPerformance">
+            <div class="row">
+                <div class="col-lg-8 mb-3">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">
+                                <i class="fas fa-clock me-2"></i>أوقات التنفيذ (آخر 24 ساعة)
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th class="text-center">الإشارة</th>
+                                            <th class="text-center">متوسط الوقت</th>
+                                            <th class="text-center">أقصى وقت</th>
+                                            <th class="text-center">عدد التنفيذات</th>
+                                            <th class="text-center">الحالة</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td class="text-center"><code>customer_account_creation</code></td>
+                                            <td class="text-center">0.15 ثانية</td>
+                                            <td class="text-center">0.45 ثانية</td>
+                                            <td class="text-center">156</td>
+                                            <td class="text-center"><span class="badge bg-success">ممتاز</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-center"><code>payment_processing</code></td>
+                                            <td class="text-center">0.08 ثانية</td>
+                                            <td class="text-center">0.12 ثانية</td>
+                                            <td class="text-center">89</td>
+                                            <td class="text-center"><span class="badge bg-success">ممتاز</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-center"><code>activity_enrollment</code></td>
+                                            <td class="text-center">1.2 ثانية</td>
+                                            <td class="text-center">3.5 ثانية</td>
+                                            <td class="text-center">23</td>
+                                            <td class="text-center"><span class="badge bg-warning">بطيء</span></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">
+                                <i class="fas fa-exclamation-triangle me-2"></i>تنبيهات الأداء
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-warning" role="alert">
+                                <strong>تحذير:</strong> الإشارة <code>activity_enrollment</code> تستغرق وقتاً أطول من المعتاد
+                            </div>
+                            <div class="alert alert-info" role="alert">
+                                <strong>معلومة:</strong> جميع الإشارات الحرجة تعمل بشكل طبيعي
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Permissions Management -->
+    <div class="section-container mb-4">
+        <h5 class="section-title" data-bs-toggle="collapse" data-bs-target="#permissionsManagement" aria-expanded="false">
+            <i class="fas fa-user-shield me-2"></i>إدارة الأذونات والصلاحيات<i class="fas fa-chevron-down float-end"></i>
+        </h5>
+        <div class="collapse" id="permissionsManagement">
+            <div class="row">
+                <div class="col-lg-6 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">
+                                <i class="fas fa-users me-2"></i>الأدوار النشطة
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="list-group list-group-flush">
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>مدير النظام</strong>
+                                        <br><small class="text-muted">صلاحيات كاملة</small>
+                                    </div>
+                                    <div>
+                                        <span class="badge bg-primary me-2">3 مستخدمين</span>
+                                        <button class="btn btn-outline-primary btn-sm" onclick="editRole('admin')">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>مدير مالي</strong>
+                                        <br><small class="text-muted">إدارة الرسوم والمدفوعات</small>
+                                    </div>
+                                    <div>
+                                        <span class="badge bg-info me-2">5 مستخدمين</span>
+                                        <button class="btn btn-outline-primary btn-sm" onclick="editRole('financial_manager')">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>مدير عام</strong>
+                                        <br><small class="text-muted">إدارة العمليات والموظفين</small>
+                                    </div>
+                                    <div>
+                                        <span class="badge bg-success me-2">8 مستخدمين</span>
+                                        <button class="btn btn-outline-primary btn-sm" onclick="editRole('academic_manager')">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>مستخدم عادي</strong>
+                                        <br><small class="text-muted">صلاحيات محدودة</small>
+                                    </div>
+                                    <div>
+                                        <span class="badge bg-secondary me-2">12 مستخدمين</span>
+                                        <button class="btn btn-outline-primary btn-sm" onclick="editRole('user')">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-6 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">
+                                <i class="fas fa-key me-2"></i>الصلاحيات الحرجة
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="list-group list-group-flush">
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>إدارة النظام</strong>
+                                        <br><small class="text-muted">تعديل إعدادات النظام</small>
+                                    </div>
+                                    <span class="badge bg-danger">3 مستخدمين</span>
+                                </div>
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>إدارة المستخدمين</strong>
+                                        <br><small class="text-muted">إضافة وحذف المستخدمين</small>
+                                    </div>
+                                    <span class="badge bg-warning">5 مستخدمين</span>
+                                </div>
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>إدارة النسخ الاحتياطي</strong>
+                                        <br><small class="text-muted">إنشاء واستعادة النسخ</small>
+                                    </div>
+                                    <span class="badge bg-info">2 مستخدمين</span>
+                                </div>
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>عرض التقارير المالية</strong>
+                                        <br><small class="text-muted">الوصول للتقارير الحساسة</small>
+                                    </div>
+                                    <span class="badge bg-success">8 مستخدمين</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Quick Actions -->
+    <div class="section-container">
+        <h5 class="section-title"><i class="fas fa-bolt me-2"></i>إجراءات سريعة</h5>
+        <div class="row">
+            <div class="col-md-3 mb-2">
+                <button class="btn btn-outline-success w-100" onclick="enableAllSignals()">
+                    <i class="fas fa-play me-2"></i>تفعيل جميع الإشارات
+                </button>
+            </div>
+            <div class="col-md-3 mb-2">
+                <button class="btn btn-outline-warning w-100" onclick="pauseCriticalSignals()">
+                    <i class="fas fa-pause me-2"></i>إيقاف الإشارات الحرجة
+                </button>
+            </div>
+            <div class="col-md-3 mb-2">
+                <button class="btn btn-outline-info w-100" onclick="exportSignalsReport()">
+                    <i class="fas fa-download me-2"></i>تقرير الإشارات
+                </button>
+            </div>
+            <div class="col-md-3 mb-2">
+                <button class="btn btn-outline-primary w-100" onclick="refreshSignalsStatus()">
+                    <i class="fas fa-sync me-2"></i>تحديث الحالة
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/global-table.js' %}"></script>
+<script>
+$(document).ready(function() {
+    // Initialize DataTable
+    if (typeof GlobalTableManager !== 'undefined') {
+        GlobalTableManager.initializeTable('signalsTable', {
+            order: [[4, 'desc']], // Sort by last execution
+            columnDefs: [
+                { targets: -1, orderable: false }, // Actions column
+                { targets: [5], orderable: false }  // Progress bars
+            ],
+            language: {
+                "search": "البحث:",
+                "lengthMenu": "عرض _MENU_ إشارة",
+                "info": "عرض _START_ إلى _END_ من _TOTAL_ إشارة",
+                "paginate": {
+                    "first": "الأول",
+                    "last": "الأخير",
+                    "next": "التالي",
+                    "previous": "السابق"
+                }
+            }
+        });
+    }
+    
+    // Initialize collapsible sections
+    $('.section-title[data-bs-toggle="collapse"]').on('click', function() {
+        const icon = $(this).find('.fa-chevron-down');
+        const isExpanded = $(this).attr('aria-expanded') === 'true';
+        
+        if (isExpanded) {
+            icon.removeClass('fa-chevron-down').addClass('fa-chevron-up');
+        } else {
+            icon.removeClass('fa-chevron-up').addClass('fa-chevron-down');
+        }
+    });
+    
+    // Auto-refresh signals status every 30 seconds
+    setInterval(refreshSignalsStatus, 30000);
+});
+
+function toggleSignal(signalName, enable) {
+    const action = enable ? 'تفعيل' : 'إيقاف';
+    if (confirm(`هل أنت متأكد من ${action} الإشارة ${signalName}؟`)) {
+        alert(`جاري ${action} الإشارة ${signalName}...`);
+        // Here you would make an AJAX call to toggle the signal
+        setTimeout(() => {
+            location.reload();
+        }, 1000);
+    }
+}
+
+function viewSignalDetails(signalName) {
+    alert(`عرض تفاصيل الإشارة: ${signalName}`);
+    // Here you would open a modal or navigate to details page
+}
+
+function editRole(roleName) {
+    alert(`تعديل الدور: ${roleName}`);
+    // Here you would open role editing interface
+}
+
+function enableAllSignals() {
+    if (confirm('هل أنت متأكد من تفعيل جميع الإشارات؟')) {
+        alert('جاري تفعيل جميع الإشارات...');
+    }
+}
+
+function pauseCriticalSignals() {
+    if (confirm('هل أنت متأكد من إيقاف الإشارات الحرجة مؤقتاً؟ هذا قد يؤثر على النظام.')) {
+        alert('جاري إيقاف الإشارات الحرجة...');
+    }
+}
+
+function exportSignalsReport() {
+    alert('جاري تصدير تقرير الإشارات...');
+}
+
+function refreshSignalsStatus() {
+    alert('جاري تحديث حالة الإشارات...');
+    // Here you would refresh the signals data
+    setTimeout(() => {
+        location.reload();
+    }, 1000);
+}
+</script>
+{% endblock %}

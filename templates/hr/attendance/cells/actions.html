@@ -1,0 +1,12 @@
+<a href="{% url 'hr:attendance_summary_detail' object.summary_id %}" class="btn btn-sm btn-outline-primary" title="عرض الملخص الشهري">
+    <i class="fas fa-file-alt"></i>
+</a>
+
+<button type="button" 
+        class="btn btn-sm btn-outline-info show-movements-btn" 
+        data-employee-name="{{ object.employee.get_full_name_ar }}"
+        data-date="{{ object.date|date:'Y-m-d' }}"
+        data-movements='[{% for movement in object.movements %}{"time":"{{ movement|date:"g:i:s A" }}","is_first":{% if forloop.first %}true{% else %}false{% endif %},"is_last":{% if forloop.last %}true{% else %}false{% endif %}}{% if not forloop.last %},{% endif %}{% endfor %}]'
+        title="عرض جميع الحركات">
+    <i class="fas fa-list"></i>
+</button>

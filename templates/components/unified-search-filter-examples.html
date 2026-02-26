@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>أمثلة مكونات البحث والفلترة الموحدة</title>
+    
+    <!-- CSS Files -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="../../static/css/variables.css" rel="stylesheet">
+    <link href="../../static/css/unified-components.css" rel="stylesheet">
+    <link href="../../static/css/unified-search-filter.css" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: var(--font-family-sans);
+            background-color: var(--bg-light);
+            margin: 0;
+            padding: var(--spacing-6);
+            line-height: 1.6;
+        }
+        
+        .example-section {
+            background-color: var(--bg-card);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-6);
+            margin-bottom: var(--spacing-6);
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .example-title {
+            color: var(--text-dark);
+            font-size: var(--font-size-xl);
+            font-weight: var(--font-weight-semibold);
+            margin-bottom: var(--spacing-4);
+            padding-bottom: var(--spacing-2);
+            border-bottom: 2px solid var(--primary-color);
+        }
+        
+        .example-description {
+            color: var(--text-color);
+            margin-bottom: var(--spacing-4);
+            font-size: var(--font-size-base);
+        }
+        
+        .demo-container {
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-4);
+            background-color: var(--bg-card);
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <header class="text-center" style="margin-bottom: var(--spacing-8);">
+            <h1 style="color: var(--primary-color); margin-bottom: var(--spacing-2);">
+                <i class="fas fa-search"></i>
+                مكونات البحث والفلترة الموحدة
+            </h1>
+            <p style="color: var(--text-color); font-size: var(--font-size-lg);">
+                أمثلة تفاعلية لنظام البحث والفلترة المتقدم
+            </p>
+        </header>
+
+        <!-- Basic Search Example -->
+        <section class="example-section">
+            <h2 class="example-title">
+                <i class="fas fa-search"></i>
+                البحث الأساسي
+            </h2>
+            <p class="example-description">
+                مكون بحث بسيط مع اقتراحات ذكية وتنظيف تلقائي للنتائج
+            </p>
+            
+            <div class="demo-container">
+                <div class="unified-search-container" data-search-options='{"minLength": 2, "showSuggestions": true}'>
+                    <div class="unified-search-box">
+                        <i class="fas fa-search unified-search-icon"></i>
+                        <input type="text" class="unified-search-input" placeholder="ابحث عن العملاء، الموظفين، أو الأقسام...">
+                        <i class="fas fa-times unified-search-clear"></i>
+                        <div class="unified-search-loading" style="display: none;">
+                            <i class="fas fa-spinner"></i>
+                        </div>
+                    </div>
+                    
+                    <div class="unified-search-suggestions">
+                        <!-- Suggestions will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Advanced Search Example -->
+        <section class="example-section">
+            <h2 class="example-title">
+                <i class="fas fa-sliders-h"></i>
+                البحث المتقدم
+            </h2>
+            <p class="example-description">
+                بحث متقدم مع حقول متعددة ومشغلات مختلفة لبحث دقيق ومفصل
+            </p>
+            
+            <div class="demo-container">
+                <div class="unified-search-container">
+                    <div class="unified-search-box search-lg">
+                        <i class="fas fa-search unified-search-icon"></i>
+                        <input type="text" class="unified-search-input" placeholder="البحث المتقدم في جميع السجلات...">
+                        <i class="fas fa-times unified-search-clear"></i>
+                    </div>
+                    
+                    <div class="unified-advanced-search">
+                        <div class="unified-advanced-search-header">
+                            <h4 class="unified-advanced-search-title">البحث المتقدم</h4>
+                            <button class="unified-advanced-search-toggle">
+                                <i class="fas fa-chevron-down"></i>
+                                خيارات متقدمة
+                            </button>
+                        </div>
+                        
+                        <div class="unified-advanced-search-body">
+                            <div class="unified-search-field-group">
+                                <!-- Search fields will be added by JavaScript -->
+                            </div>
+                            
+                            <div class="unified-filter-actions">
+                                <button class="unified-btn unified-btn-primary">
+                                    <i class="fas fa-search"></i>
+                                    تطبيق البحث
+                                </button>
+                                <button class="unified-btn unified-btn-ghost">
+                                    <i class="fas fa-times"></i>
+                                    مسح الكل
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Quick Filters Example -->
+        <section class="example-section">
+            <h2 class="example-title">
+                <i class="fas fa-filter"></i>
+                الفلاتر السريعة
+            </h2>
+            <p class="example-description">
+                فلاتر سريعة للوصول المباشر للفئات الأكثر استخداماً
+            </p>
+            
+            <div class="demo-container">
+                <div class="unified-quick-filters">
+                    <a href="#" class="unified-quick-filter" data-filter="type" data-value="customers">
+                        <i class="fas fa-users"></i>
+                        العملاء
+                        <span class="count">245</span>
+                    </a>
+                    <a href="#" class="unified-quick-filter" data-filter="type" data-value="employees">
+                        <i class="fas fa-user-tie"></i>
+                        الموظفين
+                        <span class="count">32</span>
+                    </a>
+                    <a href="#" class="unified-quick-filter" data-filter="type" data-value="classes">
+                        <i class="fas fa-school"></i>
+                        الصفوف
+                        <span class="count">18</span>
+                    </a>
+                    <a href="#" class="unified-quick-filter" data-filter="status" data-value="active">
+                        <i class="fas fa-check-circle"></i>
+                        نشط
+                        <span class="count">198</span>
+                    </a>
+                    <a href="#" class="unified-quick-filter" data-filter="status" data-value="pending">
+                        <i class="fas fa-clock"></i>
+                        في الانتظار
+                        <span class="count">47</span>
+                    </a>
+                </div>
+            </div>
+        </section>
+        <!-- Filter Panels Example -->
+        <section class="example-section">
+            <h2 class="example-title">
+                <i class="fas fa-list-ul"></i>
+                لوحات الفلترة
+            </h2>
+            <p class="example-description">
+                لوحات فلترة تفاعلية مع خيارات متعددة وعدادات ديناميكية
+            </p>
+            
+            <div class="demo-container">
+                <div class="unified-filter-container" data-filter-options='{"autoApply": true, "showActiveCount": true}'>
+                    <div class="unified-filter-header">
+                        <h4 class="unified-filter-title">
+                            <i class="fas fa-filter"></i>
+                            خيارات الفلترة
+                        </h4>
+                        <button class="unified-filter-toggle">
+                            <i class="fas fa-chevron-up"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="unified-filter-body">
+                        <div class="unified-filter-row">
+                            <div class="unified-filter-group">
+                                <label class="unified-filter-label">نوع السجل</label>
+                                <select class="unified-filter-control" name="record_type">
+                                    <option value="">جميع الأنواع</option>
+                                    <option value="customer">عميل</option>
+                                    <option value="supplier">مورد</option>
+                                    <option value="employee">موظف</option>
+                                    <option value="staff">إداري</option>
+                                </select>
+                            </div>
+                            
+                            <div class="unified-filter-group">
+                                <label class="unified-filter-label">الحالة</label>
+                                <select class="unified-filter-control" name="status">
+                                    <option value="">جميع الحالات</option>
+                                    <option value="active">نشط</option>
+                                    <option value="inactive">غير نشط</option>
+                                    <option value="pending">في الانتظار</option>
+                                    <option value="suspended">معلق</option>
+                                </select>
+                            </div>
+                            
+                            <div class="unified-filter-group">
+                                <label class="unified-filter-label">السنة الدراسية</label>
+                                <select class="unified-filter-control" name="academic_year">
+                                    <option value="">جميع السنوات</option>
+                                    <option value="2024-2025">2024-2025</option>
+                                    <option value="2023-2024">2023-2024</option>
+                                    <option value="2022-2023">2022-2023</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="unified-filter-row">
+                            <div class="unified-filter-group">
+                                <label class="unified-filter-label">تاريخ البداية</label>
+                                <input type="date" class="unified-filter-control" name="start_date">
+                            </div>
+                            
+                            <div class="unified-filter-group">
+                                <label class="unified-filter-label">تاريخ النهاية</label>
+                                <input type="date" class="unified-filter-control" name="end_date">
+                            </div>
+                            
+                            <div class="unified-filter-group">
+                                <label class="unified-filter-label">بحث في النص</label>
+                                <input type="text" class="unified-filter-control" name="text_search" placeholder="ابحث في المحتوى...">
+                            </div>
+                        </div>
+                        
+                        <div class="unified-filter-actions">
+                            <button class="unified-btn unified-btn-primary filter-apply">
+                                <i class="fas fa-check"></i>
+                                تطبيق الفلاتر
+                            </button>
+                            <button class="unified-btn unified-btn-ghost filter-clear">
+                                <i class="fas fa-times"></i>
+                                مسح الفلاتر
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Active Filters Display -->
+        <section class="example-section">
+            <h2 class="example-title">
+                <i class="fas fa-tags"></i>
+                عرض الفلاتر النشطة
+            </h2>
+            <p class="example-description">
+                عرض الفلاتر المطبقة حالياً مع إمكانية إزالة كل فلتر بشكل منفصل
+            </p>
+            
+            <div class="demo-container">
+                <div class="unified-active-filters">
+                    <span class="unified-active-filters-label">الفلاتر النشطة:</span>
+                    
+                    <div class="unified-filter-tag">
+                        <span class="unified-filter-tag-text">النوع: عميل</span>
+                        <button class="unified-filter-tag-remove">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="unified-filter-tag">
+                        <span class="unified-filter-tag-text">الحالة: نشط</span>
+                        <button class="unified-filter-tag-remove">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="unified-filter-tag">
+                        <span class="unified-filter-tag-text">السنة: 2024-2025</span>
+                        <button class="unified-filter-tag-remove">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    
+                    <button class="unified-clear-all-filters">
+                        <i class="fas fa-times-circle"></i>
+                        مسح جميع الفلاتر
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Filter Panels with Checkboxes -->
+        <section class="example-section">
+            <h2 class="example-title">
+                <i class="fas fa-check-square"></i>
+                لوحات الفلترة بالخيارات المتعددة
+            </h2>
+            <p class="example-description">
+                لوحات فلترة مع خيارات متعددة الاختيار وعدادات للنتائج
+            </p>
+            
+            <div class="demo-container">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--spacing-4);">
+                    <!-- Categories Filter Panel -->
+                    <div class="unified-filter-panel" data-filter-id="categories">
+                        <div class="unified-filter-panel-header">
+                            <h5 class="unified-filter-panel-title">الفئات</h5>
+                            <span class="unified-filter-panel-count">0</span>
+                        </div>
+                        <div class="unified-filter-panel-body">
+                            <div class="unified-filter-option">
+                                <input type="checkbox" id="cat1" value="customers">
+                                <label class="unified-filter-option-label" for="cat1">العملاء</label>
+                                <span class="unified-filter-option-count">245</span>
+                            </div>
+                            <div class="unified-filter-option">
+                                <input type="checkbox" id="cat2" value="employees">
+                                <label class="unified-filter-option-label" for="cat2">الموظفين</label>
+                                <span class="unified-filter-option-count">32</span>
+                            </div>
+                            <div class="unified-filter-option">
+                                <input type="checkbox" id="cat3" value="partners">
+                                <label class="unified-filter-option-label" for="cat3">الشركاء</label>
+                                <span class="unified-filter-option-count">198</span>
+                            </div>
+                            <div class="unified-filter-option">
+                                <input type="checkbox" id="cat4" value="staff">
+                                <label class="unified-filter-option-label" for="cat4">الموظفين</label>
+                                <span class="unified-filter-option-count">15</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Status Filter Panel -->
+                    <div class="unified-filter-panel" data-filter-id="status">
+                        <div class="unified-filter-panel-header">
+                            <h5 class="unified-filter-panel-title">الحالة</h5>
+                            <span class="unified-filter-panel-count">0</span>
+                        </div>
+                        <div class="unified-filter-panel-body">
+                            <div class="unified-filter-option">
+                                <input type="checkbox" id="status1" value="active">
+                                <label class="unified-filter-option-label" for="status1">نشط</label>
+                                <span class="unified-filter-option-count">420</span>
+                            </div>
+                            <div class="unified-filter-option">
+                                <input type="checkbox" id="status2" value="inactive">
+                                <label class="unified-filter-option-label" for="status2">غير نشط</label>
+                                <span class="unified-filter-option-count">45</span>
+                            </div>
+                            <div class="unified-filter-option">
+                                <input type="checkbox" id="status3" value="pending">
+                                <label class="unified-filter-option-label" for="status3">في الانتظار</label>
+                                <span class="unified-filter-option-count">25</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Search Results Example -->
+        <section class="example-section">
+            <h2 class="example-title">
+                <i class="fas fa-list"></i>
+                نتائج البحث
+            </h2>
+            <p class="example-description">
+                عرض نتائج البحث مع ترقيم الصفحات وخيارات الترتيب
+            </p>
+            
+            <div class="demo-container">
+                <div class="unified-search-results" data-results-options='{"itemsPerPage": 5, "showSorting": true}'>
+                    <div class="unified-search-results-header">
+                        <div class="unified-search-results-info">
+                            عرض <span class="unified-search-results-count">1</span> إلى 
+                            <span class="unified-search-results-count">5</span> من 
+                            <span class="unified-search-results-count">23</span> نتيجة
+                        </div>
+                        <div class="unified-search-results-actions">
+                            <div class="unified-search-results-sort">
+                                <label>ترتيب حسب:</label>
+                                <select>
+                                    <option value="relevance">الأكثر صلة</option>
+                                    <option value="date_desc">الأحدث أولاً</option>
+                                    <option value="date_asc">الأقدم أولاً</option>
+                                    <option value="name_asc">الاسم (أ-ي)</option>
+                                    <option value="name_desc">الاسم (ي-أ)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="unified-search-results-body">
+                        <div class="unified-search-result-item" data-result-id="1">
+                            <div class="unified-search-result-header">
+                                <h4 class="unified-search-result-title">أحمد محمد علي</h4>
+                                <div class="unified-search-result-meta">
+                                    <span><i class="fas fa-calendar"></i> 15 ديسمبر 2024</span>
+                                    <span><i class="fas fa-tag"></i> عميل</span>
+                                </div>
+                            </div>
+                            <p class="unified-search-result-description">
+                                عميل نشط في الشركة، يتعامل مع قسم المبيعات. لديه سجل ممتاز في المدفوعات والتعاملات التجارية.
+                            </p>
+                            <div class="unified-search-result-tags">
+                                <span class="unified-search-result-tag">عميل مميز</span>
+                                <span class="unified-search-result-tag">مبيعات</span>
+                                <span class="unified-search-result-tag">نشط</span>
+                            </div>
+                        </div>
+                        
+                        <div class="unified-search-result-item" data-result-id="2">
+                            <div class="unified-search-result-header">
+                                <h4 class="unified-search-result-title">فاطمة أحمد حسن</h4>
+                                <div class="unified-search-result-meta">
+                                    <span><i class="fas fa-calendar"></i> 12 ديسمبر 2024</span>
+                                    <span><i class="fas fa-tag"></i> موظفة</span>
+                                </div>
+                            </div>
+                            <p class="unified-search-result-description">
+                                موظفة في قسم المحاسبة، خبرة 10 سنوات في المجال المالي وحاصلة على ماجستير في إدارة الأعمال.
+                            </p>
+                            <div class="unified-search-result-tags">
+                                <span class="unified-search-result-tag">محاسبة</span>
+                                <span class="unified-search-result-tag">مالية</span>
+                                <span class="unified-search-result-tag">خبرة عالية</span>
+                            </div>
+                        </div>
+                        
+                        <div class="unified-search-result-item" data-result-id="3">
+                            <div class="unified-search-result-header">
+                                <h4 class="unified-search-result-title">محمد سعد إبراهيم</h4>
+                                <div class="unified-search-result-meta">
+                                    <span><i class="fas fa-calendar"></i> 10 ديسمبر 2024</span>
+                                    <span><i class="fas fa-tag"></i> شريك</span>
+                                </div>
+                            </div>
+                            <p class="unified-search-result-description">
+                                شريك في الشركة، مهندس ومهتم بمتابعة المشاريع والتطوير المستمر للأعمال.
+                            </p>
+                            <div class="unified-search-result-tags">
+                                <span class="unified-search-result-tag">شريك</span>
+                                <span class="unified-search-result-tag">مشاريع</span>
+                                <span class="unified-search-result-tag">متابع</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="unified-search-results-pagination">
+                        <!-- Pagination will be generated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Integration Example -->
+        <section class="example-section">
+            <h2 class="example-title">
+                <i class="fas fa-puzzle-piece"></i>
+                مثال متكامل
+            </h2>
+            <p class="example-description">
+                مثال شامل يجمع بين البحث المتقدم والفلاتر ونتائج البحث في واجهة واحدة
+            </p>
+            
+            <div class="demo-container">
+                <div style="display: grid; grid-template-columns: 300px 1fr; gap: var(--spacing-4);">
+                    <!-- Sidebar with filters -->
+                    <div>
+                        <div class="unified-filter-container">
+                            <div class="unified-filter-header">
+                                <h4 class="unified-filter-title">
+                                    <i class="fas fa-filter"></i>
+                                    تصفية النتائج
+                                </h4>
+                            </div>
+                            
+                            <div class="unified-filter-body">
+                                <div class="unified-filter-panel" data-filter-id="type">
+                                    <div class="unified-filter-panel-header">
+                                        <h5 class="unified-filter-panel-title">النوع</h5>
+                                        <span class="unified-filter-panel-count">0</span>
+                                    </div>
+                                    <div class="unified-filter-panel-body">
+                                        <div class="unified-filter-option">
+                                            <input type="checkbox" id="type1" value="customer">
+                                            <label class="unified-filter-option-label" for="type1">عملاء</label>
+                                            <span class="unified-filter-option-count">245</span>
+                                        </div>
+                                        <div class="unified-filter-option">
+                                            <input type="checkbox" id="type2" value="supplier">
+                                            <label class="unified-filter-option-label" for="type2">موردين</label>
+                                            <span class="unified-filter-option-count">32</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Main content area -->
+                    <div>
+                        <!-- Search box -->
+                        <div class="unified-search-container" style="margin-bottom: var(--spacing-4);">
+                            <div class="unified-search-box">
+                                <i class="fas fa-search unified-search-icon"></i>
+                                <input type="text" class="unified-search-input" placeholder="ابحث في جميع السجلات...">
+                                <i class="fas fa-times unified-search-clear"></i>
+                            </div>
+                        </div>
+                        
+                        <!-- Active filters -->
+                        <div class="unified-active-filters" style="margin-bottom: var(--spacing-4);">
+                            <span class="unified-active-filters-label">الفلاتر النشطة:</span>
+                            <button class="unified-clear-all-filters" style="display: none;">
+                                <i class="fas fa-times-circle"></i>
+                                مسح جميع الفلاتر
+                            </button>
+                        </div>
+                        
+                        <!-- Results -->
+                        <div class="unified-search-results">
+                            <div class="unified-search-results-header">
+                                <div class="unified-search-results-info">
+                                    جاري البحث...
+                                </div>
+                            </div>
+                            
+                            <div class="unified-search-results-body">
+                                <div class="unified-search-results-empty">
+                                    <i class="fas fa-search icon"></i>
+                                    <h4>ابدأ البحث</h4>
+                                    <p>استخدم مربع البحث أعلاه أو الفلاتر الجانبية للعثور على النتائج</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- JavaScript Files -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="../../static/js/unified-components.js"></script>
+    <script src="../../static/js/unified-search-filter.js"></script>
+    
+    <script>
+        // Initialize search options
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set up search fields for advanced search
+            const searchContainers = document.querySelectorAll('.unified-search-container');
+            searchContainers.forEach(container => {
+                if (container._advancedSearch) {
+                    container._advancedSearch.options.searchFields = [
+                        { value: 'name', label: 'الاسم' },
+                        { value: 'email', label: 'البريد الإلكتروني' },
+                        { value: 'phone', label: 'رقم الهاتف' },
+                        { value: 'address', label: 'العنوان' },
+                        { value: 'notes', label: 'الملاحظات' }
+                    ];
+                }
+            });
+            
+            // Demo event listeners
+            document.addEventListener('unified:search:search', function(e) {
+                UnifiedComponents.Utils.showToast(`تم البحث عن: ${e.detail.query}`, 'info');
+            });
+            
+            document.addEventListener('unified:filter:filtersApply', function(e) {
+                UnifiedComponents.Utils.showToast('تم تطبيق الفلاتر', 'success');
+            });
+            
+            document.addEventListener('unified:filter:filtersClear', function(e) {
+                UnifiedComponents.Utils.showToast('تم مسح جميع الفلاتر', 'info');
+            });
+        });
+    </script>
+</body>
+</html>

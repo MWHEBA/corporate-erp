@@ -1,0 +1,396 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load i18n %}
+{% load utils_extras %}
+
+{% block title %}{{ title }} | {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/shared-components.css' %}">
+<link rel="stylesheet" href="{% static 'css/unified-components.css' %}">
+<link rel="stylesheet" href="{% static 'css/governance.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    {% csrf_token %}
+    
+    <!-- Page Header -->
+    {% include "shared/page_header.html" with title=title subtitle=subtitle icon=icon %}
+    
+    <!-- Breadcrumb -->
+    {% include "shared/breadcrumb.html" with items=breadcrumb_items %}
+    
+    <!-- Security Overview -->
+    <div class="section-container">
+        <h5 class="section-title"><i class="fas fa-shield-alt me-2"></i>نظرة عامة على الأمان</h5>
+        <div class="row">
+            <div class="col-md-3 mb-3">
+                <div class="stats-card stats-card-success">
+                    <div class="stats-card-body">
+                        <div class="stats-card-icon"><i class="fas fa-shield-check"></i></div>
+                        <div class="stats-card-title">مستوى الأمان</div>
+                        <div class="stats-card-value">عالي</div>
+                        <div class="stats-card-unit">95%</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stats-card stats-card-info">
+                    <div class="stats-card-body">
+                        <div class="stats-card-icon"><i class="fas fa-user-shield"></i></div>
+                        <div class="stats-card-title">جلسات نشطة</div>
+                        <div class="stats-card-value">{{ active_sessions|default:24 }}</div>
+                        <div class="stats-card-unit">جلسة</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stats-card stats-card-warning">
+                    <div class="stats-card-body">
+                        <div class="stats-card-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                        <div class="stats-card-title">محاولات مشبوهة</div>
+                        <div class="stats-card-value">{{ suspicious_attempts|default:2 }}</div>
+                        <div class="stats-card-unit">محاولة</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stats-card stats-card-danger">
+                    <div class="stats-card-body">
+                        <div class="stats-card-icon"><i class="fas fa-ban"></i></div>
+                        <div class="stats-card-title">عناوين محجوبة</div>
+                        <div class="stats-card-value">{{ blocked_ips|default:5 }}</div>
+                        <div class="stats-card-unit">عنوان</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Security Incidents -->
+    <div class="section-container mb-4">
+        <h5 class="section-title">
+            <i class="fas fa-exclamation-circle me-2"></i>الحوادث الأمنية الحديثة
+        </h5>
+        <div class="card">
+            <div class="card-header">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h6 class="card-title mb-0">سجل الحوادث الأمنية</h6>
+                    </div>
+                    <div class="col-auto">
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="refreshIncidents()">
+                                <i class="fas fa-sync-alt me-1"></i>تحديث
+                            </button>
+                            <button type="button" class="btn btn-outline-danger btn-sm" onclick="exportIncidents()">
+                                <i class="fas fa-download me-1"></i>تصدير
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover" id="incidentsTable">
+                        <thead>
+                            <tr>
+                                <th class="text-center">الوقت</th>
+                                <th class="text-center">النوع</th>
+                                <th class="text-center">عنوان IP</th>
+                                <th class="text-center">المستخدم</th>
+                                <th class="text-center">الخطورة</th>
+                                <th class="text-center">الحالة</th>
+                                <th class="text-center">الإجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="text-center">2026-02-03 14:45:12</td>
+                                <td class="text-center">محاولة دخول فاشلة</td>
+                                <td class="text-center">192.168.1.150</td>
+                                <td class="text-center">unknown</td>
+                                <td class="text-center"><span class="badge bg-warning">متوسط</span></td>
+                                <td class="text-center"><span class="badge bg-info">قيد المراجعة</span></td>
+                                <td class="text-center">
+                                    <button class="btn btn-outline-info btn-sm" onclick="viewIncident(1)">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger btn-sm" onclick="blockIP('192.168.1.150')">
+                                        <i class="fas fa-ban"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-center">2026-02-03 13:20:45</td>
+                                <td class="text-center">وصول غير مصرح</td>
+                                <td class="text-center">10.0.0.25</td>
+                                <td class="text-center">guest_user</td>
+                                <td class="text-center"><span class="badge bg-danger">عالي</span></td>
+                                <td class="text-center"><span class="badge bg-success">تم الحل</span></td>
+                                <td class="text-center">
+                                    <button class="btn btn-outline-info btn-sm" onclick="viewIncident(2)">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Access Control -->
+    <div class="section-container mb-4">
+        <h5 class="section-title">
+            <i class="fas fa-key me-2"></i>التحكم في الوصول
+        </h5>
+        <div class="row">
+            <div class="col-lg-6 mb-3">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="card-title mb-0">الجلسات النشطة</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th class="text-center">المستخدم</th>
+                                        <th class="text-center">عنوان IP</th>
+                                        <th class="text-center">وقت الدخول</th>
+                                        <th class="text-center">الإجراء</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="text-center">admin</td>
+                                        <td class="text-center">192.168.1.100</td>
+                                        <td class="text-center">14:30</td>
+                                        <td class="text-center">
+                                            <button class="btn btn-outline-danger btn-sm" onclick="terminateSession('admin')">
+                                                <i class="fas fa-sign-out-alt"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-center">teacher1</td>
+                                        <td class="text-center">192.168.1.105</td>
+                                        <td class="text-center">13:45</td>
+                                        <td class="text-center">
+                                            <button class="btn btn-outline-danger btn-sm" onclick="terminateSession('teacher1')">
+                                                <i class="fas fa-sign-out-alt"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6 mb-3">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="card-title mb-0">عناوين IP المحجوبة</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th class="text-center">عنوان IP</th>
+                                        <th class="text-center">السبب</th>
+                                        <th class="text-center">تاريخ الحجب</th>
+                                        <th class="text-center">الإجراء</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="text-center">192.168.1.200</td>
+                                        <td class="text-center">محاولات متكررة</td>
+                                        <td class="text-center">2026-02-02</td>
+                                        <td class="text-center">
+                                            <button class="btn btn-outline-success btn-sm" onclick="unblockIP('192.168.1.200')">
+                                                <i class="fas fa-unlock"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-center">10.0.0.50</td>
+                                        <td class="text-center">نشاط مشبوه</td>
+                                        <td class="text-center">2026-02-01</td>
+                                        <td class="text-center">
+                                            <button class="btn btn-outline-success btn-sm" onclick="unblockIP('10.0.0.50')">
+                                                <i class="fas fa-unlock"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Security Policies -->
+    <div class="section-container">
+        <h5 class="section-title">
+            <i class="fas fa-clipboard-check me-2"></i>السياسات الأمنية النشطة
+        </h5>
+        <div class="row">
+            <div class="col-lg-4 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="policy-item">
+                            <div class="policy-icon text-success">
+                                <i class="fas fa-lock"></i>
+                            </div>
+                            <div class="policy-info">
+                                <h6>تشفير كلمات المرور</h6>
+                                <p class="text-muted mb-0">نشط - SHA-256</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="policy-item">
+                            <div class="policy-icon text-info">
+                                <i class="fas fa-clock"></i>
+                            </div>
+                            <div class="policy-info">
+                                <h6>انتهاء الجلسة</h6>
+                                <p class="text-muted mb-0">نشط - 30 دقيقة</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="policy-item">
+                            <div class="policy-icon text-warning">
+                                <i class="fas fa-shield-alt"></i>
+                            </div>
+                            <div class="policy-info">
+                                <h6>حماية من البروت فورس</h6>
+                                <p class="text-muted mb-0">نشط - 5 محاولات</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Incident Details Modal -->
+<div class="modal fade" id="incidentModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">تفاصيل الحادث الأمني</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="incidentDetails">
+                <!-- Content will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/global-table.js' %}"></script>
+<script>
+$(document).ready(function() {
+    // Initialize DataTable
+    if (typeof GlobalTableManager !== 'undefined') {
+        GlobalTableManager.initializeTable('incidentsTable', {
+            order: [[0, 'desc']],
+            columnDefs: [{ targets: -1, orderable: false }]
+        });
+    }
+    
+    // Auto-refresh incidents every 60 seconds
+    setInterval(function() {
+        refreshIncidents();
+    }, 60000);
+});
+
+function refreshIncidents() {
+    // Refresh security incidents
+    location.reload();
+}
+
+function exportIncidents() {
+    // Export security incidents
+    alert('تصدير الحوادث الأمنية...');
+}
+
+function viewIncident(id) {
+    // Load incident details
+    $('#incidentDetails').html(`
+        <div class="row">
+            <div class="col-md-6">
+                <strong>معرف الحادث:</strong> SEC-${id}<br>
+                <strong>النوع:</strong> محاولة دخول فاشلة<br>
+                <strong>الوقت:</strong> 2026-02-03 14:45:12<br>
+                <strong>عنوان IP:</strong> 192.168.1.150
+            </div>
+            <div class="col-md-6">
+                <strong>المستخدم:</strong> unknown<br>
+                <strong>الخطورة:</strong> متوسط<br>
+                <strong>الحالة:</strong> قيد المراجعة<br>
+                <strong>المتصفح:</strong> Chrome 120.0
+            </div>
+        </div>
+        <hr>
+        <h6>تفاصيل إضافية:</h6>
+        <p>تم رصد محاولة دخول فاشلة من عنوان IP غير معروف. المحاولة تمت باستخدام بيانات اعتماد غير صحيحة.</p>
+        <div class="mt-3">
+            <button class="btn btn-danger" onclick="blockIP('192.168.1.150')">حجب عنوان IP</button>
+            <button class="btn btn-success" onclick="resolveIncident(${id})">تم الحل</button>
+        </div>
+    `);
+    $('#incidentModal').modal('show');
+}
+
+function blockIP(ip) {
+    if (confirm(`هل أنت متأكد من حجب عنوان IP: ${ip}؟`)) {
+        alert(`تم حجب عنوان IP: ${ip}`);
+        location.reload();
+    }
+}
+
+function unblockIP(ip) {
+    if (confirm(`هل أنت متأكد من إلغاء حجب عنوان IP: ${ip}؟`)) {
+        alert(`تم إلغاء حجب عنوان IP: ${ip}`);
+        location.reload();
+    }
+}
+
+function terminateSession(username) {
+    if (confirm(`هل أنت متأكد من إنهاء جلسة المستخدم: ${username}؟`)) {
+        alert(`تم إنهاء جلسة المستخدم: ${username}`);
+        location.reload();
+    }
+}
+
+function resolveIncident(id) {
+    if (confirm('هل أنت متأكد من تسجيل هذا الحادث كمحلول؟')) {
+        alert(`تم حل الحادث ${id}`);
+        $('#incidentModal').modal('hide');
+        location.reload();
+    }
+}
+</script>
+{% endblock %}

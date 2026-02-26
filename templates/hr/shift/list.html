@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load i18n %}
+{% load custom_filters %}
+
+{% block title %}الورديات{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/components.css' %}">
+<link rel="stylesheet" href="{% static 'css/tables.css' %}">
+<link rel="stylesheet" href="{% static 'css/hr-tables.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <!-- Page Header المركزي -->
+  {% include "shared/page_header.html" %}
+
+  <div class="section-container">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0"><i class="fas fa-list me-2"></i>قائمة الورديات</h5>
+
+      </div>
+      <div class="card-body">
+        {% if shifts %}
+        <div class="table-responsive">
+            <table class="table table-hover table-centered" id="shiftsTable">
+                <thead class="table-light">
+                    <tr>
+                        <th class="text-center">اسم الوردية</th>
+                        <th class="text-center">النوع</th>
+                        <th class="text-center">وقت البداية</th>
+                        <th class="text-center">وقت النهاية</th>
+                        <th class="text-center">ساعات العمل</th>
+                        <th class="text-center">عدد الموظفين</th>
+                        <th class="text-center">الحالة</th>
+                        <th class="text-center">الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for shift in shifts %}
+                    <tr>
+                        <td class="text-center"><strong>{{ shift.name }}</strong></td>
+                        <td class="text-center">
+                            {% if shift.shift_type == 'morning' %}
+                                <span class="badge bg-info">صباحية</span>
+                            {% elif shift.shift_type == 'evening' %}
+                                <span class="badge bg-warning text-dark">مسائية</span>
+                            {% elif shift.shift_type == 'night' %}
+                                <span class="badge bg-dark">ليلية</span>
+                            {% else %}
+                                <span class="badge bg-secondary">متناوبة</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center"><span class="badge bg-success">{{ shift.start_time|time:"H:i" }}</span></td>
+                        <td class="text-center"><span class="badge bg-danger">{{ shift.end_time|time:"H:i" }}</span></td>
+                        <td class="text-center"><strong>{{ shift.work_hours }}</strong> ساعة</td>
+                        <td class="text-center">
+                            <span class="badge bg-primary">{{ shift.employees.count }}</span>
+                            <small class="text-muted">موظف</small>
+                        </td>
+                        <td class="text-center">
+                            {% if shift.is_active %}
+                                <span class="badge bg-success">نشط</span>
+                            {% else %}
+                                <span class="badge bg-danger">غير نشط</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center col-actions">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <a href="{% url 'hr:shift_form_edit' shift.pk %}" class="btn btn-warning" title="تعديل">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <a href="{% url 'hr:shift_assign_employees' shift.pk %}" class="btn btn-info" title="تعيين موظفين">
+                                    <i class="fas fa-users"></i>
+                                </a>
+                                <a href="{% url 'hr:shift_delete' shift.pk %}" class="btn btn-danger" title="حذف">
+                                    <i class="fas fa-trash"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+          {% include 'partials/empty_state.html' with message="لا توجد ورديات" icon="business-time" %}
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/global-table.js' %}"></script>
+<script>
+$(document).ready(function() {
+    if ($('#shiftsTable').length) {
+        initGlobalTable('shiftsTable', {
+            ordering: true,
+            order: [[0, 'asc']],
+            responsive: true,
+            columnDefs: [
+                { targets: '_all', className: 'text-center' },
+                { targets: [5, 6, 7], orderable: false }
+            ]
+        });
+    }
+});
+</script>
+{% endblock %}

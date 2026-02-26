@@ -1,0 +1,86 @@
+[
+  {
+    "model": "hr.permissiontype",
+    "pk": 1,
+    "fields": {
+      "name_ar": "تأخير في الحضور",
+      "name_en": "Late Arrival",
+      "code": "LATE_ARRIVAL",
+      "max_hours_per_request": "2.00",
+      "requires_advance_request": false,
+      "advance_hours": 0,
+      "affects_salary": false,
+      "is_active": true
+    }
+  },
+  {
+    "model": "hr.permissiontype",
+    "pk": 2,
+    "fields": {
+      "name_ar": "انصراف مبكر",
+      "name_en": "Early Leave",
+      "code": "EARLY_LEAVE",
+      "max_hours_per_request": "3.00",
+      "requires_advance_request": true,
+      "advance_hours": 24,
+      "affects_salary": false,
+      "is_active": true
+    }
+  },
+  {
+    "model": "hr.permissiontype",
+    "pk": 3,
+    "fields": {
+      "name_ar": "خروج أثناء الدوام",
+      "name_en": "Mid-day Leave",
+      "code": "MIDDAY_LEAVE",
+      "max_hours_per_request": "4.00",
+      "requires_advance_request": true,
+      "advance_hours": 24,
+      "affects_salary": false,
+      "is_active": true
+    }
+  },
+  {
+    "model": "hr.permissiontype",
+    "pk": 4,
+    "fields": {
+      "name_ar": "مهمة خارجية",
+      "name_en": "External Mission",
+      "code": "EXTERNAL_MISSION",
+      "max_hours_per_request": "4.00",
+      "requires_advance_request": true,
+      "advance_hours": 48,
+      "affects_salary": false,
+      "is_active": true
+    }
+  },
+  {
+    "model": "hr.permissiontype",
+    "pk": 5,
+    "fields": {
+      "name_ar": "موعد طبي",
+      "name_en": "Medical Appointment",
+      "code": "MEDICAL_APPOINTMENT",
+      "max_hours_per_request": "3.00",
+      "requires_advance_request": true,
+      "advance_hours": 24,
+      "affects_salary": false,
+      "is_active": true
+    }
+  },
+  {
+    "model": "hr.permissiontype",
+    "pk": 6,
+    "fields": {
+      "name_ar": "ظرف طارئ",
+      "name_en": "Emergency",
+      "code": "EMERGENCY",
+      "max_hours_per_request": "4.00",
+      "requires_advance_request": false,
+      "advance_hours": 0,
+      "affects_salary": false,
+      "is_active": true
+    }
+  }
+]

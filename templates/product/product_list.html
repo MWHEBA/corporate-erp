@@ -1,0 +1,215 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+{% load custom_filters %}
+{% load app_tags %}
+{% load utils_extras %}
+
+{% block title %}{{ page_title|default:"قائمة المنتجات" }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/shared-components.css' %}">
+<link rel="stylesheet" href="{% static 'css/unified-components.css' %}">
+<link rel="stylesheet" href="{% static 'css/product-enhancements.css' %}">
+<style>
+/* تحسين مظهر العناوين القابلة للطي */
+.section-title[data-bs-toggle="collapse"] {
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s ease;
+}
+
+.section-title[data-bs-toggle="collapse"]:hover {
+    opacity: 0.8;
+}
+
+.section-title .fa-chevron-down {
+    transition: transform 0.3s ease;
+    font-size: 0.875rem;
+}
+
+.section-title[aria-expanded="true"] .fa-chevron-down {
+    transform: rotate(180deg);
+}
+
+/* تحسين الانتقال السلس */
+.collapse {
+    transition: height 0.3s ease;
+}
+
+/* تحسين مظهر الصفوف القابلة للنقر */
+#products-table tbody tr[data-clickable="true"] {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+#products-table tbody tr[data-clickable="true"]:hover {
+    background-color: var(--primary-soft) !important;
+}
+
+#products-table tbody tr[data-clickable="true"]:hover td {
+    background-color: transparent;
+}
+
+/* منع تحديد النص عند النقر المتكرر */
+#products-table tbody tr[data-clickable="true"] {
+    user-select: none;
+}
+
+/* تأكيد أن الأزرار لا تتأثر بالنقر على الصف */
+#products-table tbody tr[data-clickable="true"] .btn,
+#products-table tbody tr[data-clickable="true"] a {
+    pointer-events: auto;
+    position: relative;
+    z-index: 10;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- CSRF Token للاستخدام في JavaScript -->
+    {% csrf_token %}
+    
+    <!-- Page Header المركزي -->
+    {% include "shared/page_header.html" %}
+
+    <!-- قسم الفلاتر - قابل للطي -->
+    <div class="section-container mb-4">
+        <h5 class="section-title" style="cursor: pointer;" data-bs-toggle="collapse" data-bs-target="#filtersSection" aria-expanded="false" aria-controls="filtersSection">
+            <i class="fas fa-filter me-2"></i>
+            تصفية وبحث المنتجات
+            <i class="fas fa-chevron-down float-end"></i>
+        </h5>
+        <div class="collapse" id="filtersSection">
+            <form method="get" id="filter-form">
+                <div class="row g-3 align-items-end">
+                    <!-- اسم المنتج -->
+                    <div class="col-md-3">
+                        {{ filter_form.name|as_crispy_field }}
+                    </div>
+                    <!-- التصنيف -->
+                    <div class="col-md-2">
+                        {{ filter_form.category|as_crispy_field }}
+                    </div>
+                    <!-- نوع المنتج -->
+                    <div class="col-md-2">
+                        {{ filter_form.product_type|as_crispy_field }}
+                    </div>
+                    <!-- السعر الأدنى -->
+                    <div class="col-md-2">
+                        {{ filter_form.min_price|as_crispy_field }}
+                    </div>
+                    <!-- السعر الأقصى -->
+                    <div class="col-md-2">
+                        {{ filter_form.max_price|as_crispy_field }}
+                    </div>
+                    <!-- الحالة -->
+                    <div class="col-md-1">
+                        <div class="form-check">
+                            {{ filter_form.is_active }}
+                            <label class="form-check-label" for="{{ filter_form.is_active.id_for_label }}">
+                                {{ filter_form.is_active.label }}
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            {{ filter_form.in_stock }}
+                            <label class="form-check-label" for="{{ filter_form.in_stock.id_for_label }}">
+                                {{ filter_form.in_stock.label }}
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <!-- الأزرار في سطر منفصل -->
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary me-2">
+                            <i class="fas fa-search me-2"></i>تطبيق الفلاتر
+                        </button>
+                        <a href="{% url 'product:product_list' %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-undo me-2"></i>إعادة تعيين
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- قسم الجدول -->
+    <div class="section-container">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="section-title mb-0">
+                <i class="fas fa-list me-2"></i>قائمة المنتجات
+                <span class="badge bg-primary ms-2">{{ products|length }} منتج</span>
+            </h5>
+        </div>
+        
+        <!-- استخدام الجدول الموحد -->
+        {% include "components/data_table.html" with table_id="products-table" headers=product_headers data=table_data action_buttons=action_buttons primary_key="id" clickable_rows=True row_click_field="row_click_url" empty_message="لا توجد منتجات متاحة" %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/global-table.js' %}"></script>
+<script>
+$(document).ready(function() {
+    // تهيئة الجدول الموحد
+    const tableElement = document.getElementById('products-table');
+    if (tableElement && typeof initGlobalTable === 'function') {
+        initGlobalTable('products-table', {
+            ordering: true,
+            order: [[1, 'asc']], // ترتيب حسب الاسم (العمود الثاني بعد الصورة)
+            columnDefs: [
+                { targets: 0, orderable: false }, // الصورة
+                { targets: 1, className: 'text-start' }, // الاسم مع الكود
+                { targets: 2, className: 'text-center' }, // النوع
+                { targets: 3, className: 'text-center' }, // التصنيف
+                { targets: 4, className: 'text-center' }, // السعر
+                { targets: 5, className: 'text-center' }, // المخزون
+                { targets: 6, className: 'text-center' }, // الحالة
+                { targets: -1, orderable: false } // الإجراءات
+            ],
+            language: {
+                "search": "البحث:",
+                "lengthMenu": "عرض _MENU_ منتج",
+                "info": "عرض _START_ إلى _END_ من _TOTAL_ منتج",
+                "emptyTable": "لا توجد منتجات للعرض",
+                "zeroRecords": "لا توجد منتجات مطابقة للبحث"
+            }
+        });
+    }
+
+    // تحديث أيقونة السهم عند فتح/إغلاق الأقسام
+    $('#filtersSection').on('show.bs.collapse', function() {
+        $(this).prev('.section-title').attr('aria-expanded', 'true');
+    }).on('hide.bs.collapse', function() {
+        $(this).prev('.section-title').attr('aria-expanded', 'false');
+    });
+    
+    // معالجة النقر على الصفوف القابلة للنقر
+    $('#products-table tbody').on('click', 'tr[data-clickable="true"]', function(e) {
+        // تجاهل النقر إذا كان على زر أو رابط
+        if ($(e.target).closest('button, a, .btn').length > 0) {
+            return;
+        }
+        
+        const url = $(this).data('url');
+        if (url) {
+            window.location.href = url;
+        }
+    });
+    
+    // إضافة مؤشر اليد للصفوف القابلة للنقر
+    $('#products-table tbody tr[data-clickable="true"]').css('cursor', 'pointer');
+    
+    // تأثير hover للصفوف القابلة للنقر
+    $('#products-table tbody').on('mouseenter', 'tr[data-clickable="true"]', function() {
+        $(this).addClass('table-active');
+    }).on('mouseleave', 'tr[data-clickable="true"]', function() {
+        $(this).removeClass('table-active');
+    });
+});
+</script>
+{% endblock %} 

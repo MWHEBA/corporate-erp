@@ -1,0 +1,107 @@
+[
+  {
+    "model": "financial.financialcategory",
+    "pk": 1,
+    "fields": {
+      "code": "product_sales",
+      "name": "مبيعات المنتجات",
+      "description": "إيرادات بيع جميع المنتجات الغذائية وتكلفة البضاعة المباعة",
+      "default_revenue_account": 284,
+      "default_expense_account": 10,
+      "is_active": true,
+      "display_order": 10,
+      "created_at": "2025-01-01T00:00:00Z",
+      "updated_at": "2025-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "financial.financialcategory",
+    "pk": 2,
+    "fields": {
+      "code": "other_revenue",
+      "name": "إيرادات أخرى",
+      "description": "إيرادات متنوعة أخرى",
+      "default_revenue_account": 35,
+      "default_expense_account": null,
+      "is_active": true,
+      "display_order": 20,
+      "created_at": "2025-01-01T00:00:00Z",
+      "updated_at": "2025-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "financial.financialcategory",
+    "pk": 3,
+    "fields": {
+      "code": "operating_expenses",
+      "name": "مصروفات تشغيلية",
+      "description": "المصروفات التشغيلية (كهرباء، مياه، إيجار، صيانة، نقل، تخزين، تبريد)",
+      "default_revenue_account": null,
+      "default_expense_account": 12,
+      "is_active": true,
+      "display_order": 30,
+      "created_at": "2025-01-01T00:00:00Z",
+      "updated_at": "2025-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "financial.financialcategory",
+    "pk": 4,
+    "fields": {
+      "code": "admin_expenses",
+      "name": "مصروفات إدارية",
+      "description": "جميع المصروفات الإدارية (قرطاسية، رواتب إدارية، مستلزمات مكتبية، برامج)",
+      "default_revenue_account": null,
+      "default_expense_account": 22,
+      "is_active": true,
+      "display_order": 40,
+      "created_at": "2025-01-01T00:00:00Z",
+      "updated_at": "2025-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "financial.financialcategory",
+    "pk": 5,
+    "fields": {
+      "code": "marketing_expenses",
+      "name": "مصروفات تسويقية",
+      "description": "مصروفات التسويق والإعلان والعروض الترويجية",
+      "default_revenue_account": null,
+      "default_expense_account": 49,
+      "is_active": true,
+      "display_order": 50,
+      "created_at": "2025-01-01T00:00:00Z",
+      "updated_at": "2025-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "financial.financialcategory",
+    "pk": 6,
+    "fields": {
+      "code": "general_expenses",
+      "name": "مصروفات عامة ومتنوعة",
+      "description": "جميع المصروفات المتنوعة والعامة (تراخيص، رسوم، هدايا، ضيافة، مصروفات أخرى)",
+      "default_revenue_account": null,
+      "default_expense_account": 53,
+      "is_active": true,
+      "display_order": 60,
+      "created_at": "2025-01-01T00:00:00Z",
+      "updated_at": "2025-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "financial.financialcategory",
+    "pk": 7,
+    "fields": {
+      "code": "losses",
+      "name": "خسائر وتالف",
+      "description": "خسائر المنتجات التالفة ومنتهية الصلاحية",
+      "default_revenue_account": null,
+      "default_expense_account": 56,
+      "is_active": true,
+      "display_order": 70,
+      "created_at": "2025-01-01T00:00:00Z",
+      "updated_at": "2025-01-01T00:00:00Z"
+    }
+  }
+]

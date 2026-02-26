@@ -1,0 +1,367 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load i18n %}
+{% load utils_extras %}
+
+{% block title %}{{ title }} | {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/shared-components.css' %}">
+<link rel="stylesheet" href="{% static 'css/unified-components.css' %}">
+<link rel="stylesheet" href="{% static 'css/governance.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    {% csrf_token %}
+    
+    <!-- Page Header -->
+    {% include "shared/page_header.html" with title=title subtitle=subtitle icon=icon %}
+    
+    <!-- Breadcrumb -->
+    {% include "shared/breadcrumb.html" with items=breadcrumb_items %}
+    
+    <!-- Audit Overview Stats -->
+    <div class="section-container">
+        <h5 class="section-title"><i class="fas fa-chart-pie me-2"></i>إحصائيات التدقيق</h5>
+        <div class="row">
+            <div class="col-md-3 mb-3">
+                <div class="stats-card stats-card-primary">
+                    <div class="stats-card-body">
+                        <div class="stats-card-icon"><i class="fas fa-clipboard-list"></i></div>
+                        <div class="stats-card-title">إجمالي السجلات</div>
+                        <div class="stats-card-value">{{ total_audit_records|smart_float|default:"1,245" }}</div>
+                        <div class="stats-card-unit">سجل</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stats-card stats-card-info">
+                    <div class="stats-card-body">
+                        <div class="stats-card-icon"><i class="fas fa-clock"></i></div>
+                        <div class="stats-card-title">سجلات اليوم</div>
+                        <div class="stats-card-value">{{ today_records|default:"87" }}</div>
+                        <div class="stats-card-unit">سجل</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stats-card stats-card-warning">
+                    <div class="stats-card-body">
+                        <div class="stats-card-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                        <div class="stats-card-title">عناصر محجورة</div>
+                        <div class="stats-card-value">{{ quarantined_items|default:"3" }}</div>
+                        <div class="stats-card-unit">عنصر</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stats-card stats-card-success">
+                    <div class="stats-card-body">
+                        <div class="stats-card-icon"><i class="fas fa-check-circle"></i></div>
+                        <div class="stats-card-title">عمليات ناجحة</div>
+                        <div class="stats-card-value">98.5%</div>
+                        <div class="stats-card-unit">نسبة</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Audit Logs Management -->
+    <div class="section-container mb-4">
+        <h5 class="section-title">
+            <i class="fas fa-list me-2"></i>سجلات التدقيق والمراجعة
+        </h5>
+        <div class="card">
+            <div class="card-header">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h6 class="card-title mb-0">سجلات التدقيق الحديثة</h6>
+                    </div>
+                    <div class="col-auto">
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="refreshAuditLogs()">
+                                <i class="fas fa-sync-alt me-1"></i>تحديث
+                            </button>
+                            <button type="button" class="btn btn-outline-success btn-sm" onclick="exportAuditLogs()">
+                                <i class="fas fa-download me-1"></i>تصدير
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover" id="auditLogsTable">
+                        <thead>
+                            <tr>
+                                <th class="text-center">الوقت</th>
+                                <th class="text-center">المستخدم</th>
+                                <th class="text-center">العملية</th>
+                                <th class="text-center">النموذج</th>
+                                <th class="text-center">الحالة</th>
+                                <th class="text-center">الإجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="text-center">2026-02-03 14:30:25</td>
+                                <td class="text-center">admin</td>
+                                <td class="text-center">إنشاء عميل</td>
+                                <td class="text-center">Customer</td>
+                                <td class="text-center"><span class="badge bg-success">نجح</span></td>
+                                <td class="text-center">
+                                    <button class="btn btn-outline-info btn-sm" onclick="viewAuditDetails(1)">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-center">2026-02-03 14:25:10</td>
+                                <td class="text-center">teacher1</td>
+                                <td class="text-center">تحديث فاتورة</td>
+                                <td class="text-center">Invoice</td>
+                                <td class="text-center"><span class="badge bg-success">نجح</span></td>
+                                <td class="text-center">
+                                    <button class="btn btn-outline-info btn-sm" onclick="viewAuditDetails(2)">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-center">2026-02-03 14:20:45</td>
+                                <td class="text-center">system</td>
+                                <td class="text-center">مزامنة مالية</td>
+                                <td class="text-center">Payment</td>
+                                <td class="text-center"><span class="badge bg-warning">تحذير</span></td>
+                                <td class="text-center">
+                                    <button class="btn btn-outline-info btn-sm" onclick="viewAuditDetails(3)">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Quarantine Management -->
+    <div class="section-container mb-4">
+        <h5 class="section-title">
+            <i class="fas fa-shield-alt me-2"></i>إدارة العناصر المحجورة
+        </h5>
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">العناصر المحجورة والمعلقة</h6>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info" role="alert">
+                    <i class="fas fa-info-circle me-2"></i>
+                    العناصر المحجورة هي العمليات التي تم إيقافها مؤقتاً لمراجعة إضافية
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-hover" id="quarantineTable">
+                        <thead>
+                            <tr>
+                                <th class="text-center">التاريخ</th>
+                                <th class="text-center">النوع</th>
+                                <th class="text-center">السبب</th>
+                                <th class="text-center">الحالة</th>
+                                <th class="text-center">الإجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="text-center">2026-02-03 13:45:00</td>
+                                <td class="text-center">دفعة مالية</td>
+                                <td class="text-center">مبلغ غير عادي</td>
+                                <td class="text-center"><span class="badge bg-warning">معلق</span></td>
+                                <td class="text-center">
+                                    <button class="btn btn-outline-success btn-sm" onclick="approveQuarantine(1)">
+                                        <i class="fas fa-check me-1"></i>موافقة
+                                    </button>
+                                    <button class="btn btn-outline-danger btn-sm" onclick="rejectQuarantine(1)">
+                                        <i class="fas fa-times me-1"></i>رفض
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- System Logs -->
+    <div class="section-container">
+        <h5 class="section-title">
+            <i class="fas fa-server me-2"></i>سجلات النظام والأخطاء
+        </h5>
+        <div class="card">
+            <div class="card-header">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h6 class="card-title mb-0">سجلات النظام الحديثة</h6>
+                    </div>
+                    <div class="col-auto">
+                        <select class="form-select form-select-sm" id="logLevelFilter">
+                            <option value="">جميع المستويات</option>
+                            <option value="ERROR">أخطاء</option>
+                            <option value="WARNING">تحذيرات</option>
+                            <option value="INFO">معلومات</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover" id="systemLogsTable">
+                        <thead>
+                            <tr>
+                                <th class="text-center">الوقت</th>
+                                <th class="text-center">المستوى</th>
+                                <th class="text-center">الرسالة</th>
+                                <th class="text-center">المصدر</th>
+                                <th class="text-center">الإجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="text-center">2026-02-03 14:35:12</td>
+                                <td class="text-center"><span class="badge bg-success">INFO</span></td>
+                                <td class="text-center">تم تسجيل دخول المستخدم admin</td>
+                                <td class="text-center">authentication</td>
+                                <td class="text-center">
+                                    <button class="btn btn-outline-info btn-sm" onclick="viewLogDetails(1)">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-center">2026-02-03 14:30:45</td>
+                                <td class="text-center"><span class="badge bg-warning">WARNING</span></td>
+                                <td class="text-center">محاولة وصول غير مصرح بها</td>
+                                <td class="text-center">security</td>
+                                <td class="text-center">
+                                    <button class="btn btn-outline-info btn-sm" onclick="viewLogDetails(2)">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Audit Details Modal -->
+<div class="modal fade" id="auditDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">تفاصيل سجل التدقيق</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="auditDetailsContent">
+                <!-- Content will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/global-table.js' %}"></script>
+<script>
+$(document).ready(function() {
+    // Initialize DataTables
+    if (typeof GlobalTableManager !== 'undefined') {
+        GlobalTableManager.initializeTable('auditLogsTable', {
+            order: [[0, 'desc']],
+            columnDefs: [{ targets: -1, orderable: false }]
+        });
+        
+        GlobalTableManager.initializeTable('quarantineTable', {
+            order: [[0, 'desc']],
+            columnDefs: [{ targets: -1, orderable: false }]
+        });
+        
+        GlobalTableManager.initializeTable('systemLogsTable', {
+            order: [[0, 'desc']],
+            columnDefs: [{ targets: -1, orderable: false }]
+        });
+    }
+    
+    // Log level filter
+    $('#logLevelFilter').on('change', function() {
+        const level = $(this).val();
+        // Filter table based on log level
+    });
+});
+
+function refreshAuditLogs() {
+    // Refresh audit logs
+    location.reload();
+}
+
+function exportAuditLogs() {
+    // Export audit logs
+    alert('تصدير سجلات التدقيق...');
+}
+
+function viewAuditDetails(id) {
+    // Load audit details
+    $('#auditDetailsContent').html(`
+        <div class="row">
+            <div class="col-md-6">
+                <strong>معرف السجل:</strong> ${id}<br>
+                <strong>المستخدم:</strong> admin<br>
+                <strong>العملية:</strong> إنشاء عميل<br>
+                <strong>الوقت:</strong> 2026-02-03 14:30:25
+            </div>
+            <div class="col-md-6">
+                <strong>النموذج:</strong> Customer<br>
+                <strong>معرف الكائن:</strong> 123<br>
+                <strong>الحالة:</strong> نجح<br>
+                <strong>عنوان IP:</strong> 192.168.1.100
+            </div>
+        </div>
+        <hr>
+        <h6>التغييرات:</h6>
+        <pre class="bg-light p-3 rounded">
+{
+    "name": "أحمد محمد علي",
+    "national_id": "12345678901234",
+    "parent_id": 456
+}
+        </pre>
+    `);
+    $('#auditDetailsModal').modal('show');
+}
+
+function viewLogDetails(id) {
+    // View system log details
+    alert(`عرض تفاصيل السجل ${id}`);
+}
+
+function approveQuarantine(id) {
+    if (confirm('هل أنت متأكد من الموافقة على هذا العنصر؟')) {
+        // Approve quarantined item
+        alert(`تم الموافقة على العنصر ${id}`);
+    }
+}
+
+function rejectQuarantine(id) {
+    if (confirm('هل أنت متأكد من رفض هذا العنصر؟')) {
+        // Reject quarantined item
+        alert(`تم رفض العنصر ${id}`);
+    }
+}
+</script>
+{% endblock %}

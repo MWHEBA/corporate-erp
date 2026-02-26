@@ -1,0 +1,832 @@
+{% load static %}
+{% load i18n %}
+{% load pricing_filters %}
+{% load utils_extras %}
+{% load custom_filters %}
+
+{% comment %}
+مكون جدول بيانات للعرض في صفحات القوائم مع دعم الترتيب والفلترة
+
+الاستخدام:
+{% include "components/data_table.html" with table_id="products-table" headers=headers data=products %}
+
+المعلمات:
+- table_id: معرف الجدول (اختياري، افتراضي "data-table")
+- headers: قائمة برؤوس الأعمدة [{'key': 'name', 'label': 'الاسم', 'sortable': True, 'width': '10%', 'class': 'text-center'}, ...] 
+- data: قائمة العناصر المعروضة
+- empty_message: رسالة عندما لا توجد بيانات (اختياري، افتراضي "لا توجد بيانات للعرض")
+- table_class: تصنيفات CSS إضافية للجدول (اختياري)
+- primary_key: اسم الحقل المستخدم كمفتاح أساسي (اختياري، افتراضي "id")
+- action_buttons: قائمة بأزرار الإجراءات مثل [{'url': 'edit_url', 'icon': 'fa-edit', 'label': 'تعديل', 'class': 'action-edit'}]
+- responsive: هل الجدول مستجيب (اختياري، افتراضي True)
+- sortable: هل الجدول قابل للترتيب (اختياري، افتراضي True)
+- current_order_by: الحقل الحالي للترتيب (اختياري، افتراضي "")
+- current_order_dir: اتجاه الترتيب الحالي (اختياري، افتراضي "")
+- row_class_callback: دالة لتحديد فئة الصفوف تبعاً لمحتواها (اختياري)
+- show_currency: هل تظهر رمز العملة في القيم المالية (اختياري، افتراضي False)
+- currency_symbol: رمز العملة (اختياري، يأتي من الإعدادات)
+- hover_effect: هل تظهر تأثير عند المرور على الصف (اختياري، افتراضي True)
+- show_search: إظهار مربع البحث (اختياري، افتراضي True)
+- show_length_menu: إظهار قائمة عدد العناصر (اختياري، افتراضي True)
+- length_options: خيارات عدد العناصر [10, 25, 50, 100] (اختياري)
+- clickable_rows: جعل الصفوف قابلة للنقر (اختياري، افتراضي False)
+- row_click_url: URL للانتقال عند النقر على الصف (اختياري)
+- show_export: إظهار أزرار التصدير (اختياري، افتراضي False)
+- export_filename: اسم الملف للتصدير (اختياري، افتراضي table_data)
+{% endcomment %}
+
+{% if data %}
+
+<div {% if responsive|default:True %}class="table-responsive"{% endif %}>
+    <table id="{{ table_id|default:'data-table' }}" class="transaction-table table-hover table-striped {{ table_class }}" style="width: 100%" {% if disable_ordering %}data-disable-ordering="true"{% endif %}>
+        <thead>
+            <tr>
+                {% for header in headers %}
+                    <th {% if header.width %}style="width: {{ header.width }};"{% endif %} class="{% if header.class %}{{ header.class }}{% endif %} col-{{ header.key }} text-center">
+                        <span class="d-block text-center">{{ header.label }}</span>
+                    </th>
+                {% endfor %}
+                {% if action_buttons %}
+                    <th class="text-center col-actions">{% trans "إجراءات" %}</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in data %}
+                {% if forloop.first %}<!-- DEBUG: لدينا بيانات فعلية -->{% endif %}
+                    <tr {% if row_class_callback %}class="{{ item|call:row_class_callback }}"{% endif %} 
+                        data-id="{{ item|get_attr:primary_key|default:'0' }}"
+                        {% if clickable_rows|default:False %}data-clickable="true"{% endif %}
+                        {% if row_click_field %} data-url="{{ item|get_attr:row_click_field }}"{% endif %}>
+                        {% for header in headers %}
+                            {% with field_value=item|get_attr:header.key %}
+                                <td class="{% if header.class %}{{ header.class }}{% endif %} col-{{ header.key }}">
+                                    {% if header.template %}
+                                        {% include header.template with value=field_value object=item %}
+                                    {% elif header.format == 'date' %}
+                                        {{ field_value|format_date_safe:"date"|safe }}
+                                    {% elif header.format == 'datetime' %}
+                                        {{ field_value|format_date_safe:"datetime"|safe }}
+                                    {% elif header.format == 'datetime_12h' %}
+                                        {{ field_value|format_date_safe:"datetime_12h"|safe }}
+                                    {% elif header.format == 'number' %}
+                                        <span class="transaction-amount {% if header.variant %}{{ header.variant }}{% endif %} text-center d-block">
+                                            {% if field_value|is_empty_value %}
+                                                <span class="text-muted">-</span>
+                                            {% else %}
+                                                {{ field_value|remove_trailing_zeros }}
+                                            {% endif %}
+                                        </span>
+                                    {% elif header.format == 'currency' %}
+                                        <span class="transaction-amount {% if header.variant %}{{ header.variant }}{% endif %} text-center d-block fw-bold">
+                                            {% if field_value|is_empty_value %}
+                                                <span class="text-muted">-</span>
+                                            {% elif field_value == 0 and header.key == 'balance' %}
+                                                <span class="text-muted">-</span>
+                                            {% else %}
+                                                <span class="currency-symbol">{{ currency_symbol|default:"ج.م" }}</span> {{ field_value|remove_trailing_zeros|default:"0" }}
+                                            {% endif %}
+                                        </span>
+                                    {% elif header.format == 'boolean' %}
+                                        {{ field_value|format_boolean_badge:header.key|safe }}
+                                    {% elif header.format == 'image' %}
+                                        {% if field_value %}
+                                            <img src="{{ field_value.url }}" alt="صورة" class="img-thumbnail" style="max-width: 50px; height: auto;">
+                                        {% else %}
+                                            <i class="fas fa-image text-muted"></i>
+                                        {% endif %}
+                                    {% elif header.format == 'role_badge' %}
+                                        <div class="text-center">
+                                            {% if field_value %}
+                                                {% if field_value.name == 'admin' %}
+                                                    <span class="badge bg-danger">
+                                                        <i class="fas fa-crown me-1"></i>{{ field_value.display_name }}
+                                                    </span>
+                                                {% elif field_value.name == 'manager' %}
+                                                    <span class="badge bg-primary">
+                                                        <i class="fas fa-user-tie me-1"></i>{{ field_value.display_name }}
+                                                    </span>
+                                                {% elif field_value.name == 'user' %}
+                                                    <span class="badge bg-success">
+                                                        <i class="fas fa-user me-1"></i>{{ field_value.display_name }}
+                                                    </span>
+                                                {% elif field_value.name == 'employee' %}
+                                                    <span class="badge bg-info">
+                                                        <i class="fas fa-user-clock me-1"></i>{{ field_value.display_name }}
+                                                    </span>
+                                                {% elif field_value.name == 'reception' %}
+                                                    <span class="badge bg-warning text-dark">
+                                                        <i class="fas fa-concierge-bell me-1"></i>{{ field_value.display_name }}
+                                                    </span>
+                                                {% else %}
+                                                    <span class="badge bg-secondary">
+                                                        <i class="fas fa-user me-1"></i>{{ field_value.display_name }}
+                                                    </span>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </div>
+                                    {% elif header.format == 'status' %}
+                                        <div class="expense-status-cell">
+                                            {% if header.key == 'is_active' %}
+                                                {% if field_value %}
+                                                    <span class="badge bg-success">{% trans "نشط" %}</span>
+                                                {% elif field_value == False %}
+                                                    <span class="badge bg-danger">{% trans "غير نشط" %}</span>
+                                                {% else %}
+                                                    <span class="badge bg-warning">{% trans "غير محدد" %} ({{ field_value|stringformat:'r' }})</span>
+                                                {% endif %}
+                                            
+                                            <!-- معالجة حالة الدفع -->
+                                            {% elif header.key == 'payment_status' %}
+                                                {% if field_value == 'paid' %}
+                                                    <span class="badge bg-success">{% trans "مدفوعة" %}</span>
+                                                {% elif field_value == 'partially_paid' %}
+                                                    <span class="badge bg-warning">{% trans "مدفوعة جزئياً" %}</span>
+                                                {% elif field_value == 'unpaid' %}
+                                                    <span class="badge bg-danger">{% trans "غير مدفوعة" %}</span>
+                                                {% else %}
+                                                    <span class="badge bg-secondary">{{ field_value }}</span>
+                                                {% endif %}
+                                                
+                                            <!-- معالجة طريقة الدفع -->
+                                            {% elif header.key == 'payment_method' %}
+                                                {% if field_value == 'cash' %}
+                                                    <span class="badge bg-success">{% trans "نقدي" %}</span>
+                                                {% elif field_value == 'credit' %}
+                                                    <span class="badge bg-warning">{% trans "آجل" %}</span>
+                                                {% elif field_value == 'bank_transfer' %}
+                                                    <span class="badge bg-primary">{% trans "تحويل بنكي" %}</span>
+                                                {% elif not field_value %}
+                                                    <span class="text-muted">-</span>
+                                                {% else %}
+                                                    <span class="badge bg-secondary">{{ field_value }}</span>
+                                                {% endif %}
+                                                
+                                            <!-- معالجة حالة الإرجاع -->
+                                            {% elif header.key == 'return_status' %}
+                                                {% if field_value == 'full' %}
+                                                    <span class="badge bg-danger">{% trans "مرتجع كلي" %}</span>
+                                                {% elif field_value == 'partial' %}
+                                                    <span class="badge bg-warning">{% trans "مرتجع جزئي" %}</span>
+                                                {% elif not field_value %}
+                                                    <span class="text-muted">-</span>
+                                                {% else %}
+                                                    <span class="badge bg-secondary">{{ field_value }}</span>
+                                                {% endif %}
+                                                
+                                            <!-- معالجة حالة المخزون -->
+                                            {% elif header.key == 'status' and 'warehouse' in request.resolver_match.url_name %}
+                                                {% if field_value == 'متوفر' %}
+                                                    <span class="badge bg-success">{{ field_value }}</span>
+                                                {% elif field_value == 'منخفض' %}
+                                                    <span class="badge bg-warning">{{ field_value }}</span>
+                                                {% elif field_value == 'نفد' %}
+                                                    <span class="badge bg-danger">{{ field_value }}</span>
+                                                {% else %}
+                                                    <span class="badge bg-secondary">{{ field_value }}</span>
+                                                {% endif %}
+                                                
+                                            <!-- معالجة حالات التسويات المالية -->
+                                            {% elif field_value == 'pending' %}
+                                                <span class="badge bg-warning text-dark">{% trans "في الانتظار" %}</span>
+                                            {% elif field_value == 'approved' %}
+                                                <span class="badge bg-info">{% trans "موافق عليه" %}</span>
+                                            {% elif field_value == 'processing' %}
+                                                <span class="badge bg-primary">{% trans "قيد المعالجة" %}</span>
+                                            {% elif field_value == 'completed' %}
+                                                <span class="badge bg-success">{% trans "مكتمل" %}</span>
+                                            {% elif field_value == 'failed' %}
+                                                <span class="badge bg-danger">{% trans "فشل" %}</span>
+                                            {% elif field_value == 'rejected' %}
+                                                <span class="badge bg-danger">{% trans "مرفوض" %}</span>
+                                            {% elif field_value == 'cancelled' %}
+                                                <span class="badge bg-secondary">{% trans "ملغي" %}</span>
+                                            {% elif field_value == 'voided' %}
+                                                <span class="badge bg-dark">{% trans "ملغي" %}</span>
+                                            
+                                            <!-- معالجة حالات مسيرات الرواتب (يجب أن تأتي بعد التسويات) -->
+                                            {% elif field_value == 'partial' %}
+                                                <span class="badge bg-warning text-dark">{% trans "جزئي" %}</span>
+                                            
+                                            <!-- معالجة حالات القيود المحاسبية -->
+                                            {% elif field_value == 'posted' %}
+                                                <span class="badge bg-success">مرحل</span>
+                                            {% elif field_value == 'draft' %}
+                                                <span class="badge bg-warning">مسودة</span>
+                                            {% elif field_value == 'paid' %}
+                                                <span class="badge bg-success">{% trans "مدفوع" %}</span>
+                                            {% elif field_value == 'approved' %}
+                                                <span class="badge bg-info">{% trans "معتمد" %}</span>
+                                            {% elif field_value == 'calculated' %}
+                                                <span class="badge bg-warning">{% trans "محسوب" %}</span>
+                                            {% elif field_value == 'pending' %}
+                                                <span class="badge bg-secondary">{% trans "قيد الانتظار" %}</span>
+                                            {% elif field_value == 'received' %}
+                                                <span class="badge bg-success">{% trans "مستلم" %}</span>
+                                            {% elif field_value == 'cancelled' %}
+                                                <span class="badge bg-danger">{% trans "ملغي" %}</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">{{ field_value }}</span>
+                                            {% endif %}
+                                        </div>
+                                    {% elif header.format == 'reference' %}
+                                        {% if field_value %}
+                                            {% if header.variant == 'highlight-code' %}
+                                                <div class="transaction-ref text-center">
+                                                    {% if header.key == 'reference_number' or header.key == 'number' %}
+                                                        {% if header.app == 'purchase' %}
+                                                        <a href="{% url 'purchase:purchase_detail' item|get_attr:primary_key|default:'0' %}" class="text-decoration-none">
+                                                        {% comment %}
+                                                        {% elif header.app == 'sale' %}
+                                                        <a href="{% url 'sale:sale_detail' item|get_attr:primary_key|default:'0' %}" class="text-decoration-none">
+                                                        {% endcomment %}
+                                                        {% else %}
+                                                        <a href="#" class="text-decoration-none">
+                                                        {% endif %}
+                                                            <span class="badge invoice-number"><i class="fas fa-file-invoice me-1"></i> {{ field_value }}</span>
+                                                        </a>
+                                                    {% else %}
+                                                        <span class="badge invoice-number"><i class="fas fa-file-invoice me-1"></i> {{ field_value }}</span>
+                                                    {% endif %}
+                                                </div>
+                                            {% else %}
+                                                <div class="transaction-ref text-center">{{ field_value }}</div>
+                                            {% endif %}
+                                        {% else %}
+                                            <strong style="text-align: center; display: block;"><span class="text-muted">-</span></strong>
+                                        {% endif %}
+                                    {% elif header.key == 'reference' and 'journal' in request.resolver_match.url_name %}
+                                        <!-- معالجة خاصة لرقم القيد المحاسبي -->
+                                        {% if field_value %}
+                                            <div class="transaction-ref text-center">
+                                                <span class="badge bg-primary">
+                                                    <i class="fas fa-book me-1"></i>{{ field_value }}
+                                                </span>
+                                            </div>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    {% elif header.format == 'icon_text' %}
+                                        <div class="d-flex align-items-center">
+                                            {% if header.icon_callback %}
+                                                <div class="transaction-icon {{ item|call:header.icon_callback }}">
+                                                    <i class="fas {{ item|call:header.icon_class_callback }}"></i>
+                                                </div>
+                                            {% endif %}
+                                            <div {% if header.icon_callback %}class="transaction-type-text me-2"{% endif %}>
+                                                {% if header.key == 'transaction_type' %}
+                                                    {{ item|call:"get_transaction_type_display" }}
+                                                {% else %}
+                                                    {{ field_value }}
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    {% elif header.format == 'link' %}
+                                        {% if header.url and field_value %}
+                                            <a href="{% url header.url item|get_attr:primary_key|default:'0' %}" class="text-decoration-none fw-bold text-primary">
+                                                {{ field_value }}
+                                            </a>
+                                        {% else %}
+                                            {{ field_value|default:"-" }}
+                                        {% endif %}
+                                    {% elif header.format == 'html' %}
+                                        {{ field_value|safe }}
+                                    {% elif header.key == 'actions' %}
+                                        <div class="d-flex justify-content-center">
+                                            {% for button in field_value %}
+                                                {% render_action_button button item primary_key %}
+                                            {% endfor %}
+                                        </div>
+                                    {% elif header.format == 'rating' %}
+                                        <div class="rating-display text-center">
+                                            <div class="rating-stars text-warning mb-1">
+                                                {% with rating=field_value|default:0|smart_float %}
+                                                    {% for i in "12345" %}
+                                                        {% if forloop.counter <= rating|add:0 %}
+                                                            <i class="fas fa-star"></i>
+                                                        {% else %}
+                                                            <i class="far fa-star"></i>
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                {% endwith %}
+                                            </div>
+                                            <small class="text-muted">{{ field_value|default:0 }}/5</small>
+                                        </div>
+                                    {% elif header.format == 'boolean_badge' %}
+                                        {% if field_value %}
+                                            <span class="badge bg-warning text-dark">
+                                                <i class="fas fa-star me-1"></i>مفضل
+                                            </span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    {% elif header.key == 'entry_type' %}
+                                        <!-- معالجة نوع القيد المحاسبي -->
+                                        {% if field_value == 'إيراد نقدي' %}
+                                            <span class="badge bg-success">💵 إيراد نقدي</span>
+                                        {% elif field_value == 'مصروف نقدي' %}
+                                            <span class="badge bg-danger">💸 مصروف نقدي</span>
+                                        {% elif field_value == 'إيراد بنكي' %}
+                                            <span class="badge bg-primary">🏦 إيراد بنكي</span>
+                                        {% elif field_value == 'مصروف بنكي' %}
+                                            <span class="badge bg-warning">🏧 مصروف بنكي</span>
+                                        {% elif field_value == 'فاتورة مبيعات' %}
+                                            <span class="badge bg-success">📄 فاتورة مبيعات</span>
+                                        {% elif field_value == 'فاتورة مشتريات' %}
+                                            <span class="badge bg-info">🛒 فاتورة مشتريات</span>
+                                        {% elif field_value == 'تحصيل من عميل' %}
+                                            <span class="badge bg-primary">💰 تحصيل من عميل</span>
+                                        {% elif field_value == 'دفع لمورد' %}
+                                            <span class="badge bg-warning">💳 دفع لمورد</span>
+                                        {% elif field_value == 'قيد مركب' %}
+                                            <span class="badge bg-secondary">🔗 قيد مركب</span>
+                                        {% elif field_value == 'تحويل' %}
+                                            <span class="badge bg-info">🔄 تحويل</span>
+                                        {% elif field_value == 'رسوم دراسية' %}
+                                            <span class="badge bg-success">🎓 رسوم دراسية</span>
+                                        {% elif field_value == 'رسوم مواد ومستلزمات' %}
+                                            <span class="badge bg-info">📚 رسوم مواد ومستلزمات</span>
+                                        {% elif field_value == 'رسوم خدمات' %}
+                                            <span class="badge bg-primary">🔧 رسوم خدمات</span>
+                                        {% elif field_value == 'رسوم إدارية' %}
+                                            <span class="badge bg-warning">📋 رسوم إدارية</span>
+                                        {% elif field_value == 'دفعة ولي أمر' %}
+                                            <span class="badge bg-success">💰 دفعة ولي أمر</span>
+                                        {% elif field_value == 'دفعة مورد' %}
+                                            <span class="badge bg-danger">💳 دفعة مورد</span>
+                                        {% elif field_value == 'مساهمة الشريك' %}
+                                            <span class="badge bg-success">🤝 مساهمة الشريك</span>
+                                        {% elif field_value == 'سحب الشريك' %}
+                                            <span class="badge bg-warning">💼 سحب الشريك</span>
+                                        {% elif field_value == 'إيراد نقدي' %}
+                                            <span class="badge bg-success">💵 إيراد نقدي</span>
+                                        {% elif field_value == 'مصروف نقدي' %}
+                                            <span class="badge bg-danger">💸 مصروف نقدي</span>
+                                        {% elif field_value == 'إيراد بنكي' %}
+                                            <span class="badge bg-primary">🏦 إيراد بنكي</span>
+                                        {% elif field_value == 'مصروف بنكي' %}
+                                            <span class="badge bg-warning">🏧 مصروف بنكي</span>
+                                        {% elif field_value == 'يدوي' %}
+                                            <span class="badge bg-secondary">✏️ يدوي</span>
+                                        {% elif field_value == 'تلقائي' %}
+                                            <span class="badge bg-info">⚙️ تلقائي</span>
+                                        {% elif field_value == 'تسوية' %}
+                                            <span class="badge bg-warning">⚖️ تسوية</span>
+                                        {% elif field_value == 'إقفال' %}
+                                            <span class="badge bg-danger">🔒 إقفال</span>
+                                        {% elif field_value == 'افتتاحي' %}
+                                            <span class="badge bg-success">🔓 افتتاحي</span>
+                                        {% elif field_value == 'تسوية مالية' %}
+                                            <span class="badge bg-primary">💼 تسوية مالية</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ field_value }}</span>
+                                        {% endif %}
+                                    {% else %}
+                                        {% if header.ellipsis|default:False %}
+                                            <div class="description">{{ field_value|default:"-" }}</div>
+                                        {% else %}
+                                            {% if field_value == None or field_value == '' %}
+                                                <span class="text-muted">-</span>
+                                            {% else %}
+                                                {{ field_value }}
+                                            {% endif %}
+                                        {% endif %}
+                                    {% endif %}
+                                </td>
+                            {% endwith %}
+                        {% endfor %}
+                        
+                        {% if action_buttons %}
+                            <td class="text-center col-actions">
+                                <div class="d-flex justify-content-center">
+                                    {% for button in action_buttons %}
+                                        {% comment %} استخدام template tag محسن للأزرار {% endcomment %}
+                                        {% render_action_button button item primary_key %}
+                                    {% endfor %}
+                                </div>
+                            </td>
+                        {% endif %}
+                    </tr>
+                {% empty %}
+                <!-- DEBUG: الـ for loop فارغ - لا توجد بيانات -->
+                <tr>
+                    <td colspan="{% if action_buttons %}{{ headers|length|add:1 }}{% else %}{{ headers|length }}{% endif %}" class="text-center py-5">
+                        <div class="empty-state-icon mb-3">
+                            <i class="fas fa-table fa-2x text-muted" style="opacity: 0.6;"></i>
+                        </div>
+                        <h5 class="text-muted mb-2">{{ empty_message|default:"لا توجد بيانات للعرض" }}</h5>
+                        <p class="text-muted small">لم يتم العثور على أي بيانات لعرضها في هذا الجدول</p>
+                    </td>
+                </tr>
+                {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% else %}
+<!-- DEBUG: في قسم الإشعار - data={{ data|default:"None" }} -->
+<!-- عرض إشعار بدلاً من الجدول الفارغ -->
+<div class="empty-table-notice text-center py-5" style="border: 2px dashed #ccc; background-color: #f8f9fa;">
+    <div class="empty-state-icon mb-3">
+        <i class="fas fa-table fa-sm text-muted" style="opacity: 0.5;"></i>
+    </div>
+    <h4 class="empty-state-title text-muted mb-2">{{ empty_message|default:"لا توجد بيانات للعرض" }}</h4>
+    <p class="text-muted">لم يتم العثور على أي بيانات لعرضها في هذا الجدول</p>
+</div>
+{% endif %}
+
+{% if show_export|default:False and data %}
+<!-- أزرار التصدير المحسنة -->
+<div class="table-export-controls mt-3">
+    <div class="d-flex justify-content-end align-items-center">
+        <button type="button" 
+                class="btn btn-sm btn-outline-success btn-export-excel" 
+                data-table="{{ table_id|default:'data-table' }}" 
+                data-filename="{{ export_filename|default:'table_data' }}"
+                data-date-from="{{ export_date_from|default:'' }}"
+                data-date-to="{{ export_date_to|default:'' }}"
+                title="تصدير كملف Excel"
+                aria-label="تصدير البيانات كملف Excel">
+            <i class="fas fa-file-excel me-1" aria-hidden="true"></i>تصدير Excel
+        </button>
+    </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Enhanced Data Table JavaScript -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const tableId = '{{ table_id|default:"data-table"|escapejs }}';
+    const table = document.getElementById(tableId);
+    if (!table) return;
+    
+    // Clickable Rows Functionality
+    {% if clickable_rows|default:False %}
+    const tableBody = table.querySelector('tbody');
+    if (tableBody) {
+        // إضافة event listener واحد للجدول بدلاً من كل صف منفرد
+        tableBody.addEventListener('click', function(e) {
+            const row = e.target.closest('tr[data-clickable="true"]');
+            if (!row) return;
+            
+            // تجاهل النقر على أزرار الإجراءات أو الروابط
+            if (e.target.closest('.col-actions, .btn, a, button, input, select, textarea')) return;
+            
+            // تجاهل الصفوف الفارغة
+            if (row.getAttribute('data-empty') === 'true') return;
+            
+            const itemId = row.getAttribute('data-id');
+            
+            {% if row_click_field %}
+            // استخدام URL من البيانات
+            const url = row.getAttribute('data-url');
+            if (url && (url.startsWith('/') || url.startsWith(window.location.origin))) {
+                window.location.href = url;
+            }
+            {% elif row_click_url %}
+            // استخدام URL ثابت مع ID
+            if (itemId && itemId !== '0' && /^\d+$/.test(itemId)) {
+                const baseUrl = '{{ row_click_url|escapejs }}';
+                const url = baseUrl.replace('/0/', `/${encodeURIComponent(itemId)}/`);
+                if (url.startsWith('/') || url.startsWith(window.location.origin)) {
+                    window.location.href = url;
+                }
+            }
+            {% endif %}
+        });
+        
+        // إضافة cursor pointer وhover effects للصفوف القابلة للنقر
+        const clickableRows = tableBody.querySelectorAll('tr[data-clickable="true"]');
+        clickableRows.forEach(row => {
+            const itemId = row.getAttribute('data-id');
+            if (itemId && itemId !== '0' && row.getAttribute('data-empty') !== 'true') {
+                row.style.cursor = 'pointer';
+                row.title = 'انقر لعرض التفاصيل';
+                
+                row.addEventListener('mouseenter', function() {
+                    this.style.backgroundColor = 'var(--bs-light, #f8f9fa)';
+                });
+                
+                row.addEventListener('mouseleave', function() {
+                    this.style.backgroundColor = '';
+                });
+            }
+        });
+    }
+    {% endif %}
+    
+    // Export Functionality
+    {% if show_export|default:False %}
+    // Excel Export
+    const excelBtn = document.querySelector('.btn-export-excel[data-table="' + tableId + '"]');
+    if (excelBtn && !excelBtn.dataset.listenerAdded) {
+        excelBtn.dataset.listenerAdded = 'true';
+        excelBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            let filename = this.dataset.filename || 'table_data';
+            const dateFrom = this.dataset.dateFrom;
+            const dateTo = this.dataset.dateTo;
+            
+            // Add date range to filename if available
+            if (dateFrom && dateTo) {
+                filename = filename + '-' + dateFrom + '-' + dateTo;
+            } else if (dateFrom) {
+                filename = filename + '-from-' + dateFrom;
+            } else if (dateTo) {
+                filename = filename + '-to-' + dateTo;
+            }
+            
+            exportTableToExcel(tableId, filename);
+        }, { once: false });
+    }
+    {% endif %}
+    
+    // Advanced Filters Functionality
+    {% if show_filters|default:False %}
+    const applyFiltersBtn = document.querySelector('.btn-apply-filters[data-table="' + tableId + '"]');
+    const clearFiltersBtn = document.querySelector('.btn-clear-filters[data-table="' + tableId + '"]');
+    
+    if (applyFiltersBtn) {
+        applyFiltersBtn.addEventListener('click', function() {
+            applyTableFilters(tableId);
+        });
+    }
+    
+    if (clearFiltersBtn) {
+        clearFiltersBtn.addEventListener('click', function() {
+            clearTableFilters(tableId);
+        });
+    }
+    
+    // Auto-apply filters on change
+    const filterInputs = document.querySelectorAll('.table-filter[data-table="' + tableId + '"]');
+    filterInputs.forEach(input => {
+        input.addEventListener('change', function() {
+            if (this.value) {
+                applyTableFilters(tableId);
+            }
+        });
+    });
+    {% endif %}
+    
+    // Column Toggle Functionality
+    {% if show_column_toggle|default:False %}
+    const columnToggles = document.querySelectorAll('.column-toggle[data-table="' + tableId + '"]');
+    columnToggles.forEach(toggle => {
+        toggle.addEventListener('change', function() {
+            toggleTableColumn(tableId, this.dataset.column, this.checked);
+        });
+    });
+    {% endif %}
+});
+
+// Export Functions
+function exportTableToCSV(tableId, filename) {
+    const table = document.getElementById(tableId);
+    if (!table) return;
+    
+    let csv = [];
+    const rows = table.querySelectorAll('tr');
+    
+    for (let i = 0; i < rows.length; i++) {
+        const row = [], cols = rows[i].querySelectorAll('td, th');
+        
+        for (let j = 0; j < cols.length; j++) {
+            // Skip action columns
+            if (cols[j].classList.contains('col-actions')) continue;
+            
+            let cellText = cols[j].innerText.replace(/"/g, '""');
+            row.push('"' + cellText + '"');
+        }
+        
+        csv.push(row.join(','));
+    }
+    
+    downloadCSV(csv.join('\n'), filename + '.csv');
+}
+
+function exportTableToExcel(tableId, filename) {
+    const table = document.getElementById(tableId);
+    if (!table) return;
+    
+    // Check if SheetJS is available
+    if (typeof XLSX === 'undefined') {
+        console.warn('SheetJS library not loaded, falling back to CSV export');
+        exportTableToCSV(tableId, filename);
+        return;
+    }
+    
+    try {
+        // Clone table to avoid modifying the original
+        const tableClone = table.cloneNode(true);
+        
+        // Remove action columns
+        const actionHeaders = tableClone.querySelectorAll('th.col-actions');
+        const actionCells = tableClone.querySelectorAll('td.col-actions');
+        actionHeaders.forEach(th => th.remove());
+        actionCells.forEach(td => td.remove());
+        
+        // Create workbook from table
+        const wb = XLSX.utils.table_to_book(tableClone, {sheet: "البيانات"});
+        
+        // Add .xlsx extension if not present
+        const finalFilename = filename.includes('.xlsx') ? filename : (filename + '.xlsx');
+        
+        // Generate Excel file and trigger download
+        XLSX.writeFile(wb, finalFilename);
+        
+        // Show success message
+        if (typeof toastr !== 'undefined') {
+            toastr.success('تم تصدير البيانات بنجاح');
+        }
+    } catch (error) {
+        console.error('Error exporting to Excel:', error);
+        if (typeof toastr !== 'undefined') {
+            toastr.error('حدث خطأ أثناء التصدير');
+        }
+    }
+}
+
+function exportTableToPDF(tableId, filename) {
+    const table = document.getElementById(tableId);
+    if (!table) return;
+    
+    // This would require a library like jsPDF
+    // Fallback to print
+    printTable(tableId);
+}
+
+function printTable(tableId) {
+    const table = document.getElementById(tableId);
+    if (!table) return;
+    
+    const printWindow = window.open('', '', 'height=600,width=800');
+    printWindow.document.write('<html><head><title>طباعة الجدول</title>');
+    printWindow.document.write('<style>table{border-collapse:collapse;width:100%;}th,td{border:1px solid #ddd;padding:8px;text-align:right;}th{background-color:#f2f2f2;}</style>');
+    printWindow.document.write('</head><body dir="rtl">');
+    printWindow.document.write(table.outerHTML);
+    printWindow.document.write('</body></html>');
+    printWindow.document.close();
+    printWindow.print();
+}
+
+function downloadCSV(csv, filename) {
+    const csvFile = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const downloadLink = document.createElement('a');
+    downloadLink.download = filename;
+    downloadLink.href = window.URL.createObjectURL(csvFile);
+    downloadLink.style.display = 'none';
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+}
+
+// Filter Functions
+function applyTableFilters(tableId) {
+    const table = document.getElementById(tableId);
+    if (!table) return;
+    
+    const filters = {};
+    const filterInputs = document.querySelectorAll('.table-filter[data-table="' + tableId + '"]');
+    
+    filterInputs.forEach(input => {
+        if (input.value) {
+            filters[input.dataset.filter] = input.value;
+        }
+    });
+    
+    const rows = table.querySelectorAll('tbody tr');
+    rows.forEach(row => {
+        let showRow = true;
+        
+        for (const [filterKey, filterValue] of Object.entries(filters)) {
+            const cell = row.querySelector(`[data-filter-key="${filterKey}"]`);
+            if (cell && !cell.textContent.toLowerCase().includes(filterValue.toLowerCase())) {
+                showRow = false;
+                break;
+            }
+        }
+        
+        row.style.display = showRow ? '' : 'none';
+    });
+}
+
+function clearTableFilters(tableId) {
+    const filterInputs = document.querySelectorAll('.table-filter[data-table="' + tableId + '"]');
+    filterInputs.forEach(input => {
+        input.value = '';
+    });
+    
+    const table = document.getElementById(tableId);
+    if (table) {
+        const rows = table.querySelectorAll('tbody tr');
+        rows.forEach(row => {
+            row.style.display = '';
+        });
+    }
+}
+
+function toggleTableColumn(tableId, columnIndex, show) {
+    const table = document.getElementById(tableId);
+    if (!table) return;
+    
+    const cells = table.querySelectorAll(`th:nth-child(${parseInt(columnIndex) + 1}), td:nth-child(${parseInt(columnIndex) + 1})`);
+    cells.forEach(cell => {
+        cell.style.display = show ? '' : 'none';
+    });
+}
+</script>
+
+<!-- Enhanced Table Styles -->
+<style>
+/* Export Controls */
+.table-export-controls {
+    padding: 1rem;
+    background: var(--bs-light);
+    border-radius: 0.5rem;
+    border: 1px solid var(--bs-border-color);
+}
+
+.export-info {
+    display: flex;
+    align-items: center;
+}
+
+.export-buttons {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Clickable Rows Enhancement */
+tr[data-clickable="true"] {
+    transition: background-color 0.2s ease;
+}
+
+tr[data-clickable="true"]:hover {
+    background-color: var(--bs-light, #f8f9fa) !important;
+}
+
+tr[data-clickable="true"][style*="cursor: pointer"] {
+    user-select: none;
+}
+
+/* Filter Controls */
+.table-controls {
+    background: var(--bs-white);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    border: 1px solid var(--bs-border-color);
+}
+
+.table-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.table-search-control {
+    min-width: 250px;
+}
+
+/* Column Toggle */
+.dropdown-menu .dropdown-item {
+    padding: 0.5rem 1rem;
+}
+
+.dropdown-menu .form-check-input {
+    margin-top: 0;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .table-controls .d-flex {
+        flex-direction: column;
+        align-items: stretch !important;
+        gap: 1rem;
+    }
+    
+    .table-actions {
+        justify-content: stretch;
+    }
+    
+    .table-search-control {
+        min-width: auto;
+        flex: 1;
+    }
+    
+    .export-buttons .btn-group {
+        width: 100%;
+    }
+    
+    .export-buttons .btn {
+        flex: 1;
+    }
+}
+</style>

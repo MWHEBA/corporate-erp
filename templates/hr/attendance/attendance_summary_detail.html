@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+{% load static core_tags custom_filters pricing_filters %}
+
+{% block title %}{{ page_title|default:"تفاصيل ملخص الحضور" }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/shared-components.css' %}">
+<link rel="stylesheet" href="{% static 'css/unified-components.css' %}">
+<style>
+.stats-card-value-group {
+    margin-bottom: 0 !important;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+{% include 'shared/page_header.html' with title=page_title subtitle=page_subtitle icon=page_icon breadcrumb_items=breadcrumb_items header_buttons=header_buttons %}
+
+<div class="container-fluid">
+    {% csrf_token %}
+    
+    <!-- Hidden form for approve button -->
+    {% if not summary.is_approved and perms.hr.change_attendancesummary %}
+    <form id="approve-summary-form" method="post" action="{% url 'hr:approve_attendance_summary' summary.id %}" style="display: none;">
+        {% csrf_token %}
+    </form>
+    {% endif %}
+    
+    <!-- Auto-recalculation notification -->
+    {% if recalculated %}
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="fas fa-check-circle me-2"></i>
+        <strong>تم تحديث البيانات!</strong> تم إعادة حساب الملخص تلقائياً لعرض أحدث البيانات.
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endif %}
+    
+    <!-- Status badge if approved -->
+    {% if summary.is_approved %}
+    <div class="alert alert-success mb-4" role="alert">
+        <i class="fas fa-check-circle me-2"></i>
+        <strong>معتمد</strong> - تم اعتماد هذا الملخص بواسطة {{ summary.approved_by.get_full_name }} في {{ summary.approved_at|date:"Y-m-d H:i" }}
+    </div>
+    {% endif %}
+
+    <!-- البطاقات الإحصائية -->
+    <div class="section-container mb-4">
+        <h5 class="section-title"><i class="fas fa-chart-bar me-2"></i>الإحصائيات الشهرية</h5>
+        <div class="row">
+            {% include 'shared/stats_card.html' with title='أيام الحضور' value=stats.present_days|default:0 unit='يوم' subtitle=stats.present_subtitle icon='fa-calendar-check' color='success' %}
+            {% include 'shared/stats_card.html' with title='أيام الغياب' value=stats.absent_days|default:0 unit='يوم' subtitle=stats.absent_subtitle icon='fa-calendar-times' color='danger' %}
+            {% include 'shared/stats_card.html' with title='دقائق التأخير' value=stats.total_late_minutes|default:0 unit='دقيقة' icon='fa-history' color='warning' %}
+            {% include 'shared/stats_card.html' with title='الأذونات المستخدمة' value=stats.permissions_count|default:0 unit='إذن' icon='fa-file-signature' color='info' %}
+        </div>
+    </div>
+
+    <!-- السجل اليومي المفصل -->
+    <div class="section-container">
+        <h5 class="section-title"><i class="fas fa-list-ul me-2"></i>السجل اليومي المفصل</h5>
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th class="text-center">التاريخ</th>
+                        <th class="text-center">اليوم</th>
+                        <th class="text-center">الحضور</th>
+                        <th class="text-center">الانصراف</th>
+                        <th class="text-center">التأخير (دقيقة)</th>
+                        <th class="text-center">انصراف مبكر (دقيقة)</th>
+                        <th class="text-center">الحالة</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in daily_records %}
+                        <tr>
+                            <td class="text-center">{{ record.date|date:"Y-m-d" }}</td>
+                            <td class="text-center">{{ record.date|arabic_day_name }}</td>
+                            <td class="text-center">{{ record.check_in|date:"g:i A"|default:"-" }}</td>
+                            <td class="text-center">{{ record.check_out|date:"g:i A"|default:"-" }}</td>
+                            <td class="text-center">
+                                {% if record.late_minutes > 0 %}
+                                    <span class="badge bg-warning">{{ record.late_minutes|remove_trailing_zeros }}</span>
+                                {% else %}
+                                    <span class="text-muted">0</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if record.early_leave_minutes > 0 %}
+                                    <span class="badge bg-secondary">{{ record.early_leave_minutes|remove_trailing_zeros }}</span>
+                                {% else %}
+                                    <span class="text-muted">0</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% display_attendance_status record.status %}
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center p-4 text-muted">
+                                <i class="fas fa-info-circle me-2"></i> لا توجد سجلات حضور لهذا الشهر
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

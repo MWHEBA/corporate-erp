@@ -1,0 +1,739 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load i18n %}
+{% load utils_extras %}
+
+{% block title %}{{ title }} | {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/shared-components.css' %}">
+<link rel="stylesheet" href="{% static 'css/unified-components.css' %}">
+<link rel="stylesheet" href="{% static 'css/governance.css' %}">
+<style>
+.report-builder {
+    min-height: 400px;
+}
+.field-selector {
+    max-height: 300px;
+    overflow-y: auto;
+}
+.selected-fields {
+    min-height: 200px;
+    border: 2px dashed #dee2e6;
+    border-radius: 8px;
+    padding: 15px;
+}
+.field-item {
+    cursor: pointer;
+    padding: 8px 12px;
+    margin: 2px 0;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+.field-item:hover {
+    background-color: var(--bs-light);
+}
+.selected-field {
+    background-color: var(--bs-primary);
+    color: white;
+    padding: 5px 10px;
+    margin: 2px;
+    border-radius: 15px;
+    display: inline-block;
+}
+.chart-preview {
+    min-height: 250px;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f8f9fa;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    {% csrf_token %}
+    
+    <!-- Page Header -->
+    {% include "shared/page_header.html" with title=title subtitle=subtitle icon=icon %}
+    
+    <!-- Breadcrumb -->
+    {% include "shared/breadcrumb.html" with items=breadcrumb_items %}
+    
+    <!-- Reports Overview -->
+    <div class="section-container">
+        <h5 class="section-title"><i class="fas fa-chart-bar me-2"></i>نظرة عامة على التقارير</h5>
+        <div class="row">
+            <div class="col-md-3 mb-3">
+                <div class="stats-card stats-card-primary">
+                    <div class="stats-card-body">
+                        <div class="stats-card-icon"><i class="fas fa-file-alt"></i></div>
+                        <div class="stats-card-title">التقارير المحفوظة</div>
+                        <div class="stats-card-value">24</div>
+                        <div class="stats-card-unit">تقرير</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stats-card stats-card-success">
+                    <div class="stats-card-body">
+                        <div class="stats-card-icon"><i class="fas fa-clock"></i></div>
+                        <div class="stats-card-title">التقارير المجدولة</div>
+                        <div class="stats-card-value">8</div>
+                        <div class="stats-card-unit">تقرير</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stats-card stats-card-info">
+                    <div class="stats-card-body">
+                        <div class="stats-card-icon"><i class="fas fa-download"></i></div>
+                        <div class="stats-card-title">تم تصديرها اليوم</div>
+                        <div class="stats-card-value">156</div>
+                        <div class="stats-card-unit">تقرير</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stats-card stats-card-warning">
+                    <div class="stats-card-body">
+                        <div class="stats-card-icon"><i class="fas fa-users"></i></div>
+                        <div class="stats-card-title">المستخدمين النشطين</div>
+                        <div class="stats-card-value">12</div>
+                        <div class="stats-card-unit">مستخدم</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Report Builder -->
+    <div class="section-container mb-4">
+        <h5 class="section-title" data-bs-toggle="collapse" data-bs-target="#reportBuilder" aria-expanded="true">
+            <i class="fas fa-tools me-2"></i>منشئ التقارير المخصصة<i class="fas fa-chevron-down float-end"></i>
+        </h5>
+        <div class="collapse show" id="reportBuilder">
+            <div class="card">
+                <div class="card-body report-builder">
+                    <div class="row">
+                        <!-- Data Source Selection -->
+                        <div class="col-lg-3 mb-3">
+                            <h6><i class="fas fa-database me-2"></i>مصدر البيانات</h6>
+                            <select class="form-select mb-3" id="dataSource" onchange="loadFields()">
+                                <option value="">اختر مصدر البيانات</option>
+                                <option value="customers">العملاء</option>
+                                <option value="invoices">الفواتير</option>
+                                <option value="payments">المدفوعات</option>
+                                <option value="activities">الأنشطة</option>
+                                <option value="transportation">النقل</option>
+                                <option value="hr">الموارد البشرية</option>
+                            </select>
+                            
+                            <h6><i class="fas fa-list me-2"></i>الحقول المتاحة</h6>
+                            <div class="field-selector" id="availableFields">
+                                <div class="text-muted text-center py-3">
+                                    <i class="fas fa-arrow-up me-2"></i>اختر مصدر البيانات أولاً
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Selected Fields -->
+                        <div class="col-lg-4 mb-3">
+                            <h6><i class="fas fa-check-square me-2"></i>الحقول المختارة</h6>
+                            <div class="selected-fields" id="selectedFields">
+                                <div class="text-muted text-center py-4">
+                                    <i class="fas fa-mouse-pointer me-2"></i>اسحب الحقول هنا أو انقر عليها
+                                </div>
+                            </div>
+                            
+                            <div class="mt-3">
+                                <h6><i class="fas fa-filter me-2"></i>المرشحات</h6>
+                                <div id="filtersContainer">
+                                    <button class="btn btn-outline-primary btn-sm" onclick="addFilter()">
+                                        <i class="fas fa-plus me-1"></i>إضافة مرشح
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Chart Configuration -->
+                        <div class="col-lg-5 mb-3">
+                            <h6><i class="fas fa-chart-pie me-2"></i>نوع التقرير</h6>
+                            <div class="row mb-3">
+                                <div class="col-6">
+                                    <select class="form-select" id="reportType" onchange="updatePreview()">
+                                        <option value="table">جدول</option>
+                                        <option value="bar">رسم بياني عمودي</option>
+                                        <option value="pie">رسم دائري</option>
+                                        <option value="line">رسم خطي</option>
+                                        <option value="summary">ملخص إحصائي</option>
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <select class="form-select" id="groupBy">
+                                        <option value="">بدون تجميع</option>
+                                        <option value="date">حسب التاريخ</option>
+                                        <option value="month">حسب الشهر</option>
+                                        <option value="category">حسب الفئة</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <h6><i class="fas fa-eye me-2"></i>معاينة التقرير</h6>
+                            <div class="chart-preview" id="chartPreview">
+                                <div class="text-muted">
+                                    <i class="fas fa-chart-bar fa-3x mb-2"></i>
+                                    <br>اختر الحقول ونوع التقرير لرؤية المعاينة
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <hr>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <button class="btn btn-primary" onclick="generateReport()">
+                                    <i class="fas fa-play me-1"></i>إنشاء التقرير
+                                </button>
+                                <button class="btn btn-success" onclick="saveReport()">
+                                    <i class="fas fa-save me-1"></i>حفظ التقرير
+                                </button>
+                                <button class="btn btn-info" onclick="scheduleReport()">
+                                    <i class="fas fa-clock me-1"></i>جدولة التقرير
+                                </button>
+                                <button class="btn btn-outline-secondary" onclick="clearBuilder()">
+                                    <i class="fas fa-trash me-1"></i>مسح الكل
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Saved Reports -->
+    <div class="section-container mb-4">
+        <h5 class="section-title" data-bs-toggle="collapse" data-bs-target="#savedReports" aria-expanded="false">
+            <i class="fas fa-folder me-2"></i>التقارير المحفوظة<i class="fas fa-chevron-down float-end"></i>
+        </h5>
+        <div class="collapse" id="savedReports">
+            <div class="card">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="reportsTable">
+                            <thead>
+                                <tr>
+                                    <th class="text-center">اسم التقرير</th>
+                                    <th class="text-center">النوع</th>
+                                    <th class="text-center">مصدر البيانات</th>
+                                    <th class="text-center">تاريخ الإنشاء</th>
+                                    <th class="text-center">آخر تشغيل</th>
+                                    <th class="text-center">الحالة</th>
+                                    <th class="text-center">الإجراءات</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="text-center"><strong>تقرير الرسوم الشهري</strong></td>
+                                    <td class="text-center"><span class="badge bg-info">جدول</span></td>
+                                    <td class="text-center">الرسوم</td>
+                                    <td class="text-center">2024-01-15</td>
+                                    <td class="text-center">منذ ساعتين</td>
+                                    <td class="text-center"><span class="badge bg-success">نشط</span></td>
+                                    <td class="text-center">
+                                        <button class="btn btn-outline-primary btn-sm" onclick="runReport('monthly_fees')">
+                                            <i class="fas fa-play"></i>
+                                        </button>
+                                        <button class="btn btn-outline-info btn-sm" onclick="editReport('monthly_fees')">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn btn-outline-success btn-sm" onclick="downloadReport('monthly_fees')">
+                                            <i class="fas fa-download"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="text-center"><strong>إحصائيات العملاء</strong></td>
+                                    <td class="text-center"><span class="badge bg-primary">رسم بياني</span></td>
+                                    <td class="text-center">العملاء</td>
+                                    <td class="text-center">2024-01-10</td>
+                                    <td class="text-center">أمس</td>
+                                    <td class="text-center"><span class="badge bg-success">نشط</span></td>
+                                    <td class="text-center">
+                                        <button class="btn btn-outline-primary btn-sm" onclick="runReport('customer_stats')">
+                                            <i class="fas fa-play"></i>
+                                        </button>
+                                        <button class="btn btn-outline-info btn-sm" onclick="editReport('customer_stats')">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn btn-outline-success btn-sm" onclick="downloadReport('customer_stats')">
+                                            <i class="fas fa-download"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="text-center"><strong>تقرير الأنشطة الأسبوعي</strong></td>
+                                    <td class="text-center"><span class="badge bg-warning">ملخص</span></td>
+                                    <td class="text-center">الأنشطة</td>
+                                    <td class="text-center">2024-01-08</td>
+                                    <td class="text-center">منذ 3 أيام</td>
+                                    <td class="text-center"><span class="badge bg-warning">مجدول</span></td>
+                                    <td class="text-center">
+                                        <button class="btn btn-outline-primary btn-sm" onclick="runReport('weekly_activities')">
+                                            <i class="fas fa-play"></i>
+                                        </button>
+                                        <button class="btn btn-outline-info btn-sm" onclick="editReport('weekly_activities')">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn btn-outline-success btn-sm" onclick="downloadReport('weekly_activities')">
+                                            <i class="fas fa-download"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Scheduled Reports -->
+    <div class="section-container mb-4">
+        <h5 class="section-title" data-bs-toggle="collapse" data-bs-target="#scheduledReports" aria-expanded="false">
+            <i class="fas fa-calendar-alt me-2"></i>التقارير المجدولة<i class="fas fa-chevron-down float-end"></i>
+        </h5>
+        <div class="collapse" id="scheduledReports">
+            <div class="row">
+                <div class="col-lg-8 mb-3">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">
+                                <i class="fas fa-clock me-2"></i>الجدولة النشطة
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th class="text-center">التقرير</th>
+                                            <th class="text-center">التكرار</th>
+                                            <th class="text-center">التوقيت</th>
+                                            <th class="text-center">آخر تشغيل</th>
+                                            <th class="text-center">التشغيل التالي</th>
+                                            <th class="text-center">الحالة</th>
+                                            <th class="text-center">الإجراءات</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td class="text-center">تقرير الرسوم الشهري</td>
+                                            <td class="text-center">شهرياً</td>
+                                            <td class="text-center">1 من كل شهر - 9:00 ص</td>
+                                            <td class="text-center">2024-02-01</td>
+                                            <td class="text-center">2024-03-01</td>
+                                            <td class="text-center"><span class="badge bg-success">نشط</span></td>
+                                            <td class="text-center">
+                                                <button class="btn btn-outline-warning btn-sm" onclick="pauseSchedule('monthly_fees')">
+                                                    <i class="fas fa-pause"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-center">تقرير الأنشطة الأسبوعي</td>
+                                            <td class="text-center">أسبوعياً</td>
+                                            <td class="text-center">الأحد - 8:00 ص</td>
+                                            <td class="text-center">2024-02-04</td>
+                                            <td class="text-center">2024-02-11</td>
+                                            <td class="text-center"><span class="badge bg-success">نشط</span></td>
+                                            <td class="text-center">
+                                                <button class="btn btn-outline-warning btn-sm" onclick="pauseSchedule('weekly_activities')">
+                                                    <i class="fas fa-pause"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-center">تقرير الحضور اليومي</td>
+                                            <td class="text-center">يومياً</td>
+                                            <td class="text-center">كل يوم - 6:00 م</td>
+                                            <td class="text-center">أمس</td>
+                                            <td class="text-center">اليوم</td>
+                                            <td class="text-center"><span class="badge bg-warning">معطل</span></td>
+                                            <td class="text-center">
+                                                <button class="btn btn-outline-success btn-sm" onclick="resumeSchedule('daily_attendance')">
+                                                    <i class="fas fa-play"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">
+                                <i class="fas fa-plus me-2"></i>جدولة تقرير جديد
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <form id="scheduleForm">
+                                <div class="mb-3">
+                                    <label class="form-label">التقرير</label>
+                                    <select class="form-select" id="reportToSchedule">
+                                        <option value="">اختر تقرير محفوظ</option>
+                                        <option value="monthly_invoices">تقرير الفواتير الشهري</option>
+                                        <option value="customer_stats">إحصائيات العملاء</option>
+                                        <option value="weekly_sales">تقرير المبيعات الأسبوعي</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">التكرار</label>
+                                    <select class="form-select" id="frequency">
+                                        <option value="daily">يومياً</option>
+                                        <option value="weekly">أسبوعياً</option>
+                                        <option value="monthly">شهرياً</option>
+                                        <option value="quarterly">ربع سنوي</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">التوقيت</label>
+                                    <input type="time" class="form-control" id="scheduleTime" value="09:00">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">إرسال إلى</label>
+                                    <input type="email" class="form-control" id="emailRecipients" placeholder="email@example.com">
+                                </div>
+                                <button type="button" class="btn btn-primary w-100" onclick="createSchedule()">
+                                    <i class="fas fa-calendar-plus me-1"></i>إنشاء الجدولة
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Quick Actions -->
+    <div class="section-container">
+        <h5 class="section-title"><i class="fas fa-bolt me-2"></i>إجراءات سريعة</h5>
+        <div class="row">
+            <div class="col-md-3 mb-2">
+                <button class="btn btn-outline-primary w-100" onclick="loadTemplate('financial')">
+                    <i class="fas fa-money-bill-wave me-2"></i>قالب مالي
+                </button>
+            </div>
+            <div class="col-md-3 mb-2">
+                <button class="btn btn-outline-success w-100" onclick="loadTemplate('academic')">
+                    <i class="fas fa-graduation-cap me-2"></i>قالب أكاديمي
+                </button>
+            </div>
+            <div class="col-md-3 mb-2">
+                <button class="btn btn-outline-info w-100" onclick="exportAllReports()">
+                    <i class="fas fa-download me-2"></i>تصدير جميع التقارير
+                </button>
+            </div>
+            <div class="col-md-3 mb-2">
+                <button class="btn btn-outline-warning w-100" onclick="runAllScheduled()">
+                    <i class="fas fa-play-circle me-2"></i>تشغيل المجدولة
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/global-table.js' %}"></script>
+<script>
+$(document).ready(function() {
+    // Initialize DataTable
+    if (typeof GlobalTableManager !== 'undefined') {
+        GlobalTableManager.initializeTable('reportsTable', {
+            order: [[3, 'desc']], // Sort by creation date
+            columnDefs: [
+                { targets: -1, orderable: false }
+            ],
+            language: {
+                "search": "البحث:",
+                "lengthMenu": "عرض _MENU_ تقرير"
+            }
+        });
+    }
+    
+    // Initialize collapsible sections
+    $('.section-title[data-bs-toggle="collapse"]').on('click', function() {
+        const icon = $(this).find('.fa-chevron-down');
+        const isExpanded = $(this).attr('aria-expanded') === 'true';
+        
+        if (isExpanded) {
+            icon.removeClass('fa-chevron-down').addClass('fa-chevron-up');
+        } else {
+            icon.removeClass('fa-chevron-up').addClass('fa-chevron-down');
+        }
+    });
+});
+
+// Report Builder Functions
+function loadFields() {
+    const dataSource = document.getElementById('dataSource').value;
+    const fieldsContainer = document.getElementById('availableFields');
+    
+    if (!dataSource) {
+        fieldsContainer.innerHTML = '<div class="text-muted text-center py-3"><i class="fas fa-arrow-up me-2"></i>اختر مصدر البيانات أولاً</div>';
+        return;
+    }
+    
+    const fields = getFieldsForDataSource(dataSource);
+    let html = '';
+    
+    fields.forEach(field => {
+        html += `<div class="field-item" onclick="selectField('${field.name}', '${field.label}')">${field.label}</div>`;
+    });
+    
+    fieldsContainer.innerHTML = html;
+}
+
+function getFieldsForDataSource(dataSource) {
+    const fieldMaps = {
+        'customers': [
+            {name: 'name', label: 'اسم العميل'},
+            {name: 'code', label: 'كود العميل'},
+            {name: 'contact_person', label: 'جهة الاتصال'},
+            {name: 'phone', label: 'الهاتف'},
+            {name: 'registration_date', label: 'تاريخ التسجيل'}
+        ],
+        'invoices': [
+            {name: 'customer_name', label: 'اسم العميل'},
+            {name: 'invoice_type', label: 'نوع الفاتورة'},
+            {name: 'total_amount', label: 'المبلغ الإجمالي'},
+            {name: 'paid_amount', label: 'المبلغ المدفوع'},
+            {name: 'status', label: 'الحالة'}
+        ],
+        'payments': [
+            {name: 'customer_name', label: 'اسم العميل'},
+            {name: 'amount', label: 'المبلغ'},
+            {name: 'payment_date', label: 'تاريخ الدفع'},
+            {name: 'payment_method', label: 'طريقة الدفع'}
+        ]
+    };
+    
+    return fieldMaps[dataSource] || [];
+}
+
+function selectField(fieldName, fieldLabel) {
+    const selectedContainer = document.getElementById('selectedFields');
+    const existingFields = selectedContainer.querySelectorAll('.selected-field');
+    
+    // Check if field already selected
+    for (let field of existingFields) {
+        if (field.dataset.field === fieldName) {
+            return;
+        }
+    }
+    
+    // Remove placeholder text if exists
+    if (selectedContainer.querySelector('.text-muted')) {
+        selectedContainer.innerHTML = '';
+    }
+    
+    // Add selected field
+    const fieldElement = document.createElement('span');
+    fieldElement.className = 'selected-field';
+    fieldElement.dataset.field = fieldName;
+    fieldElement.innerHTML = `${fieldLabel} <i class="fas fa-times ms-1" onclick="removeField('${fieldName}')"></i>`;
+    
+    selectedContainer.appendChild(fieldElement);
+    updatePreview();
+}
+
+function removeField(fieldName) {
+    const fieldElement = document.querySelector(`[data-field="${fieldName}"]`);
+    if (fieldElement) {
+        fieldElement.remove();
+        
+        // Add placeholder if no fields left
+        const selectedContainer = document.getElementById('selectedFields');
+        if (selectedContainer.children.length === 0) {
+            selectedContainer.innerHTML = '<div class="text-muted text-center py-4"><i class="fas fa-mouse-pointer me-2"></i>اسحب الحقول هنا أو انقر عليها</div>';
+        }
+        
+        updatePreview();
+    }
+}
+
+function updatePreview() {
+    const selectedFields = document.querySelectorAll('.selected-field');
+    const reportType = document.getElementById('reportType').value;
+    const previewContainer = document.getElementById('chartPreview');
+    
+    if (selectedFields.length === 0) {
+        previewContainer.innerHTML = '<div class="text-muted"><i class="fas fa-chart-bar fa-3x mb-2"></i><br>اختر الحقول ونوع التقرير لرؤية المعاينة</div>';
+        return;
+    }
+    
+    let previewHtml = '';
+    
+    switch (reportType) {
+        case 'table':
+            previewHtml = '<i class="fas fa-table fa-3x text-primary"></i><br><strong>جدول</strong><br>عرض البيانات في جدول';
+            break;
+        case 'bar':
+            previewHtml = '<i class="fas fa-chart-bar fa-3x text-success"></i><br><strong>رسم بياني عمودي</strong><br>مقارنة القيم';
+            break;
+        case 'pie':
+            previewHtml = '<i class="fas fa-chart-pie fa-3x text-warning"></i><br><strong>رسم دائري</strong><br>توزيع النسب';
+            break;
+        case 'line':
+            previewHtml = '<i class="fas fa-chart-line fa-3x text-info"></i><br><strong>رسم خطي</strong><br>الاتجاهات عبر الزمن';
+            break;
+        case 'summary':
+            previewHtml = '<i class="fas fa-list-alt fa-3x text-secondary"></i><br><strong>ملخص إحصائي</strong><br>إحصائيات موجزة';
+            break;
+    }
+    
+    previewContainer.innerHTML = `<div class="text-center">${previewHtml}</div>`;
+}
+
+function addFilter() {
+    const filtersContainer = document.getElementById('filtersContainer');
+    const filterHtml = `
+        <div class="filter-item mt-2 p-2 border rounded">
+            <div class="row">
+                <div class="col-4">
+                    <select class="form-select form-select-sm">
+                        <option>اختر الحقل</option>
+                        <option>اسم العميل</option>
+                        <option>البريد الإلكتروني</option>
+                        <option>تاريخ التسجيل</option>
+                    </select>
+                </div>
+                <div class="col-3">
+                    <select class="form-select form-select-sm">
+                        <option>يساوي</option>
+                        <option>لا يساوي</option>
+                        <option>يحتوي على</option>
+                        <option>أكبر من</option>
+                        <option>أصغر من</option>
+                    </select>
+                </div>
+                <div class="col-4">
+                    <input type="text" class="form-control form-control-sm" placeholder="القيمة">
+                </div>
+                <div class="col-1">
+                    <button class="btn btn-outline-danger btn-sm" onclick="this.parentElement.parentElement.parentElement.remove()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    filtersContainer.insertAdjacentHTML('beforeend', filterHtml);
+}
+
+function generateReport() {
+    const selectedFields = document.querySelectorAll('.selected-field');
+    const dataSource = document.getElementById('dataSource').value;
+    const reportType = document.getElementById('reportType').value;
+    
+    if (!dataSource || selectedFields.length === 0) {
+        alert('يرجى اختيار مصدر البيانات والحقول المطلوبة');
+        return;
+    }
+    
+    alert('جاري إنشاء التقرير...');
+    // Here you would generate the actual report
+}
+
+function saveReport() {
+    const reportName = prompt('أدخل اسم التقرير:');
+    if (reportName) {
+        alert(`تم حفظ التقرير: ${reportName}`);
+    }
+}
+
+function scheduleReport() {
+    alert('فتح نافذة جدولة التقرير');
+}
+
+function clearBuilder() {
+    if (confirm('هل أنت متأكد من مسح جميع الإعدادات؟')) {
+        document.getElementById('dataSource').value = '';
+        document.getElementById('selectedFields').innerHTML = '<div class="text-muted text-center py-4"><i class="fas fa-mouse-pointer me-2"></i>اسحب الحقول هنا أو انقر عليها</div>';
+        document.getElementById('availableFields').innerHTML = '<div class="text-muted text-center py-3"><i class="fas fa-arrow-up me-2"></i>اختر مصدر البيانات أولاً</div>';
+        document.getElementById('filtersContainer').innerHTML = '<button class="btn btn-outline-primary btn-sm" onclick="addFilter()"><i class="fas fa-plus me-1"></i>إضافة مرشح</button>';
+        updatePreview();
+    }
+}
+
+// Report Management Functions
+function runReport(reportId) {
+    alert(`تشغيل التقرير: ${reportId}`);
+}
+
+function editReport(reportId) {
+    alert(`تعديل التقرير: ${reportId}`);
+}
+
+function downloadReport(reportId) {
+    alert(`تحميل التقرير: ${reportId}`);
+}
+
+function pauseSchedule(reportId) {
+    if (confirm('هل تريد إيقاف جدولة هذا التقرير مؤقتاً؟')) {
+        alert(`تم إيقاف جدولة التقرير: ${reportId}`);
+    }
+}
+
+function resumeSchedule(reportId) {
+    if (confirm('هل تريد استئناف جدولة هذا التقرير؟')) {
+        alert(`تم استئناف جدولة التقرير: ${reportId}`);
+    }
+}
+
+function createSchedule() {
+    const reportToSchedule = document.getElementById('reportToSchedule').value;
+    const frequency = document.getElementById('frequency').value;
+    const scheduleTime = document.getElementById('scheduleTime').value;
+    
+    if (!reportToSchedule || !frequency || !scheduleTime) {
+        alert('يرجى ملء جميع الحقول المطلوبة');
+        return;
+    }
+    
+    if (confirm('إنشاء جدولة جديدة للتقرير؟')) {
+        alert('تم إنشاء الجدولة بنجاح');
+        document.getElementById('scheduleForm').reset();
+    }
+}
+
+// Quick Actions
+function loadTemplate(type) {
+    alert(`تحميل قالب ${type}`);
+}
+
+function exportAllReports() {
+    if (confirm('هل تريد تصدير جميع التقارير؟')) {
+        alert('جاري تصدير جميع التقارير...');
+    }
+}
+
+function runAllScheduled() {
+    if (confirm('هل تريد تشغيل جميع التقارير المجدولة الآن؟')) {
+        alert('جاري تشغيل جميع التقارير المجدولة...');
+    }
+}
+</script>
+{% endblock %}

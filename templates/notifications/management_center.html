@@ -1,0 +1,673 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load i18n %}
+{% load utils_extras %}
+
+{% block title %}{{ title }} | {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/shared-components.css' %}">
+<link rel="stylesheet" href="{% static 'css/unified-components.css' %}">
+<link rel="stylesheet" href="{% static 'css/governance.css' %}">
+<style>
+.notification-preview {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    min-height: 200px;
+}
+.template-item {
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.template-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+.notification-type-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    {% csrf_token %}
+    
+    <!-- Page Header -->
+    {% include "shared/page_header.html" with title=title subtitle=subtitle icon=icon %}
+    
+    <!-- Breadcrumb -->
+    {% include "shared/breadcrumb.html" with items=breadcrumb_items %}
+    
+    <!-- Notifications Overview -->
+    <div class="section-container">
+        <h5 class="section-title"><i class="fas fa-bell me-2"></i>نظرة عامة على الإشعارات</h5>
+        <div class="row">
+            <div class="col-md-3 mb-3">
+                <div class="stats-card stats-card-primary">
+                    <div class="stats-card-body">
+                        <div class="stats-card-icon"><i class="fas fa-envelope"></i></div>
+                        <div class="stats-card-title">إشعارات اليوم</div>
+                        <div class="stats-card-value">1,247</div>
+                        <div class="stats-card-unit">إشعار</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stats-card stats-card-success">
+                    <div class="stats-card-body">
+                        <div class="stats-card-icon"><i class="fas fa-check-circle"></i></div>
+                        <div class="stats-card-title">تم التسليم</div>
+                        <div class="stats-card-value">1,198</div>
+                        <div class="stats-card-unit">إشعار</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stats-card stats-card-warning">
+                    <div class="stats-card-body">
+                        <div class="stats-card-icon"><i class="fas fa-clock"></i></div>
+                        <div class="stats-card-title">في الانتظار</div>
+                        <div class="stats-card-value">49</div>
+                        <div class="stats-card-unit">إشعار</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stats-card stats-card-danger">
+                    <div class="stats-card-body">
+                        <div class="stats-card-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                        <div class="stats-card-title">فشل التسليم</div>
+                        <div class="stats-card-value">0</div>
+                        <div class="stats-card-unit">إشعار</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Notification Templates -->
+    <div class="section-container mb-4">
+        <h5 class="section-title" data-bs-toggle="collapse" data-bs-target="#notificationTemplates" aria-expanded="true">
+            <i class="fas fa-file-alt me-2"></i>قوالب الإشعارات<i class="fas fa-chevron-down float-end"></i>
+        </h5>
+        <div class="collapse show" id="notificationTemplates">
+            <div class="row">
+                <div class="col-lg-4 mb-3">
+                    <div class="card template-item h-100" onclick="selectTemplate('payment_reminder')">
+                        <div class="card-body position-relative">
+                            <span class="badge bg-warning notification-type-badge">تذكير</span>
+                            <h6 class="card-title">
+                                <i class="fas fa-money-bill-wave me-2"></i>تذكير بالدفع
+                            </h6>
+                            <p class="card-text text-muted">إشعار تذكير لأولياء الأمور بالرسوم المستحقة</p>
+                            <div class="mt-3">
+                                <small class="text-muted">
+                                    <i class="fas fa-eye me-1"></i>استخدم 156 مرة
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 mb-3">
+                    <div class="card template-item h-100" onclick="selectTemplate('enrollment_confirmation')">
+                        <div class="card-body position-relative">
+                            <span class="badge bg-success notification-type-badge">تأكيد</span>
+                            <h6 class="card-title">
+                                <i class="fas fa-user-check me-2"></i>تأكيد التسجيل
+                            </h6>
+                            <p class="card-text text-muted">تأكيد تسجيل العميل في النظام</p>
+                            <div class="mt-3">
+                                <small class="text-muted">
+                                    <i class="fas fa-eye me-1"></i>استخدم 89 مرة
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 mb-3">
+                    <div class="card template-item h-100" onclick="selectTemplate('activity_notification')">
+                        <div class="card-body position-relative">
+                            <span class="badge bg-info notification-type-badge">معلومات</span>
+                            <h6 class="card-title">
+                                <i class="fas fa-calendar-check me-2"></i>إشعار نشاط
+                            </h6>
+                            <p class="card-text text-muted">إشعار بالأنشطة والفعاليات الجديدة</p>
+                            <div class="mt-3">
+                                <small class="text-muted">
+                                    <i class="fas fa-eye me-1"></i>استخدم 234 مرة
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-3">
+                <button class="btn btn-primary" onclick="createNewTemplate()">
+                    <i class="fas fa-plus me-1"></i>إنشاء قالب جديد
+                </button>
+                <button class="btn btn-outline-info ms-2" onclick="importTemplate()">
+                    <i class="fas fa-upload me-1"></i>استيراد قالب
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Notification Builder -->
+    <div class="section-container mb-4">
+        <h5 class="section-title" data-bs-toggle="collapse" data-bs-target="#notificationBuilder" aria-expanded="false">
+            <i class="fas fa-tools me-2"></i>منشئ الإشعارات<i class="fas fa-chevron-down float-end"></i>
+        </h5>
+        <div class="collapse" id="notificationBuilder">
+            <div class="row">
+                <div class="col-lg-8 mb-3">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">
+                                <i class="fas fa-edit me-2"></i>تحرير الإشعار
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <form id="notificationForm">
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">نوع الإشعار</label>
+                                        <select class="form-select" id="notificationType">
+                                            <option value="email">بريد إلكتروني</option>
+                                            <option value="sms">رسالة نصية</option>
+                                            <option value="push">إشعار فوري</option>
+                                            <option value="system">إشعار النظام</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">الأولوية</label>
+                                        <select class="form-select" id="priority">
+                                            <option value="low">منخفضة</option>
+                                            <option value="normal" selected>عادية</option>
+                                            <option value="high">عالية</option>
+                                            <option value="urgent">عاجلة</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">عنوان الإشعار</label>
+                                    <input type="text" class="form-control" id="notificationTitle" placeholder="أدخل عنوان الإشعار">
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">محتوى الإشعار</label>
+                                    <textarea class="form-control" id="notificationContent" rows="6" placeholder="أدخل محتوى الإشعار..."></textarea>
+                                    <div class="form-text">
+                                        يمكنك استخدام المتغيرات: {customer_name}, {contact_name}, {amount}, {due_date}
+                                    </div>
+                                </div>
+                                
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">المستقبلون</label>
+                                        <select class="form-select" id="recipients">
+                                            <option value="all_parents">جميع أولياء الأمور</option>
+                                            <option value="specific_grade">فئة عمرية محددة</option>
+                                            <option value="unpaid_fees">أولياء أمور الرسوم غير المدفوعة</option>
+                                            <option value="custom">مخصص</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">توقيت الإرسال</label>
+                                        <select class="form-select" id="sendTiming">
+                                            <option value="now">الآن</option>
+                                            <option value="scheduled">مجدول</option>
+                                            <option value="trigger">عند حدث معين</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <div class="d-flex gap-2">
+                                    <button type="button" class="btn btn-primary" onclick="sendNotification()">
+                                        <i class="fas fa-paper-plane me-1"></i>إرسال الإشعار
+                                    </button>
+                                    <button type="button" class="btn btn-success" onclick="saveTemplate()">
+                                        <i class="fas fa-save me-1"></i>حفظ كقالب
+                                    </button>
+                                    <button type="button" class="btn btn-outline-info" onclick="previewNotification()">
+                                        <i class="fas fa-eye me-1"></i>معاينة
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">
+                                <i class="fas fa-eye me-2"></i>معاينة الإشعار
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="notification-preview" id="notificationPreview">
+                                <div class="text-muted text-center">
+                                    <i class="fas fa-bell fa-2x mb-2"></i>
+                                    <br>اكتب محتوى الإشعار لرؤية المعاينة
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Notification History -->
+    <div class="section-container mb-4">
+        <h5 class="section-title" data-bs-toggle="collapse" data-bs-target="#notificationHistory" aria-expanded="false">
+            <i class="fas fa-history me-2"></i>سجل الإشعارات<i class="fas fa-chevron-down float-end"></i>
+        </h5>
+        <div class="collapse" id="notificationHistory">
+            <div class="card">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="notificationsTable">
+                            <thead>
+                                <tr>
+                                    <th class="text-center">العنوان</th>
+                                    <th class="text-center">النوع</th>
+                                    <th class="text-center">المستقبلون</th>
+                                    <th class="text-center">تاريخ الإرسال</th>
+                                    <th class="text-center">معدل التسليم</th>
+                                    <th class="text-center">الحالة</th>
+                                    <th class="text-center">الإجراءات</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="text-center"><strong>تذكير بدفع الرسوم</strong></td>
+                                    <td class="text-center"><span class="badge bg-primary">بريد إلكتروني</span></td>
+                                    <td class="text-center">156 ولي أمر</td>
+                                    <td class="text-center">منذ ساعتين</td>
+                                    <td class="text-center">
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar bg-success" style="width: 95%">95%</div>
+                                        </div>
+                                    </td>
+                                    <td class="text-center"><span class="badge bg-success">مكتمل</span></td>
+                                    <td class="text-center">
+                                        <button class="btn btn-outline-info btn-sm" onclick="viewNotificationDetails('payment_reminder_001')">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button class="btn btn-outline-primary btn-sm" onclick="resendNotification('payment_reminder_001')">
+                                            <i class="fas fa-redo"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="text-center"><strong>إشعار نشاط جديد</strong></td>
+                                    <td class="text-center"><span class="badge bg-info">إشعار فوري</span></td>
+                                    <td class="text-center">89 ولي أمر</td>
+                                    <td class="text-center">أمس</td>
+                                    <td class="text-center">
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar bg-success" style="width: 100%">100%</div>
+                                        </div>
+                                    </td>
+                                    <td class="text-center"><span class="badge bg-success">مكتمل</span></td>
+                                    <td class="text-center">
+                                        <button class="btn btn-outline-info btn-sm" onclick="viewNotificationDetails('activity_notification_001')">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button class="btn btn-outline-primary btn-sm" onclick="resendNotification('activity_notification_001')">
+                                            <i class="fas fa-redo"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="text-center"><strong>تأكيد التسجيل</strong></td>
+                                    <td class="text-center"><span class="badge bg-warning">رسالة نصية</span></td>
+                                    <td class="text-center">23 ولي أمر</td>
+                                    <td class="text-center">منذ 3 أيام</td>
+                                    <td class="text-center">
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar bg-warning" style="width: 87%">87%</div>
+                                        </div>
+                                    </td>
+                                    <td class="text-center"><span class="badge bg-warning">جزئي</span></td>
+                                    <td class="text-center">
+                                        <button class="btn btn-outline-info btn-sm" onclick="viewNotificationDetails('enrollment_confirmation_001')">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button class="btn btn-outline-primary btn-sm" onclick="resendNotification('enrollment_confirmation_001')">
+                                            <i class="fas fa-redo"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Scheduled Notifications -->
+    <div class="section-container mb-4">
+        <h5 class="section-title" data-bs-toggle="collapse" data-bs-target="#scheduledNotifications" aria-expanded="false">
+            <i class="fas fa-calendar-alt me-2"></i>الإشعارات المجدولة<i class="fas fa-chevron-down float-end"></i>
+        </h5>
+        <div class="collapse" id="scheduledNotifications">
+            <div class="row">
+                <div class="col-lg-8 mb-3">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">
+                                <i class="fas fa-clock me-2"></i>الجدولة النشطة
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th class="text-center">الإشعار</th>
+                                            <th class="text-center">التكرار</th>
+                                            <th class="text-center">التوقيت</th>
+                                            <th class="text-center">آخر إرسال</th>
+                                            <th class="text-center">الإرسال التالي</th>
+                                            <th class="text-center">الحالة</th>
+                                            <th class="text-center">الإجراءات</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td class="text-center">تذكير الرسوم الشهري</td>
+                                            <td class="text-center">شهرياً</td>
+                                            <td class="text-center">1 من كل شهر - 9:00 ص</td>
+                                            <td class="text-center">2024-02-01</td>
+                                            <td class="text-center">2024-03-01</td>
+                                            <td class="text-center"><span class="badge bg-success">نشط</span></td>
+                                            <td class="text-center">
+                                                <button class="btn btn-outline-warning btn-sm" onclick="pauseScheduledNotification('monthly_fees_reminder')">
+                                                    <i class="fas fa-pause"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-center">إشعار الأنشطة الأسبوعي</td>
+                                            <td class="text-center">أسبوعياً</td>
+                                            <td class="text-center">الأحد - 8:00 ص</td>
+                                            <td class="text-center">2024-02-04</td>
+                                            <td class="text-center">2024-02-11</td>
+                                            <td class="text-center"><span class="badge bg-success">نشط</span></td>
+                                            <td class="text-center">
+                                                <button class="btn btn-outline-warning btn-sm" onclick="pauseScheduledNotification('weekly_activities')">
+                                                    <i class="fas fa-pause"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">
+                                <i class="fas fa-plus me-2"></i>جدولة إشعار جديد
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <form id="scheduleNotificationForm">
+                                <div class="mb-3">
+                                    <label class="form-label">القالب</label>
+                                    <select class="form-select" id="templateToSchedule">
+                                        <option value="">اختر قالب محفوظ</option>
+                                        <option value="payment_reminder">تذكير بالدفع</option>
+                                        <option value="enrollment_confirmation">تأكيد التسجيل</option>
+                                        <option value="activity_notification">إشعار نشاط</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">التكرار</label>
+                                    <select class="form-select" id="notificationFrequency">
+                                        <option value="daily">يومياً</option>
+                                        <option value="weekly">أسبوعياً</option>
+                                        <option value="monthly">شهرياً</option>
+                                        <option value="custom">مخصص</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">التوقيت</label>
+                                    <input type="time" class="form-control" id="notificationTime" value="09:00">
+                                </div>
+                                <button type="button" class="btn btn-primary w-100" onclick="createNotificationSchedule()">
+                                    <i class="fas fa-calendar-plus me-1"></i>إنشاء الجدولة
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Quick Actions -->
+    <div class="section-container">
+        <h5 class="section-title"><i class="fas fa-bolt me-2"></i>إجراءات سريعة</h5>
+        <div class="row">
+            <div class="col-md-3 mb-2">
+                <button class="btn btn-outline-primary w-100" onclick="sendBulkNotification()">
+                    <i class="fas fa-bullhorn me-2"></i>إشعار جماعي
+                </button>
+            </div>
+            <div class="col-md-3 mb-2">
+                <button class="btn btn-outline-success w-100" onclick="exportNotificationReport()">
+                    <i class="fas fa-download me-2"></i>تقرير الإشعارات
+                </button>
+            </div>
+            <div class="col-md-3 mb-2">
+                <button class="btn btn-outline-info w-100" onclick="testNotificationSystem()">
+                    <i class="fas fa-vial me-2"></i>اختبار النظام
+                </button>
+            </div>
+            <div class="col-md-3 mb-2">
+                <button class="btn btn-outline-warning w-100" onclick="manageNotificationSettings()">
+                    <i class="fas fa-cog me-2"></i>إعدادات الإشعارات
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/global-table.js' %}"></script>
+<script>
+$(document).ready(function() {
+    // Initialize DataTable
+    if (typeof GlobalTableManager !== 'undefined') {
+        GlobalTableManager.initializeTable('notificationsTable', {
+            order: [[3, 'desc']], // Sort by send date
+            columnDefs: [
+                { targets: -1, orderable: false }, // Actions column
+                { targets: [4], orderable: false }  // Progress bars
+            ],
+            language: {
+                "search": "البحث:",
+                "lengthMenu": "عرض _MENU_ إشعار"
+            }
+        });
+    }
+    
+    // Initialize collapsible sections
+    $('.section-title[data-bs-toggle="collapse"]').on('click', function() {
+        const icon = $(this).find('.fa-chevron-down');
+        const isExpanded = $(this).attr('aria-expanded') === 'true';
+        
+        if (isExpanded) {
+            icon.removeClass('fa-chevron-down').addClass('fa-chevron-up');
+        } else {
+            icon.removeClass('fa-chevron-up').addClass('fa-chevron-down');
+        }
+    });
+    
+    // Real-time preview
+    $('#notificationTitle, #notificationContent').on('input', updateNotificationPreview);
+});
+
+// Template Functions
+function selectTemplate(templateId) {
+    const templates = {
+        'payment_reminder': {
+            title: 'تذكير بدفع المستحقات',
+            content: 'عزيزي العميل {customer_name},\n\nنود تذكيركم بأن هناك مستحقات بمبلغ {amount} ج.م.\n\nيرجى سداد المبلغ قبل تاريخ {due_date}.\n\nشكراً لتعاونكم.'
+        },
+        'enrollment_confirmation': {
+            title: 'تأكيد التسجيل',
+            content: 'عزيزي العميل {customer_name},\n\nنحن سعداء لإبلاغكم بأنه تم تسجيلكم بنجاح في النظام.\n\nمرحباً بكم.'
+        },
+        'activity_notification': {
+            title: 'إشعار بخدمة جديدة',
+            content: 'عزيزي العميل {customer_name},\n\nيسعدنا إبلاغكم بوجود خدمة جديدة متاحة.\n\nللمزيد من التفاصيل، يرجى زيارة النظام.'
+        }
+    };
+    
+    const template = templates[templateId];
+    if (template) {
+        document.getElementById('notificationTitle').value = template.title;
+        document.getElementById('notificationContent').value = template.content;
+        updateNotificationPreview();
+    }
+}
+
+function updateNotificationPreview() {
+    const title = document.getElementById('notificationTitle').value;
+    const content = document.getElementById('notificationContent').value;
+    const previewContainer = document.getElementById('notificationPreview');
+    
+    if (!title && !content) {
+        previewContainer.innerHTML = '<div class="text-muted text-center"><i class="fas fa-bell fa-2x mb-2"></i><br>اكتب محتوى الإشعار لرؤية المعاينة</div>';
+        return;
+    }
+    
+    // Replace variables with sample data
+    let previewContent = content
+        .replace(/{contact_name}/g, 'أحمد محمد')
+        .replace(/{customer_name}/g, 'شركة النجاح')
+        .replace(/{amount}/g, '500')
+        .replace(/{due_date}/g, '2024-03-15');
+    
+    previewContainer.innerHTML = `
+        <div class="notification-preview-content">
+            <h6 class="fw-bold mb-2">${title}</h6>
+            <div style="white-space: pre-line;">${previewContent}</div>
+        </div>
+    `;
+}
+
+function createNewTemplate() {
+    alert('فتح نافذة إنشاء قالب جديد');
+}
+
+function importTemplate() {
+    alert('فتح نافذة استيراد قالب');
+}
+
+function sendNotification() {
+    const title = document.getElementById('notificationTitle').value;
+    const content = document.getElementById('notificationContent').value;
+    const recipients = document.getElementById('recipients').value;
+    
+    if (!title || !content) {
+        alert('يرجى إدخال عنوان ومحتوى الإشعار');
+        return;
+    }
+    
+    if (confirm('هل أنت متأكد من إرسال هذا الإشعار؟')) {
+        alert('جاري إرسال الإشعار...');
+    }
+}
+
+function saveTemplate() {
+    const title = document.getElementById('notificationTitle').value;
+    const content = document.getElementById('notificationContent').value;
+    
+    if (!title || !content) {
+        alert('يرجى إدخال عنوان ومحتوى الإشعار');
+        return;
+    }
+    
+    const templateName = prompt('أدخل اسم القالب:');
+    if (templateName) {
+        alert(`تم حفظ القالب: ${templateName}`);
+    }
+}
+
+function previewNotification() {
+    alert('فتح نافذة معاينة مفصلة');
+}
+
+// History Functions
+function viewNotificationDetails(notificationId) {
+    alert(`عرض تفاصيل الإشعار: ${notificationId}`);
+}
+
+function resendNotification(notificationId) {
+    if (confirm('هل تريد إعادة إرسال هذا الإشعار؟')) {
+        alert(`جاري إعادة إرسال الإشعار: ${notificationId}`);
+    }
+}
+
+// Scheduling Functions
+function pauseScheduledNotification(scheduleId) {
+    if (confirm('هل تريد إيقاف هذه الجدولة مؤقتاً؟')) {
+        alert(`تم إيقاف الجدولة: ${scheduleId}`);
+    }
+}
+
+function createNotificationSchedule() {
+    const template = document.getElementById('templateToSchedule').value;
+    const frequency = document.getElementById('notificationFrequency').value;
+    const time = document.getElementById('notificationTime').value;
+    
+    if (!template || !frequency || !time) {
+        alert('يرجى ملء جميع الحقول المطلوبة');
+        return;
+    }
+    
+    if (confirm('إنشاء جدولة جديدة للإشعار؟')) {
+        alert('تم إنشاء الجدولة بنجاح');
+        document.getElementById('scheduleNotificationForm').reset();
+    }
+}
+
+// Quick Actions
+function sendBulkNotification() {
+    alert('فتح نافذة الإشعار الجماعي');
+}
+
+function exportNotificationReport() {
+    alert('جاري تصدير تقرير الإشعارات...');
+}
+
+function testNotificationSystem() {
+    if (confirm('هل تريد تشغيل اختبار شامل لنظام الإشعارات؟')) {
+        alert('جاري تشغيل اختبار النظام...');
+    }
+}
+
+function manageNotificationSettings() {
+    alert('فتح إعدادات الإشعارات');
+}
+</script>
+{% endblock %}

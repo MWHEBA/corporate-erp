@@ -1,0 +1,20 @@
+[
+  {
+    "model": "product.unit",
+    "pk": 1,
+    "fields": {
+      "name": "قطعة",
+      "code": "UNIT0001",
+      "is_active": true
+    }
+  },
+  {
+    "model": "product.unit",
+    "pk": 2,
+    "fields": {
+      "name": "كرتونة",
+      "code": "UNIT0002",
+      "is_active": true
+    }
+  }
+]
