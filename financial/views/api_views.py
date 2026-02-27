@@ -1515,11 +1515,12 @@ def cash_flow_statement(request):
 @login_required
 def customer_supplier_balances_report(request, account_type):
     """
-    تقرير أرصدة أولياء الأمور والموردين
+    تقرير أرصدة العملاء والموردين
     account_type: 'customers' أو 'suppliers'
     """
-    from ..services.parent_supplier_balances_service import ParentSupplierBalancesService
     from django.http import HttpResponse
+    from django.db.models import Sum, Q
+    from decimal import Decimal
     
     # تحديد تاريخ التقرير
     as_of_date = request.GET.get("as_of_date")
@@ -1531,52 +1532,121 @@ def customer_supplier_balances_report(request, account_type):
         as_of_date = timezone.now().date()
     
     try:
-        # إنشاء خدمة تقارير الأرصدة
-        balances_service = CustomerSupplierBalancesService(as_of_date=as_of_date)
+        # تحديد نوع الحساب والنموذج
+        if account_type == "customers":
+            from client.models import Customer
+            entities = Customer.objects.filter(is_active=True).order_by('code')
+            page_title = "تقرير أرصدة العملاء"
+            page_icon = "fas fa-users"
+            filename = f'customer_balances_{as_of_date}.xlsx'
+            entity_label = "العميل"
+        else:
+            from supplier.models import Supplier
+            entities = Supplier.objects.filter(is_active=True).order_by('code')
+            page_title = "تقرير أرصدة الموردين"
+            page_icon = "fas fa-truck"
+            filename = f'supplier_balances_{as_of_date}.xlsx'
+            entity_label = "المورد"
+        
+        # حساب الأرصدة الفعلية
+        accounts_data = []
+        total_balance = Decimal('0')
+        
+        # تهيئة فترات الاستحقاق
+        due_periods = {
+            'current': {'label': 'حالي (0-30 يوم)', 'amount': Decimal('0'), 'days': '0-30'},
+            'days_1_30': {'label': 'متأخر (31-60)', 'amount': Decimal('0'), 'days': '31-60'},
+            'days_31_60': {'label': 'متأخر (61-90)', 'amount': Decimal('0'), 'days': '61-90'},
+            'days_61_90': {'label': 'متأخر (91-120)', 'amount': Decimal('0'), 'days': '91-120'},
+            'over_90': {'label': 'متأخر جداً (+120)', 'amount': Decimal('0'), 'days': '+120'},
+        }
+        
+        for entity in entities:
+            # حساب الرصيد الفعلي من الفواتير والمدفوعات
+            balance = entity.actual_balance
+            
+            if balance != 0:
+                # توزيع بسيط على الفترات (يمكن تحسينه لاحقاً بحساب تواريخ الفواتير)
+                accounts_data.append({
+                    'account_code': entity.code,
+                    'account_name': entity.name,
+                    'current': balance if balance > 0 else Decimal('0'),
+                    'days_1_30': Decimal('0'),
+                    'days_31_60': Decimal('0'),
+                    'days_61_90': Decimal('0'),
+                    'over_90': Decimal('0'),
+                    'total_balance': balance,
+                })
+                total_balance += balance
+                due_periods['current']['amount'] += balance
+        
+        report_data = {
+            'accounts': accounts_data,
+            'due_periods': due_periods,
+            'summary': {
+                'total_balance': total_balance,
+                'total_balance_formatted': f"{total_balance:,.2f}"
+            },
+            'as_of_date': as_of_date,
+            'account_type': account_type
+        }
         
         # التحقق من طلب التصدير
         if request.GET.get('export') == 'excel':
-            # إنشاء التقرير
-            if account_type == "customers":
-                report_data = balances_service.generate_customer_balances_report()
-                report_type = 'ar'
-                filename = f'parent_balances_{as_of_date}.xlsx'
-            else:
-                report_data = balances_service.generate_supplier_balances_report()
-                report_type = 'ap'
-                filename = f'supplier_balances_{as_of_date}.xlsx'
-            
-            # تصدير إلى Excel
-            excel_content = balances_service.export_to_excel(report_data, report_type)
-            
-            if excel_content:
+            try:
+                import openpyxl
+                from openpyxl.styles import Font, Alignment, PatternFill
+                from io import BytesIO
+                
+                # إنشاء ملف Excel
+                wb = openpyxl.Workbook()
+                ws = wb.active
+                ws.title = page_title
+                
+                # العنوان
+                ws['A1'] = page_title
+                ws['A1'].font = Font(size=16, bold=True)
+                ws['A1'].alignment = Alignment(horizontal='center')
+                ws.merge_cells('A1:C1')
+                
+                ws['A2'] = f'حتى تاريخ: {as_of_date}'
+                ws['A2'].alignment = Alignment(horizontal='center')
+                ws.merge_cells('A2:C2')
+                
+                # رؤوس الأعمدة
+                headers = ['الكود', f'اسم {entity_label}', 'الرصيد']
+                for col, header in enumerate(headers, 1):
+                    cell = ws.cell(row=4, column=col)
+                    cell.value = header
+                    cell.font = Font(bold=True)
+                    cell.fill = PatternFill(start_color='CCCCCC', end_color='CCCCCC', fill_type='solid')
+                    cell.alignment = Alignment(horizontal='center')
+                
+                # البيانات
+                for row, item in enumerate(accounts_data, 5):
+                    ws.cell(row=row, column=1, value=item['account_code'])
+                    ws.cell(row=row, column=2, value=item['account_name'])
+                    ws.cell(row=row, column=3, value=float(item['total_balance']))
+                
+                # الإجمالي
+                total_row = len(accounts_data) + 5
+                ws.cell(row=total_row, column=2, value='الإجمالي').font = Font(bold=True)
+                ws.cell(row=total_row, column=3, value=float(total_balance)).font = Font(bold=True)
+                
+                # حفظ الملف
+                excel_file = BytesIO()
+                wb.save(excel_file)
+                excel_file.seek(0)
+                
                 response = HttpResponse(
-                    excel_content,
+                    excel_file.read(),
                     content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
                 )
                 response['Content-Disposition'] = f'attachment; filename="{filename}"'
                 return response
-            else:
+                
+            except ImportError:
                 messages.warning(request, "تصدير Excel غير متاح. يرجى تثبيت openpyxl")
-        
-        # إنشاء التقرير
-        if account_type == "customers":
-            report_data = balances_service.generate_customer_balances_report()
-        else:
-            report_data = balances_service.generate_supplier_balances_report()
-        
-        # التحقق من وجود خطأ
-        if "error" in report_data:
-            messages.error(request, report_data["error"])
-            return redirect("core:dashboard")
-        
-        # تحديد العنوان والأيقونة حسب النوع
-        if account_type == "customers":
-            page_title = "تقرير أرصدة أولياء الأمور"
-            page_icon = "fas fa-users"
-        else:
-            page_title = "تقرير أرصدة الموردين"
-            page_icon = "fas fa-truck"
         
         context = {
             "page_title": page_title,
@@ -1610,6 +1680,7 @@ def customer_supplier_balances_report(request, account_type):
         return render(request, "financial/reports/customer_supplier_balances.html", context)
     
     except Exception as e:
+        logger.error(f"خطأ في تحميل تقرير الأرصدة: {e}")
         messages.error(request, f"خطأ في تحميل تقرير الأرصدة: {e}")
         return redirect("core:dashboard")
 
@@ -1991,82 +2062,6 @@ def sales_report(request):
     return render(request, "financial/reports/sales_report.html", context)
 
 
-@login_required
-def purchases_report(request):
-    """
-    تقرير المشتريات - محدّث ✅
-    بناءً على حسابات المصروفات مع تحليلات متقدمة
-    """
-    from financial.services.purchases_report_service import PurchasesReportService
-    import json
-
-    # تحديد فترة التقرير
-    date_from = request.GET.get("date_from")
-    date_to = request.GET.get("date_to")
-    
-    if date_from:
-        try:
-            date_from = datetime.strptime(date_from, "%Y-%m-%d").date()
-        except ValueError:
-            date_from = None
-    
-    if date_to:
-        try:
-            date_to = datetime.strptime(date_to, "%Y-%m-%d").date()
-        except ValueError:
-            date_to = None
-    
-    # إنشاء خدمة التقرير
-    purchases_service = PurchasesReportService(
-        date_from=date_from,
-        date_to=date_to
-    )
-    
-    # الحصول على التقرير الكامل
-    report = purchases_service.get_complete_report()
-    
-    # تحويل البيانات إلى JSON للاستخدام في JavaScript
-    from decimal import Decimal
-    
-    class DecimalEncoder(json.JSONEncoder):
-        def default(self, obj):
-            if isinstance(obj, Decimal):
-                return float(obj)
-            return super(DecimalEncoder, self).default(obj)
-    
-    monthly_comparison_json = json.dumps(report["monthly_comparison"], cls=DecimalEncoder)
-    purchases_by_category_json = json.dumps(report["purchases_by_category"], cls=DecimalEncoder)
-    
-    context = {
-        "page_title": "تقرير المشتريات",
-        "page_subtitle": "تحليل شامل للمصروفات والمشتريات",
-        "page_icon": "fas fa-shopping-cart",
-        "header_buttons": [
-            {
-                "onclick": "window.print()",
-                "icon": "fa-print",
-                "text": "طباعة",
-                "class": "btn-outline-secondary",
-            },
-        ],
-        "breadcrumb_items": [
-            {"title": "الرئيسية", "url": reverse('core:dashboard'), "icon": "fas fa-home"},
-            {"title": "الإدارة المالية", "icon": "fas fa-money-bill-wave"},
-            {"title": "التقارير", "icon": "fas fa-chart-bar"},
-            {"title": "تقرير المشتريات", "active": True},
-        ],
-        "purchases_data": report["purchases_data"],
-        "total_purchases": report["total_purchases"],
-        "statistics": report["statistics"],
-        "monthly_comparison": monthly_comparison_json,
-        "purchases_by_category": purchases_by_category_json,
-        "date_from": report["date_from"],
-        "date_to": report["date_to"],
-        # للتوافق مع القالب القديم
-        "avg_daily_purchases": report["statistics"]["avg_daily_purchases"],
-        "days_count": report["statistics"]["days_count"],
-    }
-    return render(request, "financial/reports/purchases_report.html", context)
 
 
 @login_required
@@ -2667,218 +2662,6 @@ def payment_sync_process_pending_api(request):
     except Exception as e:
         logger.error(f"Error in views.py: {str(e)}", exc_info=True)
         return JsonResponse({"success": False, "message": "حدث خطأ غير متوقع"})
-
-
-@login_required
-def audit_trail_list(request):
-    """
-    قائمة سجل التدقيق
-    """
-    try:
-        from financial.models import AuditTrail
-        
-        # الفلترة
-        action_filter = request.GET.get('action', '')
-        entity_type_filter = request.GET.get('entity_type', '')
-        user_filter = request.GET.get('user', '')
-        date_from = request.GET.get('date_from', '')
-        date_to = request.GET.get('date_to', '')
-        
-        # الاستعلام الأساسي
-        audit_entries = AuditTrail.objects.select_related('user').order_by('-timestamp')
-        
-        # تطبيق الفلاتر
-        if action_filter:
-            audit_entries = audit_entries.filter(action=action_filter)
-        
-        if entity_type_filter:
-            audit_entries = audit_entries.filter(entity_type=entity_type_filter)
-        
-        if user_filter:
-            audit_entries = audit_entries.filter(user_id=user_filter)
-        
-        if date_from:
-            audit_entries = audit_entries.filter(timestamp__date__gte=date_from)
-        
-        if date_to:
-            audit_entries = audit_entries.filter(timestamp__date__lte=date_to)
-        
-        # الترقيم الصفحي
-        paginator = Paginator(audit_entries, 50)
-        page_number = request.GET.get('page')
-        page_obj = paginator.get_page(page_number)
-        
-        # الإحصائيات
-        from django.contrib.auth import get_user_model
-        from datetime import datetime, timedelta
-        
-        User = get_user_model()
-        today = datetime.now().date()
-        
-        total_entries = audit_entries.count()
-        today_entries = AuditTrail.objects.filter(timestamp__date=today).count()
-        active_users = AuditTrail.objects.filter(timestamp__date=today).values('user').distinct().count()
-        delete_entries = AuditTrail.objects.filter(action='delete').count()
-        
-        # قائمة المستخدمين للفلترة
-        users = User.objects.filter(
-            id__in=AuditTrail.objects.values_list('user_id', flat=True).distinct()
-        ).order_by('first_name', 'last_name', 'username')
-        
-        context = {
-            "page_obj": page_obj,
-            "total_entries": total_entries,
-            "users": users,
-            "summary": {
-                "total_count": total_entries,
-                "today_count": today_entries,
-                "active_users": active_users,
-                "delete_count": delete_entries,
-            },
-            "filters": {
-                "action": action_filter,
-                "entity_type": entity_type_filter,
-                "user": user_filter,
-                "date_from": date_from,
-                "date_to": date_to,
-            },
-            "page_title": "سجل التدقيق",
-            "page_subtitle": "تتبع جميع العمليات والتغييرات في النظام",
-            "page_icon": "fas fa-clipboard-list",
-            "header_buttons": [
-                {
-                    "onclick": "window.print()",
-                    "icon": "fa-print",
-                    "text": "طباعة",
-                    "class": "btn-outline-secondary",
-                },
-                {
-                    "onclick": "confirmCleanup()",
-                    "icon": "fa-trash",
-                    "text": "تنظيف السجل",
-                    "class": "btn-outline-danger",
-                },
-            ],
-            "breadcrumb_items": [
-                {"title": "الرئيسية", "url": reverse('core:dashboard'), "icon": "fas fa-home"},
-                {"title": "الإدارة المالية", "icon": "fas fa-money-bill-wave"},
-                {"title": "التقارير", "icon": "fas fa-chart-bar"},
-                {"title": "سجل التدقيق", "active": True},
-            ],
-            "action_filter": action_filter,
-            "entity_type_filter": entity_type_filter,
-        }
-
-        return render(request, "financial/reports/audit_trail_list.html", context)
-
-    except Exception as e:
-        messages.error(request, f"خطأ في تحميل سجل التدقيق: {str(e)}")
-        return render(request, "financial/reports/audit_trail_list.html", {"page_obj": None})
-
-
-@login_required
-@transaction.atomic
-def audit_trail_cleanup(request):
-    """
-    تنظيف سجل التدقيق - حذف السجلات القديمة
-    """
-    if request.method == 'POST':
-        try:
-            from financial.models import AuditTrail
-            from datetime import datetime
-            
-            cleanup_date = request.POST.get('cleanup_date')
-            if not cleanup_date:
-                messages.error(request, "يجب تحديد تاريخ التنظيف")
-                return redirect("financial:audit_trail_list")
-            
-            # تحويل التاريخ
-            cleanup_date = datetime.strptime(cleanup_date, '%Y-%m-%d').date()
-            
-            # فحص السجلات الموجودة للتشخيص
-            total_records = AuditTrail.objects.count()
-            records_before_date = AuditTrail.objects.filter(
-                timestamp__date__lte=cleanup_date
-            ).count()
-            
-            print(f"DEBUG: إجمالي السجلات: {total_records}")
-            print(f"DEBUG: السجلات قبل {cleanup_date}: {records_before_date}")
-            
-            # حذف السجلات الأقدم من أو تساوي التاريخ المحدد
-            records_to_delete = AuditTrail.objects.filter(
-                timestamp__date__lte=cleanup_date
-            )
-            
-            deleted_count = records_to_delete.count()
-            print(f"DEBUG: سيتم حذف {deleted_count} سجل")
-            
-            # عرض بعض السجلات التي سيتم حذفها للتشخيص
-            if deleted_count > 0:
-                sample_records = records_to_delete[:5]
-                print("DEBUG: عينة من السجلات التي سيتم حذفها:")
-                for record in sample_records:
-                    print(f"  - ID: {record.id}, التاريخ: {record.timestamp}, الوصف: {record.description[:50]}")
-            
-            if deleted_count > 0:
-                # تنفيذ الحذف الفعلي
-                deleted_result = records_to_delete.delete()
-                actual_deleted = deleted_result[0]  # العدد الفعلي المحذوف
-                
-                print(f"DEBUG: تم حذف {actual_deleted} سجل فعلياً")
-                
-                # فحص السجلات المتبقية للتأكد
-                remaining_records = AuditTrail.objects.count()
-                print(f"DEBUG: السجلات المتبقية بعد الحذف: {remaining_records}")
-                
-                success_message = f"تم حذف {actual_deleted} سجل تدقيق أقدم من أو يساوي {cleanup_date}. السجلات المتبقية: {remaining_records}"
-                
-                # للطلبات AJAX
-                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                    return JsonResponse({
-                        'success': True, 
-                        'message': success_message,
-                        'deleted_count': actual_deleted,
-                        'remaining_count': remaining_records
-                    })
-                
-                messages.success(request, success_message)
-                
-                # تسجيل عملية التنظيف في سجل التدقيق
-                AuditTrail.log_action(
-                    action='delete',
-                    entity_type='audit_trail',
-                    entity_id=0,
-                    user=request.user,
-                    description=f"تنظيف سجل التدقيق - حذف {actual_deleted} سجل أقدم من {cleanup_date}",
-                    reason="تنظيف دوري للسجلات القديمة",
-                    request=request
-                )
-            else:
-                info_message = f"لا توجد سجلات أقدم من أو تساوي {cleanup_date} للحذف. إجمالي السجلات الحالية: {total_records}"
-                
-                # للطلبات AJAX
-                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                    return JsonResponse({
-                        'success': False, 
-                        'message': info_message,
-                        'deleted_count': 0,
-                        'remaining_count': total_records
-                    })
-                
-                messages.info(request, info_message)
-                
-        except ValueError:
-            error_message = "تاريخ غير صحيح"
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return JsonResponse({'success': False, 'message': error_message})
-            messages.error(request, error_message)
-        except Exception as e:
-            error_message = f"خطأ في تنظيف السجل: {str(e)}"
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return JsonResponse({'success': False, 'message': error_message})
-            messages.error(request, error_message)
-    
-    return redirect("financial:audit_trail_list")
 
 
 @login_required

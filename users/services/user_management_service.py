@@ -81,8 +81,8 @@ class UserManagementService(TransactionalService):
                 # Get custom permission IDs once to avoid repeated queries
                 custom_perm_ids = list(PermissionService.get_custom_permissions_only().values_list('id', flat=True))
                 
-                # Optimized query with all necessary relations
-                users = User.objects.filter(is_active=True).select_related('role').prefetch_related(
+                # Optimized query with all necessary relations (including inactive users)
+                users = User.objects.all().select_related('role').prefetch_related(
                     Prefetch(
                         'user_permissions',
                         queryset=Permission.objects.filter(id__in=custom_perm_ids),
@@ -436,8 +436,8 @@ class UserManagementService(TransactionalService):
         """
         with monitor_operation("search_users"):
             try:
-                # Start with active users
-                users_query = User.objects.filter(is_active=True)
+                # Start with all users (including inactive)
+                users_query = User.objects.all()
                 
                 # Apply search query
                 if query:

@@ -15,6 +15,15 @@
 <div class="container-fluid">
     {% csrf_token %}
     {% include "shared/page_header.html" %}
+    
+    <!-- تنبيه: استخدام الأذون الجماعية -->
+    <div class="alert alert-info alert-dismissible fade show" role="alert">
+        <i class="fas fa-info-circle me-2"></i>
+        <strong>ملاحظة:</strong> للعمل بشكل أسرع وأكثر كفاءة، يُنصح باستخدام 
+        <a href="{% url 'product:batch_voucher_list' %}" class="alert-link">الأذون الجماعية</a>
+        التي تسمح بإضافة عدة منتجات في إذن واحد.
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
 
     <div class="section-container">
         <div class="row mb-4">

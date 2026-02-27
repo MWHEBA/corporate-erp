@@ -126,10 +126,6 @@ class SupplierForm(forms.ModelForm):
             is_active=True
         ).select_related('settings').order_by('display_order', 'name')
         
-        # في حالة الإضافة، نخفي نوع السائق (يتم إنشاؤه تلقائياً من الباصات)
-        if not self.instance.pk:
-            active_types = active_types.exclude(code='driver')
-        
         self.fields["primary_type"].queryset = active_types
         self.fields["primary_type"].label_from_instance = lambda obj: obj.settings.name if obj.settings else obj.name
         self.fields["primary_type"].required = True

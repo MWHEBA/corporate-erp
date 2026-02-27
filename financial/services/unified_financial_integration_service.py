@@ -20,10 +20,10 @@ class UnifiedFinancialIntegrationService:
     @classmethod
     def create_parent_account(cls, parent, user: Optional[User] = None) -> Optional[ChartOfAccounts]:
         """
-        إنشاء حساب محاسبي لولي الأمر باستخدام الخدمة الموحدة
+        إنشاء حساب محاسبي لالعميل باستخدام الخدمة الموحدة
         
         Args:
-            parent: نموذج ولي الأمر
+            parent: نموذج العميل
             user: المستخدم الذي ينشئ الحساب
             
         Returns:
@@ -32,7 +32,7 @@ class UnifiedFinancialIntegrationService:
         try:
             return UnifiedAccountService.create_parent_account(parent, user)
         except Exception as e:
-            logger.error(f"❌ فشل في إنشاء حساب ولي الأمر عبر الخدمة الموحدة: {e}")
+            logger.error(f"❌ فشل في إنشاء حساب العميل عبر الخدمة الموحدة: {e}")
             return None
     
     @classmethod

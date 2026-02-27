@@ -3,7 +3,7 @@
 import django.core.validators
 from django.db import migrations, models
 import django.db.models.deletion
-import financial.models.audit_trail
+import financial.mixins
 
 
 class Migration(migrations.Migration):
@@ -253,7 +253,7 @@ class Migration(migrations.Migration):
                 "verbose_name_plural": "دفعات الفواتير",
                 "ordering": ["-payment_date"],
             },
-            bases=(financial.models.audit_trail.PaymentAuditMixin, models.Model),
+            bases=(financial.mixins.PaymentAuditMixin, models.Model),
         ),
         migrations.CreateModel(
             name="SaleReturn",

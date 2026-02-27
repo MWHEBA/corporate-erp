@@ -50,7 +50,9 @@ class Sale(models.Model):
     tax = models.DecimalField(_("الضريبة"), max_digits=12, decimal_places=2, default=0)
     total = models.DecimalField(_("الإجمالي"), max_digits=12, decimal_places=2)
     payment_method = models.CharField(
-        _("طريقة الدفع"), max_length=20, choices=PAYMENT_METHODS
+        _("طريقة الدفع"), 
+        max_length=50,  # زودنا الطول عشان يستوعب account codes
+        help_text=_("طريقة الدفع أو كود الحساب المالي")
     )
     payment_status = models.CharField(
         _("حالة الدفع"), max_length=20, choices=PAYMENT_STATUSES, default="unpaid"
@@ -83,6 +85,34 @@ class Sale(models.Model):
 
     def __str__(self):
         return f"{self.number} - {self.customer} - {self.date}"
+
+    def get_payment_method_display(self):
+        """عرض طريقة الدفع بشكل مناسب"""
+        # القيم القديمة
+        payment_method_map = {
+            'cash': _("نقدي"),
+            'bank_transfer': _("تحويل بنكي"),
+            'check': _("شيك"),
+            'credit': _("آجل"),
+            'credit_card': _("بطاقة ائتمان"),
+            'debit_card': _("بطاقة خصم"),
+        }
+
+        if self.payment_method in payment_method_map:
+            return payment_method_map[self.payment_method]
+
+        # محاولة جلب الحساب من الكود
+        try:
+            from financial.models import ChartOfAccounts
+            account = ChartOfAccounts.objects.filter(code=self.payment_method).first()
+            if account:
+                return account.name
+        except:
+            pass
+
+        # إرجاع القيمة كما هي
+        return self.payment_method or _("غير محدد")
+
 
     def save(self, *args, **kwargs):
         # حفظ الفاتورة

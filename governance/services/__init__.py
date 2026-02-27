@@ -43,6 +43,10 @@ from .governance_monitoring import (
 )
 from .payroll_governance_service import PayrollGovernanceService
 from .payroll_gateway import PayrollGateway, PayrollData, SalaryComponentData
+from .service_governance import governed_service
+from .signal_governance import (
+    governed_signal_handler, SignalErrorHandler, SignalPerformanceMonitor
+)
 
 __all__ = [
     'AuditService',
@@ -104,5 +108,9 @@ __all__ = [
     'PayrollGovernanceService',
     'PayrollGateway',
     'PayrollData',
-    'SalaryComponentData'
+    'SalaryComponentData',
+    'governed_service',
+    'governed_signal_handler',
+    'SignalErrorHandler',
+    'SignalPerformanceMonitor'
 ]

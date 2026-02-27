@@ -34,14 +34,6 @@ class CoreSupplierFunctionalityTest(TestCase):
         )
         
         # إنشاء أنواع موردين أساسية للشركة
-        self.driver_type = SupplierType.objects.create(
-            name='سائق',
-            code='driver',
-            description='سائقي الحافلات المدرسية',
-            icon='fas fa-car',
-            color='#28a745'
-        )
-        
         self.educational_type = SupplierType.objects.create(
             name='مورد تعليمي',
             code='educational',
@@ -59,10 +51,6 @@ class CoreSupplierFunctionalityTest(TestCase):
         )
         
         # إنشاء مورد أساسي للاختبار
-        general_type = SupplierType.objects.get_or_create(
-            code='general',
-            defaults={'name': 'مورد عام', 'description': 'مورد عام'}
-        )[0]
         self.supplier = Supplier.objects.create(
             name='مورد اختبار',
             code='TEST001',
@@ -111,19 +99,8 @@ class CoreSupplierFunctionalityTest(TestCase):
         """
         print("🧪 اختبار وظائف نموذج نوع المورد...")
         
-        # التحقق من إنشاء نوع المورد
-        self.assertIsNotNone(self.driver_type.id)
-        self.assertEqual(self.driver_type.name, 'سائق')
-        self.assertEqual(self.driver_type.code, 'driver')
-        self.assertTrue(self.driver_type.is_active)
-        
         # اختبار طريقة __str__
-        self.assertEqual(str(self.driver_type), 'سائق')
-        
-        # اختبار الخصائص الديناميكية
-        self.assertEqual(self.driver_type.dynamic_name, 'سائق')
-        self.assertEqual(self.driver_type.dynamic_icon, 'fas fa-car')
-        self.assertEqual(self.driver_type.dynamic_color, '#28a745')
+        self.assertEqual(str(self.service_type), 'مقدم خدمات')
         
         print("   ✅ نموذج نوع المورد يعمل بشكل صحيح")
     
@@ -174,17 +151,6 @@ class CoreSupplierFunctionalityTest(TestCase):
         self.assertEqual(self.supplier.primary_type, self.educational_type)
         self.assertEqual(self.supplier.get_primary_type_display(), 'مورد تعليمي')
         
-        # إضافة أنواع متعددة للمورد
-        self.supplier.supplier_types.add(self.driver_type, self.service_type)
-        
-        # التحقق من العلاقة many-to-many
-        self.assertEqual(self.supplier.supplier_types.count(), 2)
-        self.assertIn(self.driver_type, self.supplier.supplier_types.all())
-        self.assertIn(self.service_type, self.supplier.supplier_types.all())
-        
-        # اختبار العلاقة العكسية
-        self.assertIn(self.supplier, self.driver_type.suppliers.all())
-        
         print("   ✅ العلاقات بين النماذج تعمل بشكل صحيح")
     
     def test_supplier_validation(self):
@@ -210,7 +176,7 @@ class CoreSupplierFunctionalityTest(TestCase):
         supplier2 = Supplier.objects.create(
             name='مورد ثاني',
             code='TEST002',
-            primary_type=self.driver_type
+            primary_type=self.service_type
         )
         
         self.assertIsNotNone(supplier2.id)
@@ -225,66 +191,25 @@ class CoreSupplierFunctionalityTest(TestCase):
         """
         print("🧪 اختبار الحقول الخاصة بالمدارس...")
         
-        # إنشاء سائق
-        driver = Supplier.objects.create(
-            name='سائق أحمد',
-            code='DRIVER001',
-            primary_type=self.driver_type,
-            driver_license_number='123456789',
-            vehicle_type='حافلة مدرسية',
-            vehicle_plate_number='أ ب ج 123',
-            monthly_salary=Decimal('3000.00')
-        )
-        
-        # اختبار وظائف السائق
-        self.assertTrue(driver.is_driver())
-        self.assertFalse(driver.is_educational_supplier())
-        self.assertFalse(driver.is_service_provider())
-        
-        # اختبار معلومات السائق
-        driver_info = driver.get_driver_info()
-        self.assertIsNotNone(driver_info)
-        self.assertEqual(driver_info['license_number'], '123456789')
-        self.assertEqual(driver_info['vehicle_type'], 'حافلة مدرسية')
-        self.assertEqual(driver_info['monthly_salary'], Decimal('3000.00'))
-        
         # إنشاء مورد تعليمي
         edu_supplier = Supplier.objects.create(
             name='مكتبة المعرفة',
             code='EDU001',
-            primary_type=self.educational_type,
-            educational_specialization='كتب ومواد تعليمية',
-            grade_levels_served='جميع المراحل'
+            primary_type=self.educational_type
         )
         
         # اختبار وظائف المورد التعليمي
         self.assertTrue(edu_supplier.is_educational_supplier())
-        self.assertFalse(edu_supplier.is_driver())
-        
-        # اختبار معلومات المورد التعليمي
-        edu_info = edu_supplier.get_educational_info()
-        self.assertIsNotNone(edu_info)
-        self.assertEqual(edu_info['specialization'], 'كتب ومواد تعليمية')
         
         # إنشاء مقدم خدمات
         service_provider = Supplier.objects.create(
             name='شركة النظافة',
             code='SERVICE001',
-            primary_type=self.service_type,
-            service_category='تنظيف',
-            service_area='القاهرة الكبرى',
-            hourly_rate=Decimal('50.00')
+            primary_type=self.service_type
         )
         
         # اختبار وظائف مقدم الخدمات
         self.assertTrue(service_provider.is_service_provider())
-        self.assertFalse(service_provider.is_driver())
-        
-        # اختبار معلومات مقدم الخدمات
-        service_info = service_provider.get_service_info()
-        self.assertIsNotNone(service_info)
-        self.assertEqual(service_info['service_category'], 'تنظيف')
-        self.assertEqual(service_info['hourly_rate'], Decimal('50.00'))
         
         print("   ✅ الحقول الخاصة بالمدارس تعمل بشكل صحيح")
 

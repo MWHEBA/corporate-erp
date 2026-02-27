@@ -454,87 +454,16 @@ def mark_notifications_read(request):
         return JsonResponse({"success": False, "error": str(e)}, status=400)
 
 
-@login_required
-def abc_analysis_report(request):
-    """
-    تقرير تحليل ABC للمنتجات - محدّث [OK]
-    """
-    if not AdvancedReportsService:
-        messages.error(request, "خدمة التقارير المتقدمة غير متاحة")
-        return redirect("product:inventory_dashboard")
-
-    # فلاتر البحث
-    warehouse_id = request.GET.get("warehouse")
-    period_months = int(request.GET.get("period_months", 12))
-    category_id = request.GET.get("category")
-
-    warehouse = None
-    if warehouse_id:
-        warehouse = get_object_or_404(Warehouse, id=warehouse_id)
-
-    # الحصول على التقرير
-    report_data = AdvancedReportsService.abc_analysis(
-        warehouse=warehouse, period_months=period_months
-    )
-
-    # ترقيم الصفحات
-    analysis_data = report_data.get("analysis_data", [])
-    
-    # فلترة حسب التصنيف إذا تم اختياره
-    if category_id:
-        analysis_data = [item for item in analysis_data if item.get('category') == category_id]
-    
-    paginator = Paginator(analysis_data, 50)
-    page_number = request.GET.get("page")
-    page_obj = paginator.get_page(page_number)
-
-    context = {
-        "analysis_data": page_obj,
-        "summary": report_data.get("summary", {}),
-        "date_from": report_data.get("date_from"),
-        "date_to": report_data.get("date_to"),
-        "warehouses": Warehouse.objects.filter(is_active=True),
-        "categories": [
-            {"id": "A", "name": "فئة A - عالية القيمة"},
-            {"id": "B", "name": "فئة B - متوسطة القيمة"},
-            {"id": "C", "name": "فئة C - منخفضة القيمة"},
-        ],
-        "filters": {
-            "warehouse_id": warehouse_id,
-            "period_months": period_months,
-            "category": category_id,
-        },
-        "error": report_data.get("error"),
-        "page_title": "تحليل ABC",
-        "page_subtitle": "تصنيف المنتجات حسب القيمة والأهمية",
-        "page_icon": "fas fa-chart-pie",
-        "header_buttons": [
-            {
-                "onclick": "window.print()",
-                "icon": "fa-print",
-                "text": "طباعة",
-                "class": "btn-success",
-            },
-        ],
-        "breadcrumb_items": [
-            {"title": "الرئيسية", "url": reverse("core:dashboard"), "icon": "fas fa-home"},
-            {"title": "المنتجات", "url": reverse("product:product_list"), "icon": "fas fa-box"},
-            {"title": "التقارير", "icon": "fas fa-chart-bar"},
-            {"title": "تحليل ABC", "active": True},
-        ],
-    }
-
-    return render(request, "product/reports/abc_analysis.html", context)
 
 
 @login_required
 def inventory_turnover_report(request):
     """
-    تقرير معدل دوران المخزون - محدّث [OK]
+    تقرير معدل دوران المخزون - محدّث بالبيانات الحقيقية
     """
     if not AdvancedReportsService:
         messages.error(request, "خدمة التقارير المتقدمة غير متاحة")
-        return redirect("product:inventory_dashboard")
+        return redirect("product:product_list")
 
     # فلاتر البحث
     warehouse_id = request.GET.get("warehouse")
@@ -563,7 +492,7 @@ def inventory_turnover_report(request):
     context = {
         "page_obj": page_obj,
         "analysis_data": page_obj,  # للتوافق
-        "turnover_data": analysis_data,  # للتوافق مع Template القديم
+        "turnover_data": analysis_data,  # البيانات الكاملة للجدول
         "summary": report_data.get("summary", {}),
         "date_from": report_data.get("date_from"),
         "date_to": report_data.get("date_to"),
@@ -582,7 +511,7 @@ def inventory_turnover_report(request):
         "selected_warehouse": warehouse,
         "error": report_data.get("error"),
         "page_title": "معدل دوران المخزون",
-        "page_subtitle": "تحليل سرعة حركة المنتجات",
+        "page_subtitle": "تحليل سرعة حركة المنتجات بناءً على المبيعات الفعلية",
         "page_icon": "fas fa-sync-alt",
         "header_buttons": [
             {

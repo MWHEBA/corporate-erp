@@ -577,7 +577,7 @@ class AdvancedReportsService:
         """
         # تحديد نوع الحساب
         if account_type == "customers":
-            base_account_code = "10300"  # مدينو أولياء الأمور
+            base_account_code = "10300"  # العملاء
             title = "تقرير أرصدة العملاء"
         else:
             base_account_code = "20100"  # الموردين

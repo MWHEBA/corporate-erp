@@ -205,60 +205,71 @@ def journal_entries_list(request):
                 first_line = lines[0]
                 amount = first_line.debit if first_line.debit > 0 else first_line.credit
                 
-                # استخدام النوع المحفوظ في القيد أولاً
-                if hasattr(entry, 'entry_type') and entry.entry_type and entry.entry_type != 'manual':
-                    # استخدام النوع المحفوظ مباشرة
-                    entry_type = entry.get_entry_type_display() if hasattr(entry, 'get_entry_type_display') else entry.entry_type
-                # تحديد نوع القيد بناءً على تحليل الخطوط (للقيود اليدوية فقط)
-                elif len(lines) == 2:
+                # تحديد نوع القيد بناءً على تحليل الخطوط (لجميع القيود)
+                if len(lines) == 2:
                     line1, line2 = lines[0], lines[1]
                     
-                    # تحليل ذكي لنوع القيد بناءً على أسماء الحسابات الفعلية
+                    # تحليل ذكي لنوع القيد بناءً على أكواد الحسابات (أدق من الأسماء)
+                    account_codes = [line1.account.code, line2.account.code]
                     account_names = [line1.account.name, line2.account.name]
                     
-                    # التحقق من وجود حسابات نقدية (صندوق)
-                    cash_accounts = ['الصندوق', 'صندوق', 'نقدية', 'كاش']
-                    has_cash = any(cash_word in acc_name for acc_name in account_names for cash_word in cash_accounts)
+                    # التحقق من وجود حسابات نقدية (صندوق) - كود 10100
+                    has_cash = any(code.startswith('10100') for code in account_codes)
                     
-                    # التحقق من وجود حسابات بنكية
-                    bank_accounts = ['بنك', 'البنك', 'مصرف']
-                    has_bank = any(bank_word in acc_name for acc_name in account_names for bank_word in bank_accounts)
+                    # التحقق من وجود حسابات بنكية - كود 10200
+                    has_bank = any(code.startswith('10200') for code in account_codes)
                     
-                    # التحقق من وجود حسابات أولياء الأمور/موردين
-                    parent_accounts = ['العملاء', 'عميل', 'مدينون', 'أولياء الأمور', 'ولي أمر']
-                    supplier_accounts = ['الموردون', 'مورد', 'دائنون']
-                    has_parent = any(parent_word in acc_name for acc_name in account_names for parent_word in parent_accounts)
-                    has_supplier = any(supp_word in acc_name for acc_name in account_names for supp_word in supplier_accounts)
+                    # التحقق من وجود حسابات العملاء - كود 11010
+                    has_parent = any(code.startswith('11010') for code in account_codes)
                     
-                    # التحقق من حسابات الإيرادات والمصروفات والمخزون
-                    revenue_accounts = ['إيرادات', 'مبيعات', 'دخل']
-                    expense_accounts = ['مصروفات', 'مصاريف', 'تكلفة', 'مخزون']
-                    has_revenue = any(rev_word in acc_name for acc_name in account_names for rev_word in revenue_accounts)
-                    has_expense = any(exp_word in acc_name for acc_name in account_names for exp_word in expense_accounts)
+                    # التحقق من وجود حسابات الموردين - كود 21010
+                    has_supplier = any(code.startswith('21010') for code in account_codes)
+                    
+                    # التحقق من حسابات المخزون - كود 10400 أو 10300
+                    has_inventory = any(code.startswith('10400') or code.startswith('10300') for code in account_codes)
+                    
+                    # التحقق من حسابات الإيرادات - كود 40xxx
+                    has_revenue = any(code.startswith('40') for code in account_codes)
+                    
+                    # التحقق من حسابات المصروفات - كود 50xxx
+                    has_expense = any(code.startswith('50') for code in account_codes)
                     
                     # تحديد نوع القيد بناءً على المنطق المحاسبي
-                    if has_cash and (line1.debit > 0 and 'الصندوق' in line1.account.name) or (line2.debit > 0 and 'الصندوق' in line2.account.name):
+                    if has_cash and line1.debit > 0 and line1.account.code.startswith('10100'):
                         entry_type = "إيراد نقدي"
-                    elif has_cash and (line1.credit > 0 and 'الصندوق' in line1.account.name) or (line2.credit > 0 and 'الصندوق' in line2.account.name):
+                    elif has_cash and line2.debit > 0 and line2.account.code.startswith('10100'):
+                        entry_type = "إيراد نقدي"
+                    elif has_cash and line1.credit > 0 and line1.account.code.startswith('10100'):
                         entry_type = "مصروف نقدي"
-                    elif has_bank and (line1.debit > 0 and 'بنك' in line1.account.name) or (line2.debit > 0 and 'بنك' in line2.account.name):
+                    elif has_cash and line2.credit > 0 and line2.account.code.startswith('10100'):
+                        entry_type = "مصروف نقدي"
+                    elif has_bank and line1.debit > 0 and line1.account.code.startswith('10200'):
                         entry_type = "إيراد بنكي"
-                    elif has_bank and (line1.credit > 0 and 'بنك' in line1.account.name) or (line2.credit > 0 and 'بنك' in line2.account.name):
+                    elif has_bank and line2.debit > 0 and line2.account.code.startswith('10200'):
+                        entry_type = "إيراد بنكي"
+                    elif has_bank and line1.credit > 0 and line1.account.code.startswith('10200'):
                         entry_type = "مصروف بنكي"
-                    # فواتير المبيعات: أولياء الأمور (مدين) + إيرادات (دائن)
+                    elif has_bank and line2.credit > 0 and line2.account.code.startswith('10200'):
+                        entry_type = "مصروف بنكي"
+                    # فواتير المبيعات: العملاء (مدين) + إيرادات (دائن)
                     elif has_parent and has_revenue:
                         entry_type = "فاتورة مبيعات"
-                    # فواتير المشتريات: مصروفات/مخزون (مدين) + موردون (دائن)
-                    elif has_supplier and has_expense:
+                    # فواتير المشتريات: مخزون (مدين) + موردون (دائن)
+                    elif has_inventory and has_supplier:
+                        entry_type = "فاتورة مشتريات"
+                    # فواتير المشتريات: مصروفات (مدين) + موردون (دائن)
+                    elif has_expense and has_supplier:
                         entry_type = "فاتورة مشتريات"
                     # فواتير المشتريات البديلة: موردون (دائن) + أي حساب آخر (مدين)
                     elif has_supplier and not (has_cash or has_bank or has_parent):
                         entry_type = "فاتورة مشتريات"
-                    # فواتير المبيعات البديلة: أولياء الأمور (مدين) + أي حساب آخر (دائن)
+                    # فواتير المبيعات البديلة: العملاء (مدين) + أي حساب آخر (دائن)
                     elif has_parent and not (has_cash or has_bank or has_supplier):
                         entry_type = "فاتورة مبيعات"
+                    # تحصيل من ولي أمر: العملاء (دائن) + نقدية/بنك (مدين)
                     elif has_parent and (has_cash or has_bank):
                         entry_type = "تحصيل من ولي أمر"
+                    # دفع لمورد: موردون (مدين) + نقدية/بنك (دائن)
                     elif has_supplier and (has_cash or has_bank):
                         entry_type = "دفع لمورد"
                     else:
@@ -275,7 +286,8 @@ def journal_entries_list(request):
                     entry_type = entry.entry_type
             
             # تحديد أيقونة ولون النوع
-            entry_type_display = entry.get_entry_type_display() if hasattr(entry, 'get_entry_type_display') else "غير محدد"
+            # استخدام النوع المحلل (entry_type) بدلاً من entry_type_display
+            entry_type_display = entry_type  # استخدام النوع المحلل الذكي
             entry_type_raw = entry.entry_type if hasattr(entry, 'entry_type') else 'manual'
             
             # تعيين الأيقونة واللون حسب النوع
@@ -545,10 +557,11 @@ def journal_entries_detail(request, pk):
         from purchase.models import PurchasePayment
         from django.urls import reverse
 
-        # البحث في دفعات المشتريات - استخدام العلاقة العكسية
-        purchase_payment = journal_entry.purchasepayment_set.select_related(
-            "purchase", "purchase__supplier"
-        ).first()
+        # البحث في دفعات المشتريات - استخدام العلاقة العكسية الصحيحة
+        purchase_payment = PurchasePayment.objects.filter(
+            financial_transaction=journal_entry
+        ).select_related("purchase", "purchase__supplier").first()
+        
         if purchase_payment:
             source_payment = purchase_payment
             source_payment_url = reverse(
@@ -560,15 +573,37 @@ def journal_entries_detail(request, pk):
     except (ImportError, AttributeError):
         pass
 
-    # Sale module removed - skip sale payment lookup
+    # البحث في دفعات المبيعات - استخدام العلاقة العكسية الصحيحة
+    if not source_payment:
+        try:
+            from sale.models import SalePayment
+            from django.urls import reverse
+
+            sale_payment = SalePayment.objects.filter(
+                financial_transaction=journal_entry
+            ).select_related("sale", "sale__customer").first()
+            
+            if sale_payment:
+                source_payment = sale_payment
+                source_payment_url = reverse(
+                    "sale:payment_detail", args=[sale_payment.pk]
+                )
+                source_invoice = sale_payment.sale
+                source_party = sale_payment.sale.customer
+                invoice_type = "sale"
+        except (ImportError, AttributeError):
+            pass
 
     # ثانياً: إذا لم نجد دفعة، نبحث في الفواتير باستخدام العلاقات العكسية
     if not source_invoice:
         try:
             from purchase.models import Purchase
 
-            # البحث في فواتير المشتريات - استخدام العلاقة العكسية
-            purchase = journal_entry.purchases.select_related("supplier").first()
+            # البحث في فواتير المشتريات - استخدام العلاقة العكسية الصحيحة
+            purchase = Purchase.objects.filter(
+                journal_entry=journal_entry
+            ).select_related("supplier").first()
+            
             if purchase:
                 source_invoice = purchase
                 source_party = purchase.supplier
@@ -576,7 +611,21 @@ def journal_entries_detail(request, pk):
         except (ImportError, AttributeError):
             pass
 
-    # Sale module removed - skip sale invoice lookup
+    # البحث في فواتير المبيعات - استخدام العلاقة العكسية الصحيحة
+    if not source_invoice:
+        try:
+            from sale.models import Sale
+
+            sale = Sale.objects.filter(
+                journal_entry=journal_entry
+            ).select_related("customer").first()
+            
+            if sale:
+                source_invoice = sale
+                source_party = sale.customer
+                invoice_type = "sale"
+        except (ImportError, AttributeError):
+            pass
 
     context = {
         "journal_entry": journal_entry,

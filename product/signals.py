@@ -274,7 +274,13 @@ if InventoryMovement:
         معالجة حركات المخزون المحسنة مع تنبيهات فورية
         ✅ ACTIVE - Enhanced inventory system
         ✅ UNIFIED: Uses MovementService for Single Entry Point
+        
+        NOTE: This signal is DISABLED for InventoryMovement because it has its own
+        approve() method that handles stock updates directly.
         """
+        # تجاهل InventoryMovement - له approve() method خاص
+        return
+        
         if not instance.is_approved:
             return
         

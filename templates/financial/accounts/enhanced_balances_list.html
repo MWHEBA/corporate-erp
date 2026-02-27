@@ -105,7 +105,7 @@
                   <th width="15%" class="text-center">{% trans "كود الحساب" %}</th>
                   <th width="35%" class="text-center">{% trans "اسم الحساب" %}</th>
                   <th width="25%" class="text-center">{% trans "النوع" %}</th>
-                  <th width="25%" class="text-end text-center">{% trans "الرصيد" %}</th>
+                  <th width="25%" class="text-center">{% trans "الرصيد" %}</th>
                 </tr>
               </thead>
               <tbody>
@@ -127,7 +127,7 @@
                       <span class="badge bg-success">{% trans "نقدي" %}</span>
                     {% endif %}
                   </td>
-                  <td class="text-end text-center">
+                  <td class="text-center">
                     <span class="fw-bold {% if balance.balance > 0 %}text-success{% elif balance.balance < 0 %}text-danger{% else %}text-muted{% endif %}">
                       {{ balance.balance|currency }}
                     </span>

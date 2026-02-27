@@ -331,8 +331,10 @@ def _get_users_tab_data(request):
     elif has_permissions == 'false':
         has_permissions_bool = False
     
-    # Get users with custom permission statistics
-    users_data = UserManagementService.search_users(
+    # Create service instance and get users with custom permission statistics
+    service = UserManagementService()
+    users_data = service.perform_operation(
+        'search_users',
         query=search,
         role_id=int(role_filter) if role_filter and role_filter != 'no_role' else None,
         has_permissions=has_permissions_bool

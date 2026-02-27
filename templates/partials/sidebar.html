@@ -223,6 +223,16 @@
                                 <i class="fas fa-file-export me-2"></i>أذون الصرف
                             </a>
                         </li>
+                        <li>
+                            <a href="{% url 'product:transfer_voucher_list' %}" class="submenu-link">
+                                <i class="fas fa-exchange-alt me-2"></i>التحويل المخزني
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{% url 'product:batch_voucher_list' %}" class="submenu-link">
+                                <i class="fas fa-layer-group me-2"></i>الأذون الجماعية
+                            </a>
+                        </li>
                     </ul>
                 </li>
 
@@ -425,7 +435,7 @@
                             </a>
                         </li>
                         <li>
-                            <a href="{% url 'financial:audit_trail_list' %}" class="submenu-link">
+                            <a href="{% url 'governance:audit_management' %}" class="submenu-link">
                                 <i class="fas fa-history me-2"></i>{% trans "سجل التدقيق" %}
                             </a>
                         </li>
@@ -485,16 +495,6 @@
                         
                         <div class="nav-divider"></div>
                         
-                        <!-- تقارير المشتريات -->
-                        <li class="submenu-title">تقارير المشتريات</li>
-                        <li>
-                            <a href="{% url 'financial:purchases_report' %}" class="submenu-link">
-                                <i class="fas fa-shopping-bag me-2"></i>{% trans "تقرير المشتريات" %}
-                            </a>
-                        </li>
-                        
-                        <div class="nav-divider"></div>
-                        
                         <!-- تقارير الموارد البشرية -->
                         <li class="submenu-title">تقارير الموارد البشرية</li>
                         <li>
@@ -532,16 +532,7 @@
                                 <i class="fas fa-boxes me-2"></i>{% trans "تقرير المخزون المالي" %}
                             </a>
                         </li>
-                        <li>
-                            <a href="{% url 'financial:abc_analysis_report' %}" class="submenu-link">
-                                <i class="fas fa-chart-pie me-2"></i>{% trans "تحليل ABC - مالي" %}
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{% url 'product:abc_analysis_report' %}" class="submenu-link">
-                                <i class="fas fa-chart-bar me-2"></i>{% trans "تحليل ABC - مبيعات" %}
-                            </a>
-                        </li>
+
                         <li>
                             <a href="{% url 'product:inventory_turnover_report' %}" class="submenu-link">
                                 <i class="fas fa-sync-alt me-2"></i>{% trans "معدل دوران المخزون" %}
@@ -650,11 +641,6 @@
                         <!-- الحوكمة والمراقبة -->
                         <li class="submenu-title">الحوكمة والمراقبة</li>
                         <li>
-                            <a href="{% url 'governance:dashboard' %}" class="submenu-link">
-                                <i class="fas fa-tachometer-alt me-2"></i>لوحة الحوكمة الموحدة
-                            </a>
-                        </li>
-                        <li>
                             <a href="{% url 'governance:audit_management' %}" class="submenu-link">
                                 <i class="fas fa-clipboard-list me-2"></i>إدارة التدقيق والسجلات
                             </a>
@@ -687,11 +673,6 @@
                         <li>
                             <a href="{% url 'governance:signals_management' %}" class="submenu-link">
                                 <i class="fas fa-broadcast-tower me-2"></i>إدارة الإشارات والأذونات
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{% url 'users:permissions_dashboard' %}?tab=matrix" class="submenu-link">
-                                <i class="fas fa-users-cog me-2"></i>مصفوفة الأدوار والصلاحيات
                             </a>
                         </li>
                         <li>

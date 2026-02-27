@@ -2028,6 +2028,28 @@ def warehouse_list(request):
     total_warehouses = Warehouse.objects.count()
     active_warehouses = Warehouse.objects.filter(is_active=True).count()
 
+    # حساب إحصائيات المخازن
+    from django.db.models import Count, Sum, F, DecimalField, ExpressionWrapper
+    from django.db.models.functions import Coalesce
+    from core.utils import get_default_currency
+    
+    currency_symbol = get_default_currency()
+    
+    # إضافة إحصائيات لكل مخزن
+    warehouses = warehouses.annotate(
+        products_count=Count('stocks', distinct=True),
+        total_stock_value=Coalesce(
+            Sum(
+                ExpressionWrapper(
+                    F('stocks__quantity') * F('stocks__average_cost'),
+                    output_field=DecimalField(max_digits=15, decimal_places=2)
+                )
+            ),
+            0,
+            output_field=DecimalField(max_digits=15, decimal_places=2)
+        )
+    )
+    
     # تعريف أعمدة جدول المخازن
     warehouse_headers = [
         {
@@ -2058,11 +2080,20 @@ def warehouse_list(request):
             "width": "120px",
         },
         {
-            "key": "capacity",
-            "label": "السعة",
+            "key": "products_count",
+            "label": "عدد المنتجات",
             "sortable": True,
             "class": "text-center",
-            "width": "100px",
+            "width": "120px",
+            "format": "number",
+        },
+        {
+            "key": "stock_value",
+            "label": f"قيمة المخزون ({currency_symbol})",
+            "sortable": True,
+            "class": "text-center",
+            "width": "150px",
+            "format": "currency",
         },
         {
             "key": "is_active",
@@ -2082,27 +2113,30 @@ def warehouse_list(request):
             "label": "عرض",
             "class": "action-view",
         },
-        {
-            "url": "product:warehouse_edit",
-            "icon": "fa-edit",
-            "label": "تعديل",
-            "class": "action-edit",
-        },
-        {
-            "url": "product:warehouse_delete",
-            "icon": "fa-trash",
-            "label": "حذف",
-            "class": "action-delete",
-        },
     ]
+    
+    # تحضير بيانات الجدول
+    warehouse_data = []
+    for warehouse in warehouses:
+        warehouse_data.append({
+            'id': warehouse.id,
+            'code': warehouse.code,
+            'name': warehouse.name,
+            'location': warehouse.location or '-',
+            'manager_name': warehouse.manager.get_full_name() if warehouse.manager else '-',
+            'products_count': warehouse.products_count,
+            'stock_value': warehouse.total_stock_value,
+            'is_active': warehouse.is_active,
+        })
 
     context = {
-        "warehouses": warehouses,
+        "warehouses": warehouse_data,
         "warehouse_headers": warehouse_headers,
         "warehouse_actions": warehouse_actions,
         "primary_key": "id",
         "total_warehouses": total_warehouses,
         "active_warehouses": active_warehouses,
+        "currency_symbol": currency_symbol,
         "page_title": "المخازن",
         "page_subtitle": "إدارة المخازن ومواقع التخزين",
         "page_icon": "fas fa-warehouse",
@@ -2409,16 +2443,13 @@ def warehouse_detail(request, pk):
         "page_icon": "fas fa-warehouse",
         "header_buttons": [
             {
-                "url": reverse("product:warehouse_edit", args=[warehouse.pk]),
-                "icon": "fa-edit",
-                "text": "تعديل",
-                "class": "btn-primary",
-            },
-            {
-                "url": reverse("product:warehouse_delete", args=[warehouse.pk]),
-                "icon": "fa-trash",
-                "text": "حذف",
-                "class": "btn-danger",
+                "url": "#",
+                "icon": "fa-ellipsis-v",
+                "text": "",
+                "class": "btn-outline-secondary",
+                "id": "actions-menu-btn",
+                "toggle": "modal",
+                "target": "#actionsModal",
             },
         ],
         "breadcrumb_items": [
@@ -3040,19 +3071,6 @@ def stock_movement_detail(request, pk):
         "page_subtitle": f"{movement.product.name} | {movement.timestamp.strftime('%d-%m-%Y %H:%M')}",
         "page_icon": "fas fa-exchange-alt",
         "header_buttons": [
-            {
-                "onclick": "window.print()",
-                "icon": "fa-print",
-                "text": "طباعة",
-                "class": "btn-outline-secondary",
-            },
-        ] if not movement.document_type or movement.document_type == 'adjustment' else [
-            {
-                "url": reverse("product:stock_movement_delete", kwargs={"pk": movement.pk}),
-                "icon": "fa-trash",
-                "text": "حذف",
-                "class": "btn-danger",
-            },
             {
                 "onclick": "window.print()",
                 "icon": "fa-print",

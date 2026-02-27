@@ -21,15 +21,13 @@ class SaleForm(forms.ModelForm):
         queryset=Warehouse.objects.filter(is_active=True), label="المخزن"
     )
 
-    # حقل الخزينة للفواتير النقدية
-    financial_account = forms.ModelChoiceField(
-        queryset=None,  # سيتم تحديده في __init__
-        label="الخزينة/البنك",
-        help_text="اختر الخزينة التي سيتم استلام المبلغ فيها (للفواتير النقدية فقط)",
-        required=False,
-        empty_label="اختر الخزينة...",
+    # حقل طريقة الدفع - ديناميكي يدعم account codes
+    payment_method = forms.ChoiceField(
+        label="طريقة الدفع",
+        help_text="اختر طريقة الدفع (نقدي/آجل) أو حساب محدد",
+        required=False,  # سيتم التحقق منه في clean() حسب نوع الفاتورة
         widget=forms.Select(
-            attrs={"class": "form-control", "id": "id_financial_account"}
+            attrs={"class": "form-control", "id": "id_payment_method"}
         ),
     )
 
@@ -42,7 +40,6 @@ class SaleForm(forms.ModelForm):
             "number",
             "discount",
             "payment_method",
-            "financial_account",
             "notes",
         ]
         widgets = {
@@ -66,31 +63,53 @@ class SaleForm(forms.ModelForm):
         if warehouses.exists() and not self.initial.get("warehouse"):
             self.initial["warehouse"] = warehouses.first().pk
 
-        # تعيين طريقة الدفع "نقدي" بشكل افتراضي
-        if not self.initial.get("payment_method"):
-            self.initial["payment_method"] = "cash"
-
-        # تحديد الحسابات المالية المتاحة (نقدية وبنكية فقط)
+        # إعداد خيارات طريقة الدفع
+        payment_choices = [
+            ('', 'اختر طريقة الدفع'),
+            ('cash', 'نقدي'),
+            ('credit', 'آجل'),
+        ]
+        
+        # إضافة حسابات الدفع من النظام المالي (للفواتير النقدية فقط)
         try:
-            from financial.models.chart_of_accounts import ChartOfAccounts
-
-            self.fields["financial_account"].queryset = ChartOfAccounts.objects.filter(
-                Q(is_cash_account=True) | Q(is_bank_account=True), is_active=True
-            ).order_by("code")
-
-            # تعيين الحساب النقدي الافتراضي إذا وجد
-            default_cash_account = ChartOfAccounts.objects.filter(
-                is_cash_account=True, is_active=True
-            ).first()
-            if default_cash_account and not self.initial.get("financial_account"):
-                self.initial["financial_account"] = default_cash_account.pk
-
+            from financial.models import ChartOfAccounts
+            payment_accounts = ChartOfAccounts.objects.filter(
+                account_type__code__in=['cash', 'bank'],
+                is_active=True
+            ).order_by('code')
+            
+            for account in payment_accounts:
+                payment_choices.append((account.code, f"{account.name} ({account.code})"))
         except ImportError:
-            # في حالة عدم وجود النموذج المالي
-            self.fields["financial_account"].queryset = self.fields[
-                "financial_account"
-            ].queryset.none()
-            self.fields["financial_account"].required = False
+            pass
+        
+        self.fields['payment_method'].choices = payment_choices
+        
+        # تعيين "آجل" كافتراضي
+        if not self.initial.get("payment_method"):
+            self.initial["payment_method"] = "credit"
+        
+        # Handle old values when editing
+        if self.instance and self.instance.pk and self.instance.payment_method:
+            # إذا كانت القيمة القديمة cash أو credit، نبقيها كما هي
+            # إذا كانت account code، نبقيها أيضاً
+            self.initial['payment_method'] = self.instance.payment_method
+
+    def clean(self):
+        cleaned_data = super().clean()
+        payment_method = cleaned_data.get('payment_method')
+        
+        # التحقق من payment_method: مطلوب فقط للفواتير النقدية
+        # الـ view بيبعت invoice_type في الـ POST data
+        # لكن في الـ form validation مش موجود، فهنعتمد على القيمة نفسها
+        if payment_method and payment_method not in ['', 'credit']:
+            # فاتورة نقدية - payment_method لازم يكون موجود
+            pass
+        elif not payment_method or payment_method == '':
+            # لو فاضي، نفترض إنه آجل ونحط 'credit'
+            cleaned_data['payment_method'] = 'credit'
+        
+        return cleaned_data
 
     def clean_number(self):
         number = self.cleaned_data.get("number")
@@ -164,26 +183,18 @@ class SalePaymentForm(forms.ModelForm):
     """
     نموذج تسجيل دفعة على فاتورة المبيعات
     """
-
-    # إضافة حقل اختيار الحساب المالي
-    financial_account = forms.ModelChoiceField(
-        queryset=None,  # سيتم تحديده في __init__
-        label="الحساب المالي",
-        help_text="اختر الخزينة أو البنك المستخدم لاستقبال الدفعة",
+    
+    # Override payment_method field لدعم account codes
+    # حسب unified-components-guide.md
+    payment_method = forms.ChoiceField(
         required=True,
-        empty_label="اختر الحساب المالي...",  # تخصيص النص الافتراضي
-        widget=forms.Select(
-            attrs={
-                "class": "form-control select2",
-                "data-placeholder": "اختر الحساب المالي...",
-            }
-        ),
+        label='طريقة الدفع (الخزينة/البنك)',
+        widget=forms.Select(attrs={'class': 'form-select'})
     )
 
     class Meta:
         model = SalePayment
         fields = [
-            "financial_account",
             "amount",
             "payment_date",
             "payment_method",
@@ -216,29 +227,53 @@ class SalePaymentForm(forms.ModelForm):
         self.sale = kwargs.pop("sale", None)
         super().__init__(*args, **kwargs)
 
-        # تحديد الحسابات المالية المتاحة (نقدية وبنكية فقط)
+        # تحميل حسابات الدفع ديناميكياً (حسب unified-components-guide.md)
         try:
-            from financial.models.chart_of_accounts import ChartOfAccounts
-
-            self.fields["financial_account"].queryset = ChartOfAccounts.objects.filter(
-                Q(is_cash_account=True) | Q(is_bank_account=True), is_active=True
-            ).order_by("code")
-
-            # تعيين الحساب النقدي الافتراضي إذا وجد
-            default_cash_account = ChartOfAccounts.objects.filter(
-                is_cash_account=True, is_active=True
-            ).first()
-            if default_cash_account and not self.initial.get("financial_account"):
-                self.initial["financial_account"] = default_cash_account.pk
-
-        except ImportError:
-            # في حالة عدم وجود النموذج المالي
-            self.fields["financial_account"].queryset = self.fields[
-                "financial_account"
-            ].queryset.none()
-            self.fields["financial_account"].required = False
-            self.fields["financial_account"].help_text = "النظام المالي غير متاح حالياً"
-
+            from financial.models import ChartOfAccounts
+            from django.db.models import Q
+            
+            payment_accounts = ChartOfAccounts.objects.filter(
+                Q(is_cash_account=True) | Q(is_bank_account=True),
+                is_active=True
+            ).order_by('code')
+            
+            if payment_accounts.exists():
+                choices = [('', 'اختر حساب الدفع')]
+                for account in payment_accounts:
+                    choices.append((account.code, f"{account.name} ({account.code})"))
+                
+                self.fields['payment_method'].choices = choices
+                
+                # Handle old values when editing
+                if self.instance and self.instance.pk and self.instance.payment_method:
+                    old_value = self.instance.payment_method
+                    if old_value == 'cash':
+                        default_cash = ChartOfAccounts.objects.filter(code='10100').first()
+                        if default_cash:
+                            self.initial['payment_method'] = default_cash.code
+                    elif old_value == 'bank_transfer':
+                        default_bank = ChartOfAccounts.objects.filter(code='10200').first()
+                        if default_bank:
+                            self.initial['payment_method'] = default_bank.code
+                    else:
+                        # Already an account code - verify it exists
+                        if payment_accounts.filter(code=old_value).exists():
+                            self.initial['payment_method'] = old_value
+            else:
+                # No payment accounts found - use fallback
+                self.fields['payment_method'].choices = [
+                    ('', 'اختر طريقة الدفع'),
+                    ('cash', 'نقداً'),
+                    ('bank_transfer', 'تحويل بنكي'),
+                ]
+        except Exception:
+            # Fallback to default choices on any error
+            self.fields['payment_method'].choices = [
+                ('', 'اختر طريقة الدفع'),
+                ('cash', 'نقداً'),
+                ('bank_transfer', 'تحويل بنكي'),
+            ]
+        
         # تعيين التاريخ الحالي كافتراضي
         if not self.initial.get("payment_date"):
             self.initial["payment_date"] = timezone.now().date()
@@ -268,73 +303,25 @@ class SalePaymentForm(forms.ModelForm):
 
         return amount
 
-    def clean_financial_account(self):
-        financial_account = self.cleaned_data.get("financial_account")
-
-        if financial_account:
-            # التحقق من أن الحساب نقدي أو بنكي
-            if not (
-                financial_account.is_cash_account or financial_account.is_bank_account
-            ):
-                raise ValidationError("يجب اختيار حساب نقدي أو بنكي فقط")
-
-            # التحقق من أن الحساب نشط
-            if not financial_account.is_active:
-                raise ValidationError("الحساب المحدد غير نشط")
-
-        return financial_account
-
-    def clean(self):
-        cleaned_data = super().clean()
-
-        # التحقق من تطابق طريقة الدفع مع نوع الحساب
-        payment_method = cleaned_data.get("payment_method")
-        financial_account = cleaned_data.get("financial_account")
-
-        if payment_method and financial_account:
-            if payment_method == "cash" and not financial_account.is_cash_account:
-                raise ValidationError(
-                    {
-                        "financial_account": "يجب اختيار حساب نقدي عند اختيار الدفع النقدي"
-                    }
-                )
-            elif (
-                payment_method in ["bank_transfer", "check"]
-                and not financial_account.is_bank_account
-            ):
-                raise ValidationError(
-                    {
-                        "financial_account": "يجب اختيار حساب بنكي عند اختيار التحويل البنكي أو الشيك"
-                    }
-                )
-
-        return cleaned_data
-
 
 class SalePaymentEditForm(forms.ModelForm):
     """
     نموذج تعديل دفعة على فاتورة المبيعات
     """
 
-    # إضافة حقل اختيار الحساب المالي
-    financial_account = forms.ModelChoiceField(
-        queryset=None,  # سيتم تحديده في __init__
-        label="الحساب المالي",
-        help_text="اختر الخزينة أو البنك المستخدم لاستقبال الدفعة",
+    # حقل طريقة الدفع - ديناميكي يدعم account codes
+    payment_method = forms.ChoiceField(
+        label="طريقة الدفع (الخزينة/البنك)",
+        help_text="اختر حساب الدفع",
         required=True,
-        empty_label="اختر الحساب المالي...",
         widget=forms.Select(
-            attrs={
-                "class": "form-control select2",
-                "data-placeholder": "اختر الحساب المالي...",
-            }
+            attrs={"class": "form-control select2"}
         ),
     )
 
     class Meta:
         model = SalePayment
         fields = [
-            "financial_account",
             "amount",
             "payment_date",
             "payment_method",
@@ -367,21 +354,66 @@ class SalePaymentEditForm(forms.ModelForm):
         self.sale = kwargs.pop("sale", None)
         super().__init__(*args, **kwargs)
 
-        # تحديد الحسابات المالية المتاحة (نقدية وبنكية فقط)
+        # إعداد خيارات طريقة الدفع
+        payment_choices = [('', 'اختر حساب الدفع')]
+        
         try:
-            from financial.models.chart_of_accounts import ChartOfAccounts
-
-            self.fields["financial_account"].queryset = ChartOfAccounts.objects.filter(
-                Q(is_cash_account=True) | Q(is_bank_account=True), is_active=True
-            ).order_by("code")
-
-        except ImportError:
-            # في حالة عدم وجود النموذج المالي
-            self.fields["financial_account"].queryset = self.fields[
-                "financial_account"
-            ].queryset.none()
-            self.fields["financial_account"].required = False
-            self.fields["financial_account"].help_text = "النظام المالي غير متاح حالياً"
+            from financial.models import ChartOfAccounts
+            from django.db.models import Q
+            
+            payment_accounts = ChartOfAccounts.objects.filter(
+                Q(is_cash_account=True) | Q(is_bank_account=True),
+                is_active=True
+            ).order_by('code')
+            
+            if payment_accounts.exists():
+                for account in payment_accounts:
+                    payment_choices.append((account.code, f"{account.name} ({account.code})"))
+            else:
+                # No payment accounts found - use fallback
+                payment_choices = [
+                    ('', 'اختر طريقة الدفع'),
+                    ('cash', 'نقداً'),
+                    ('bank_transfer', 'تحويل بنكي'),
+                ]
+                
+        except Exception:
+            payment_choices = [
+                ('', 'اختر طريقة الدفع'),
+                ('cash', 'نقداً'),
+                ('bank_transfer', 'تحويل بنكي'),
+            ]
+        
+        self.fields['payment_method'].choices = payment_choices
+        
+        # Handle old values when editing
+        if self.instance and self.instance.pk and self.instance.payment_method:
+            old_value = self.instance.payment_method
+            # تحويل القيم القديمة
+            if old_value == 'cash':
+                try:
+                    from financial.models import ChartOfAccounts
+                    default_cash = ChartOfAccounts.objects.filter(code='10100').first()
+                    if default_cash:
+                        self.initial['payment_method'] = default_cash.code
+                except:
+                    self.initial['payment_method'] = 'cash'
+            elif old_value == 'bank_transfer':
+                try:
+                    from financial.models import ChartOfAccounts
+                    default_bank = ChartOfAccounts.objects.filter(code='10200').first()
+                    if default_bank:
+                        self.initial['payment_method'] = default_bank.code
+                except:
+                    self.initial['payment_method'] = 'bank_transfer'
+            else:
+                # Already an account code - verify it exists
+                try:
+                    from financial.models import ChartOfAccounts
+                    if ChartOfAccounts.objects.filter(code=old_value, is_active=True).exists():
+                        self.initial['payment_method'] = old_value
+                except:
+                    pass
 
         # إضافة CSS classes للحقول
         for field_name, field in self.fields.items():
@@ -409,48 +441,6 @@ class SalePaymentEditForm(forms.ModelForm):
         # لأن المستخدم قد يريد تعديل مبلغ موجود
 
         return amount
-
-    def clean_financial_account(self):
-        financial_account = self.cleaned_data.get("financial_account")
-
-        if financial_account:
-            # التحقق من أن الحساب نقدي أو بنكي
-            if not (
-                financial_account.is_cash_account or financial_account.is_bank_account
-            ):
-                raise ValidationError("يجب اختيار حساب نقدي أو بنكي فقط")
-
-            # التحقق من أن الحساب نشط
-            if not financial_account.is_active:
-                raise ValidationError("الحساب المحدد غير نشط")
-
-        return financial_account
-
-    def clean(self):
-        cleaned_data = super().clean()
-
-        # التحقق من تطابق طريقة الدفع مع نوع الحساب
-        payment_method = cleaned_data.get("payment_method")
-        financial_account = cleaned_data.get("financial_account")
-
-        if payment_method and financial_account:
-            if payment_method == "cash" and not financial_account.is_cash_account:
-                raise ValidationError(
-                    {
-                        "financial_account": "يجب اختيار حساب نقدي عند اختيار الدفع النقدي"
-                    }
-                )
-            elif (
-                payment_method in ["bank_transfer", "check"]
-                and not financial_account.is_bank_account
-            ):
-                raise ValidationError(
-                    {
-                        "financial_account": "يجب اختيار حساب بنكي عند اختيار التحويل البنكي أو الشيك"
-                    }
-                )
-
-        return cleaned_data
 
 
 class SaleReturnForm(forms.ModelForm):

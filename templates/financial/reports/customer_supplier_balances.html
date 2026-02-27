@@ -270,12 +270,12 @@
                     <tr>
                         <th style="width: 100px;" class="text-center">الكود</th>
                         <th class="text-center">اسم الحساب</th>
-                        <th class="text-end text-center" style="width: 120px;">حالي<br><small class="opacity-75">(0-30 يوم)</small></th>
-                        <th class="text-end text-center" style="width: 120px;">متأخر<br><small class="opacity-75">(31-60)</small></th>
-                        <th class="text-end text-center" style="width: 120px;">متأخر<br><small class="opacity-75">(61-90)</small></th>
-                        <th class="text-end text-center" style="width: 120px;">متأخر<br><small class="opacity-75">(91-120)</small></th>
-                        <th class="text-end text-center" style="width: 120px;">متأخر جداً<br><small class="opacity-75">(+120)</small></th>
-                        <th class="text-end text-center" style="width: 130px;"><i class="fas fa-calculator me-1"></i>الإجمالي</th>
+                        <th class="text-center" style="width: 120px;">حالي<br><small class="opacity-75">(0-30 يوم)</small></th>
+                        <th class="text-center" style="width: 120px;">متأخر<br><small class="opacity-75">(31-60)</small></th>
+                        <th class="text-center" style="width: 120px;">متأخر<br><small class="opacity-75">(61-90)</small></th>
+                        <th class="text-center" style="width: 120px;">متأخر<br><small class="opacity-75">(91-120)</small></th>
+                        <th class="text-center" style="width: 120px;">متأخر جداً<br><small class="opacity-75">(+120)</small></th>
+                        <th class="text-center" style="width: 130px;"><i class="fas fa-calculator me-1"></i>الإجمالي</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -287,42 +287,42 @@
                         <td class="text-center">
                             <strong class="text-dark">{{ account.account_name }}</strong>
                         </td>
-                        <td class="text-end text-center">
+                        <td class="text-center">
                             {% if account.current > 0 %}
                                 <span class="text-success">{{ account.current|smart_float }}</span>
                             {% else %}
                                 <span class="text-muted">-</span>
                             {% endif %}
                         </td>
-                        <td class="text-end text-center">
+                        <td class="text-center">
                             {% if account.days_1_30 > 0 %}
                                 <span class="text-warning">{{ account.days_1_30|smart_float }}</span>
                             {% else %}
                                 <span class="text-muted">-</span>
                             {% endif %}
                         </td>
-                        <td class="text-end text-center">
+                        <td class="text-center">
                             {% if account.days_31_60 > 0 %}
                                 <span class="text-warning">{{ account.days_31_60|smart_float }}</span>
                             {% else %}
                                 <span class="text-muted">-</span>
                             {% endif %}
                         </td>
-                        <td class="text-end text-center">
+                        <td class="text-center">
                             {% if account.days_61_90 > 0 %}
                                 <span class="text-danger">{{ account.days_61_90|smart_float }}</span>
                             {% else %}
                                 <span class="text-muted">-</span>
                             {% endif %}
                         </td>
-                        <td class="text-end text-center">
+                        <td class="text-center">
                             {% if account.over_90 > 0 %}
                                 <span class="text-danger fw-bold">{{ account.over_90|smart_float }}</span>
                             {% else %}
                                 <span class="text-muted">-</span>
                             {% endif %}
                         </td>
-                        <td class="text-end text-center">
+                        <td class="text-center">
                             <strong class="text-primary">{{ account.total_balance|smart_float }}</strong>
                         </td>
                     </tr>
@@ -332,12 +332,12 @@
                             <i class="fas fa-sigma me-2"></i>
                             <strong>الإجمالي الكلي</strong>
                         </td>
-                        <td class="text-end text-center">{{ report_data.due_periods.current.amount|smart_float }}</td>
-                        <td class="text-end text-center">{{ report_data.due_periods.days_1_30.amount|smart_float }}</td>
-                        <td class="text-end text-center">{{ report_data.due_periods.days_31_60.amount|smart_float }}</td>
-                        <td class="text-end text-center">{{ report_data.due_periods.days_61_90.amount|smart_float }}</td>
-                        <td class="text-end text-center">{{ report_data.due_periods.over_90.amount|smart_float }}</td>
-                        <td class="text-end text-center">{{ report_data.summary.total_balance|smart_float }}</td>
+                        <td class="text-center">{{ report_data.due_periods.current.amount|smart_float }}</td>
+                        <td class="text-center">{{ report_data.due_periods.days_1_30.amount|smart_float }}</td>
+                        <td class="text-center">{{ report_data.due_periods.days_31_60.amount|smart_float }}</td>
+                        <td class="text-center">{{ report_data.due_periods.days_61_90.amount|smart_float }}</td>
+                        <td class="text-center">{{ report_data.due_periods.over_90.amount|smart_float }}</td>
+                        <td class="text-center">{{ report_data.summary.total_balance|smart_float }}</td>
                     </tr>
                 </tbody>
             </table>

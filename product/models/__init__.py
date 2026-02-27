@@ -36,6 +36,10 @@ try:
         LocationMovement,
         LocationTask,
     )
+    from .batch_voucher import (
+        BatchVoucher,
+        BatchVoucherItem,
+    )
 except ImportError:
     # في حالة عدم توفر النماذج الجديدة، استخدم None
     StockTransfer = StockSnapshot = None
@@ -45,6 +49,7 @@ except ImportError:
     ExpiryAlert = ExpiryRule = None
     LocationZone = LocationAisle = LocationShelf = None
     ProductLocation = LocationMovement = LocationTask = None
+    BatchVoucher = BatchVoucherItem = None
 
 # تصدير جميع النماذج (الأساسية والمحسنة)
 __all__ = [
@@ -86,4 +91,7 @@ __all__ = [
     "ProductLocation",
     "LocationMovement",
     "LocationTask",
+    # الأذون الجماعية
+    "BatchVoucher",
+    "BatchVoucherItem",
 ]

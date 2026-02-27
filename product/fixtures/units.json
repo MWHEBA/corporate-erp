@@ -5,7 +5,9 @@
     "fields": {
       "name": "قطعة",
       "code": "UNIT0001",
-      "is_active": true
+      "is_active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
     }
   },
   {
@@ -14,7 +16,9 @@
     "fields": {
       "name": "كرتونة",
       "code": "UNIT0002",
-      "is_active": true
+      "is_active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
     }
   }
 ]

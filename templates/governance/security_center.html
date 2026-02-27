@@ -9,6 +9,22 @@
 <link rel="stylesheet" href="{% static 'css/shared-components.css' %}">
 <link rel="stylesheet" href="{% static 'css/unified-components.css' %}">
 <link rel="stylesheet" href="{% static 'css/governance.css' %}">
+<style>
+.pagination {
+    margin: 0;
+}
+.pagination .page-link {
+    color: var(--primary-color);
+    border-color: #dee2e6;
+}
+.pagination .page-item.active .page-link {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+.pagination .page-link:hover {
+    background-color: #f8f9fa;
+}
+</style>
 {% endblock %}
 
 {% block content %}
@@ -16,22 +32,19 @@
     {% csrf_token %}
     
     <!-- Page Header -->
-    {% include "shared/page_header.html" with title=title subtitle=subtitle icon=icon %}
-    
-    <!-- Breadcrumb -->
-    {% include "shared/breadcrumb.html" with items=breadcrumb_items %}
+    {% include "shared/page_header.html" with title=title subtitle=subtitle icon=icon breadcrumb_items=breadcrumb_items %}
     
     <!-- Security Overview -->
     <div class="section-container">
         <h5 class="section-title"><i class="fas fa-shield-alt me-2"></i>نظرة عامة على الأمان</h5>
         <div class="row">
             <div class="col-md-3 mb-3">
-                <div class="stats-card stats-card-success">
+                <div class="stats-card {% if security_level == 'عالي' %}stats-card-success{% elif security_level == 'متوسط' %}stats-card-warning{% else %}stats-card-danger{% endif %}">
                     <div class="stats-card-body">
                         <div class="stats-card-icon"><i class="fas fa-shield-check"></i></div>
                         <div class="stats-card-title">مستوى الأمان</div>
-                        <div class="stats-card-value">عالي</div>
-                        <div class="stats-card-unit">95%</div>
+                        <div class="stats-card-value">{{ security_level }}</div>
+                        <div class="stats-card-unit">{{ security_percentage }}%</div>
                     </div>
                 </div>
             </div>
@@ -40,7 +53,7 @@
                     <div class="stats-card-body">
                         <div class="stats-card-icon"><i class="fas fa-user-shield"></i></div>
                         <div class="stats-card-title">جلسات نشطة</div>
-                        <div class="stats-card-value">{{ active_sessions|default:24 }}</div>
+                        <div class="stats-card-value">{{ active_sessions }}</div>
                         <div class="stats-card-unit">جلسة</div>
                     </div>
                 </div>
@@ -50,7 +63,7 @@
                     <div class="stats-card-body">
                         <div class="stats-card-icon"><i class="fas fa-exclamation-triangle"></i></div>
                         <div class="stats-card-title">محاولات مشبوهة</div>
-                        <div class="stats-card-value">{{ suspicious_attempts|default:2 }}</div>
+                        <div class="stats-card-value">{{ suspicious_attempts }}</div>
                         <div class="stats-card-unit">محاولة</div>
                     </div>
                 </div>
@@ -60,7 +73,7 @@
                     <div class="stats-card-body">
                         <div class="stats-card-icon"><i class="fas fa-ban"></i></div>
                         <div class="stats-card-title">عناوين محجوبة</div>
-                        <div class="stats-card-value">{{ blocked_ips|default:5 }}</div>
+                        <div class="stats-card-value">{{ blocked_ips }}</div>
                         <div class="stats-card-unit">عنوان</div>
                     </div>
                 </div>
@@ -106,38 +119,95 @@
                             </tr>
                         </thead>
                         <tbody>
+                            {% for incident in recent_incidents %}
                             <tr>
-                                <td class="text-center">2026-02-03 14:45:12</td>
-                                <td class="text-center">محاولة دخول فاشلة</td>
-                                <td class="text-center">192.168.1.150</td>
-                                <td class="text-center">unknown</td>
-                                <td class="text-center"><span class="badge bg-warning">متوسط</span></td>
-                                <td class="text-center"><span class="badge bg-info">قيد المراجعة</span></td>
+                                <td class="text-center">{{ incident.detected_at|date:"Y-m-d H:i:s" }}</td>
+                                <td class="text-center">{{ incident.get_incident_type_display }}</td>
+                                <td class="text-center">{{ incident.ip_address }}</td>
+                                <td class="text-center">{{ incident.user.username|default:incident.username_attempted|default:"unknown" }}</td>
                                 <td class="text-center">
-                                    <button class="btn btn-outline-info btn-sm" onclick="viewIncident(1)">
+                                    {% if incident.severity == 'CRITICAL' %}
+                                        <span class="badge bg-danger">{{ incident.get_severity_display }}</span>
+                                    {% elif incident.severity == 'HIGH' %}
+                                        <span class="badge bg-warning">{{ incident.get_severity_display }}</span>
+                                    {% elif incident.severity == 'MEDIUM' %}
+                                        <span class="badge bg-info">{{ incident.get_severity_display }}</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">{{ incident.get_severity_display }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if incident.status == 'RESOLVED' %}
+                                        <span class="badge bg-success">{{ incident.get_status_display }}</span>
+                                    {% elif incident.status == 'UNDER_REVIEW' %}
+                                        <span class="badge bg-info">{{ incident.get_status_display }}</span>
+                                    {% else %}
+                                        <span class="badge bg-warning">{{ incident.get_status_display }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    <button class="btn btn-outline-info btn-sm" onclick="viewIncident({{ incident.id }})">
                                         <i class="fas fa-eye"></i>
                                     </button>
-                                    <button class="btn btn-outline-danger btn-sm" onclick="blockIP('192.168.1.150')">
+                                    {% if incident.status != 'RESOLVED' %}
+                                    <button class="btn btn-outline-danger btn-sm" onclick="blockIP('{{ incident.ip_address }}')">
                                         <i class="fas fa-ban"></i>
                                     </button>
+                                    {% endif %}
                                 </td>
                             </tr>
+                            {% empty %}
                             <tr>
-                                <td class="text-center">2026-02-03 13:20:45</td>
-                                <td class="text-center">وصول غير مصرح</td>
-                                <td class="text-center">10.0.0.25</td>
-                                <td class="text-center">guest_user</td>
-                                <td class="text-center"><span class="badge bg-danger">عالي</span></td>
-                                <td class="text-center"><span class="badge bg-success">تم الحل</span></td>
-                                <td class="text-center">
-                                    <button class="btn btn-outline-info btn-sm" onclick="viewIncident(2)">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                </td>
+                                <td colspan="7" class="text-center text-muted">لا توجد حوادث أمنية</td>
                             </tr>
+                            {% endfor %}
                         </tbody>
                     </table>
                 </div>
+                
+                <!-- Django Pagination -->
+                {% if recent_incidents.has_other_pages %}
+                <nav aria-label="Page navigation" class="mt-3">
+                    <ul class="pagination justify-content-center">
+                        {% if recent_incidents.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=1" aria-label="First">
+                                <span aria-hidden="true">&laquo;&laquo;</span>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ recent_incidents.previous_page_number }}" aria-label="Previous">
+                                <span aria-hidden="true">&laquo;</span>
+                            </a>
+                        </li>
+                        {% endif %}
+                        
+                        {% for num in recent_incidents.paginator.page_range %}
+                            {% if recent_incidents.number == num %}
+                                <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                            {% elif num > recent_incidents.number|add:'-3' and num < recent_incidents.number|add:'3' %}
+                                <li class="page-item"><a class="page-link" href="?page={{ num }}">{{ num }}</a></li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if recent_incidents.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ recent_incidents.next_page_number }}" aria-label="Next">
+                                <span aria-hidden="true">&raquo;</span>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ recent_incidents.paginator.num_pages }}" aria-label="Last">
+                                <span aria-hidden="true">&raquo;&raquo;</span>
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                <div class="text-center text-muted">
+                    <small>صفحة {{ recent_incidents.number }} من {{ recent_incidents.paginator.num_pages }} ({{ recent_incidents.paginator.count }} حادث)</small>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -165,26 +235,22 @@
                                     </tr>
                                 </thead>
                                 <tbody>
+                                    {% for session in active_sessions_list %}
                                     <tr>
-                                        <td class="text-center">admin</td>
-                                        <td class="text-center">192.168.1.100</td>
-                                        <td class="text-center">14:30</td>
+                                        <td class="text-center">{{ session.user.username }}</td>
+                                        <td class="text-center">{{ session.ip_address }}</td>
+                                        <td class="text-center">{{ session.login_at|date:"H:i" }}</td>
                                         <td class="text-center">
-                                            <button class="btn btn-outline-danger btn-sm" onclick="terminateSession('admin')">
+                                            <button class="btn btn-outline-danger btn-sm" onclick="terminateSession({{ session.id }}, '{{ session.user.username }}')">
                                                 <i class="fas fa-sign-out-alt"></i>
                                             </button>
                                         </td>
                                     </tr>
+                                    {% empty %}
                                     <tr>
-                                        <td class="text-center">teacher1</td>
-                                        <td class="text-center">192.168.1.105</td>
-                                        <td class="text-center">13:45</td>
-                                        <td class="text-center">
-                                            <button class="btn btn-outline-danger btn-sm" onclick="terminateSession('teacher1')">
-                                                <i class="fas fa-sign-out-alt"></i>
-                                            </button>
-                                        </td>
+                                        <td colspan="4" class="text-center text-muted">لا توجد جلسات نشطة</td>
                                     </tr>
+                                    {% endfor %}
                                 </tbody>
                             </table>
                         </div>
@@ -208,26 +274,22 @@
                                     </tr>
                                 </thead>
                                 <tbody>
+                                    {% for blocked in blocked_ips_list %}
                                     <tr>
-                                        <td class="text-center">192.168.1.200</td>
-                                        <td class="text-center">محاولات متكررة</td>
-                                        <td class="text-center">2026-02-02</td>
+                                        <td class="text-center">{{ blocked.ip_address }}</td>
+                                        <td class="text-center">{{ blocked.get_reason_display }}</td>
+                                        <td class="text-center">{{ blocked.blocked_at|date:"Y-m-d" }}</td>
                                         <td class="text-center">
-                                            <button class="btn btn-outline-success btn-sm" onclick="unblockIP('192.168.1.200')">
+                                            <button class="btn btn-outline-success btn-sm" onclick="unblockIP({{ blocked.id }}, '{{ blocked.ip_address }}')">
                                                 <i class="fas fa-unlock"></i>
                                             </button>
                                         </td>
                                     </tr>
+                                    {% empty %}
                                     <tr>
-                                        <td class="text-center">10.0.0.50</td>
-                                        <td class="text-center">نشاط مشبوه</td>
-                                        <td class="text-center">2026-02-01</td>
-                                        <td class="text-center">
-                                            <button class="btn btn-outline-success btn-sm" onclick="unblockIP('10.0.0.50')">
-                                                <i class="fas fa-unlock"></i>
-                                            </button>
-                                        </td>
+                                        <td colspan="4" class="text-center text-muted">لا توجد عناوين IP محجوبة</td>
                                     </tr>
+                                    {% endfor %}
                                 </tbody>
                             </table>
                         </div>
@@ -243,51 +305,27 @@
             <i class="fas fa-clipboard-check me-2"></i>السياسات الأمنية النشطة
         </h5>
         <div class="row">
+            {% for policy in security_policies %}
             <div class="col-lg-4 mb-3">
                 <div class="card">
                     <div class="card-body">
                         <div class="policy-item">
-                            <div class="policy-icon text-success">
-                                <i class="fas fa-lock"></i>
+                            <div class="policy-icon {% if policy.is_enabled %}text-success{% else %}text-danger{% endif %}">
+                                <i class="fas {% if policy.policy_type == 'PASSWORD_ENCRYPTION' %}fa-lock{% elif policy.policy_type == 'SESSION_TIMEOUT' %}fa-clock{% elif policy.policy_type == 'BRUTE_FORCE_PROTECTION' %}fa-shield-alt{% elif policy.policy_type == 'RATE_LIMITING' %}fa-tachometer-alt{% elif policy.policy_type == 'TWO_FACTOR_AUTH' %}fa-mobile-alt{% else %}fa-key{% endif %}"></i>
                             </div>
                             <div class="policy-info">
-                                <h6>تشفير كلمات المرور</h6>
-                                <p class="text-muted mb-0">نشط - SHA-256</p>
+                                <h6>{{ policy.get_policy_type_display }}</h6>
+                                <p class="text-muted mb-0">{% if policy.is_enabled %}نشط{% else %}معطل{% endif %}{% if policy.configuration %} - {{ policy.configuration|truncatechars:30 }}{% endif %}</p>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="col-lg-4 mb-3">
-                <div class="card">
-                    <div class="card-body">
-                        <div class="policy-item">
-                            <div class="policy-icon text-info">
-                                <i class="fas fa-clock"></i>
-                            </div>
-                            <div class="policy-info">
-                                <h6>انتهاء الجلسة</h6>
-                                <p class="text-muted mb-0">نشط - 30 دقيقة</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            {% empty %}
+            <div class="col-12">
+                <div class="alert alert-info">لا توجد سياسات أمنية محددة</div>
             </div>
-            <div class="col-lg-4 mb-3">
-                <div class="card">
-                    <div class="card-body">
-                        <div class="policy-item">
-                            <div class="policy-icon text-warning">
-                                <i class="fas fa-shield-alt"></i>
-                            </div>
-                            <div class="policy-info">
-                                <h6>حماية من البروت فورس</h6>
-                                <p class="text-muted mb-0">نشط - 5 محاولات</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            {% endfor %}
         </div>
     </div>
 </div>
@@ -309,88 +347,230 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/global-table.js' %}"></script>
 <script>
 $(document).ready(function() {
-    // Initialize DataTable
-    if (typeof GlobalTableManager !== 'undefined') {
-        GlobalTableManager.initializeTable('incidentsTable', {
-            order: [[0, 'desc']],
-            columnDefs: [{ targets: -1, orderable: false }]
-        });
-    }
-    
-    // Auto-refresh incidents every 60 seconds
-    setInterval(function() {
-        refreshIncidents();
-    }, 60000);
+    // No DataTable initialization - using Django pagination
 });
 
 function refreshIncidents() {
-    // Refresh security incidents
     location.reload();
 }
 
 function exportIncidents() {
-    // Export security incidents
-    alert('تصدير الحوادث الأمنية...');
+    toastr.info('جاري تصدير الحوادث الأمنية...');
+    // TODO: Implement export functionality
 }
 
 function viewIncident(id) {
-    // Load incident details
-    $('#incidentDetails').html(`
-        <div class="row">
-            <div class="col-md-6">
-                <strong>معرف الحادث:</strong> SEC-${id}<br>
-                <strong>النوع:</strong> محاولة دخول فاشلة<br>
-                <strong>الوقت:</strong> 2026-02-03 14:45:12<br>
-                <strong>عنوان IP:</strong> 192.168.1.150
-            </div>
-            <div class="col-md-6">
-                <strong>المستخدم:</strong> unknown<br>
-                <strong>الخطورة:</strong> متوسط<br>
-                <strong>الحالة:</strong> قيد المراجعة<br>
-                <strong>المتصفح:</strong> Chrome 120.0
-            </div>
-        </div>
-        <hr>
-        <h6>تفاصيل إضافية:</h6>
-        <p>تم رصد محاولة دخول فاشلة من عنوان IP غير معروف. المحاولة تمت باستخدام بيانات اعتماد غير صحيحة.</p>
-        <div class="mt-3">
-            <button class="btn btn-danger" onclick="blockIP('192.168.1.150')">حجب عنوان IP</button>
-            <button class="btn btn-success" onclick="resolveIncident(${id})">تم الحل</button>
-        </div>
-    `);
-    $('#incidentModal').modal('show');
+    $.ajax({
+        url: `/governance/security/incident/${id}/`,
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                const data = response.data;
+                const severityBadge = data.severity === 'حرج' ? 'danger' : 
+                                     data.severity === 'عالي' ? 'warning' : 
+                                     data.severity === 'متوسط' ? 'info' : 'secondary';
+                const statusBadge = data.status === 'تم الحل' ? 'success' : 
+                                   data.status === 'قيد المراجعة' ? 'info' : 'warning';
+                
+                let html = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <strong>معرف الحادث:</strong> SEC-${data.id}<br>
+                            <strong>النوع:</strong> ${data.incident_type}<br>
+                            <strong>الوقت:</strong> ${data.detected_at}<br>
+                            <strong>عنوان IP:</strong> ${data.ip_address}<br>
+                            <strong>المسار:</strong> ${data.request_path || 'غير متاح'}<br>
+                            <strong>الطريقة:</strong> ${data.request_method || 'غير متاح'}
+                        </div>
+                        <div class="col-md-6">
+                            <strong>المستخدم:</strong> ${data.user}<br>
+                            <strong>الخطورة:</strong> <span class="badge bg-${severityBadge}">${data.severity}</span><br>
+                            <strong>الحالة:</strong> <span class="badge bg-${statusBadge}">${data.status}</span><br>
+                            <strong>المتصفح:</strong> ${data.user_agent ? data.user_agent.substring(0, 50) + '...' : 'غير متاح'}
+                        </div>
+                    </div>
+                    <hr>
+                    <h6>الوصف:</h6>
+                    <p>${data.description}</p>
+                `;
+                
+                if (data.resolved_at) {
+                    html += `
+                        <div class="alert alert-success">
+                            <strong>تم الحل:</strong> ${data.resolved_at} بواسطة ${data.resolved_by}<br>
+                            <strong>الملاحظات:</strong> ${data.resolution_notes || 'لا توجد ملاحظات'}
+                        </div>
+                    `;
+                } else {
+                    html += `
+                        <div class="mt-3">
+                            <button class="btn btn-danger" onclick="blockIP('${data.ip_address}')">
+                                <i class="fas fa-ban me-1"></i>حجب عنوان IP
+                            </button>
+                            <button class="btn btn-success" onclick="resolveIncident(${data.id})">
+                                <i class="fas fa-check me-1"></i>تم الحل
+                            </button>
+                        </div>
+                    `;
+                }
+                
+                $('#incidentDetails').html(html);
+                $('#incidentModal').modal('show');
+            } else {
+                toastr.error(response.error || 'فشل تحميل تفاصيل الحادث');
+            }
+        },
+        error: function() {
+            toastr.error('حدث خطأ أثناء تحميل تفاصيل الحادث');
+        }
+    });
 }
 
 function blockIP(ip) {
-    if (confirm(`هل أنت متأكد من حجب عنوان IP: ${ip}؟`)) {
-        alert(`تم حجب عنوان IP: ${ip}`);
-        location.reload();
-    }
+    Swal.fire({
+        title: 'حجب عنوان IP',
+        text: `هل أنت متأكد من حجب عنوان IP: ${ip}؟`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'نعم، احجب',
+        cancelButtonText: 'إلغاء'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            $.ajax({
+                url: `/governance/security/ip/${ip}/block/`,
+                method: 'POST',
+                data: {
+                    csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val(),
+                    description: 'حجب يدوي من مركز الأمان'
+                },
+                success: function(response) {
+                    if (response.success) {
+                        Swal.fire('تم الحجب!', response.message, 'success').then(() => {
+                            location.reload();
+                        });
+                    } else {
+                        toastr.error(response.error || 'فشل حجب عنوان IP');
+                    }
+                },
+                error: function() {
+                    toastr.error('حدث خطأ أثناء حجب عنوان IP');
+                }
+            });
+        }
+    });
 }
 
-function unblockIP(ip) {
-    if (confirm(`هل أنت متأكد من إلغاء حجب عنوان IP: ${ip}؟`)) {
-        alert(`تم إلغاء حجب عنوان IP: ${ip}`);
-        location.reload();
-    }
+function unblockIP(blockedId, ip) {
+    Swal.fire({
+        title: 'إلغاء حجب عنوان IP',
+        text: `هل أنت متأكد من إلغاء حجب عنوان IP: ${ip}؟`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#28a745',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'نعم، ألغِ الحجب',
+        cancelButtonText: 'إلغاء'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            $.ajax({
+                url: `/governance/security/ip/${blockedId}/unblock/`,
+                method: 'POST',
+                data: {
+                    csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val()
+                },
+                success: function(response) {
+                    if (response.success) {
+                        Swal.fire('تم إلغاء الحجب!', response.message, 'success').then(() => {
+                            location.reload();
+                        });
+                    } else {
+                        toastr.error(response.error || 'فشل إلغاء حجب عنوان IP');
+                    }
+                },
+                error: function() {
+                    toastr.error('حدث خطأ أثناء إلغاء حجب عنوان IP');
+                }
+            });
+        }
+    });
 }
 
-function terminateSession(username) {
-    if (confirm(`هل أنت متأكد من إنهاء جلسة المستخدم: ${username}؟`)) {
-        alert(`تم إنهاء جلسة المستخدم: ${username}`);
-        location.reload();
-    }
+function terminateSession(sessionId, username) {
+    Swal.fire({
+        title: 'إنهاء الجلسة',
+        text: `هل أنت متأكد من إنهاء جلسة المستخدم: ${username}؟`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'نعم، أنهِ الجلسة',
+        cancelButtonText: 'إلغاء'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            $.ajax({
+                url: `/governance/security/session/${sessionId}/terminate/`,
+                method: 'POST',
+                data: {
+                    csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val()
+                },
+                success: function(response) {
+                    if (response.success) {
+                        Swal.fire('تم الإنهاء!', response.message, 'success').then(() => {
+                            location.reload();
+                        });
+                    } else {
+                        toastr.error(response.error || 'فشل إنهاء الجلسة');
+                    }
+                },
+                error: function() {
+                    toastr.error('حدث خطأ أثناء إنهاء الجلسة');
+                }
+            });
+        }
+    });
 }
 
 function resolveIncident(id) {
-    if (confirm('هل أنت متأكد من تسجيل هذا الحادث كمحلول؟')) {
-        alert(`تم حل الحادث ${id}`);
-        $('#incidentModal').modal('hide');
-        location.reload();
-    }
+    Swal.fire({
+        title: 'حل الحادث',
+        text: 'هل أنت متأكد من تسجيل هذا الحادث كمحلول؟',
+        input: 'textarea',
+        inputPlaceholder: 'ملاحظات الحل (اختياري)',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#28a745',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'نعم، تم الحل',
+        cancelButtonText: 'إلغاء'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            $.ajax({
+                url: `/governance/security/incident/${id}/resolve/`,
+                method: 'POST',
+                data: {
+                    csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val(),
+                    notes: result.value || ''
+                },
+                success: function(response) {
+                    if (response.success) {
+                        Swal.fire('تم الحل!', response.message, 'success').then(() => {
+                            $('#incidentModal').modal('hide');
+                            location.reload();
+                        });
+                    } else {
+                        toastr.error(response.error || 'فشل حل الحادث');
+                    }
+                },
+                error: function() {
+                    toastr.error('حدث خطأ أثناء حل الحادث');
+                }
+            });
+        }
+    });
 }
 </script>
 {% endblock %}

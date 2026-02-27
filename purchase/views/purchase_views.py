@@ -87,7 +87,6 @@ def purchase_list(request):
     services_count = Purchase.objects.filter(is_service=True).count()
     products_count = Purchase.objects.filter(is_service=False).count()
     courses_count = Purchase.objects.filter(service_type='course').count()
-    transportation_count = Purchase.objects.filter(service_type='transportation').count()
 
     # الحصول على قائمة الموردين للفلترة
     suppliers = Supplier.objects.filter(is_active=True).order_by("name")
@@ -122,15 +121,6 @@ def purchase_list(request):
         },
         {"key": "warehouse.name", "label": _("المخزن"), "sortable": True},
         {
-            "key": "financial_category.name",
-            "label": _("التصنيف المالي"),
-            "sortable": True,
-            "class": "text-center",
-            "format": "badge",
-            "badge_class": "bg-info",
-            "default": "غير محدد",
-        },
-        {
             "key": "total",
             "label": _("الإجمالي"),
             "sortable": True,
@@ -139,8 +129,8 @@ def purchase_list(request):
             "decimals": 2,
         },
         {
-            "key": "payment_method",
-            "label": _("طريقة الدفع"),
+            "key": "invoice_type",
+            "label": _("نوع الفاتورة"),
             "sortable": True,
             "class": "text-center",
             "template": "components/cells/purchase_payment_method.html",
@@ -242,11 +232,10 @@ def purchase_list(request):
             'supplier.name': purchase.supplier.name,
             'service_type_display': purchase.get_service_type_display() if purchase.is_service else 'منتج',
             'warehouse.name': purchase.warehouse.name if purchase.warehouse else 'غير محدد',
-            'financial_category.name': purchase.financial_category.name if purchase.financial_category else 'غير محدد',
             'total': purchase.total,
-            'payment_method': purchase.get_payment_method_display(),
+            'invoice_type': 'cash' if purchase.payment_method not in ['credit', ''] else 'credit',
             'payment_status': purchase.payment_status,
-            'return_status': purchase.return_status if purchase.is_returned else 'none',
+            'return_status': purchase.return_status if purchase.is_returned else '-',
             'actions': actions
         }
         table_data.append(row_data)
@@ -266,7 +255,6 @@ def purchase_list(request):
         "services_count": services_count,
         "products_count": products_count,
         "courses_count": courses_count,
-        "transportation_count": transportation_count,
         "service_types": Purchase.SERVICE_TYPES,
         "page_title": "فواتير المشتريات",
         "page_subtitle": "قائمة بجميع فواتير المشتريات في النظام",
@@ -311,7 +299,7 @@ def purchase_create(request, supplier_id=None):
                 is_service_invoice = selected_supplier.primary_type.settings.is_service_provider
             else:
                 # Fallback للطريقة القديمة
-                is_service_invoice = selected_supplier.is_service_provider() or selected_supplier.is_driver()
+                is_service_invoice = selected_supplier.is_service_provider()
         except Supplier.DoesNotExist:
             messages.error(request, "المورد المحدد غير موجود أو غير نشط")
             return redirect("purchase:purchase_list")
@@ -383,55 +371,37 @@ def purchase_create(request, supplier_id=None):
                             )
                             item.save()
 
-                    # إنشاء دفعة تلقائية للفواتير النقدية فقط
+                    # إنشاء دفعة تلقائية للفواتير النقدية فقط (غير مرحلة)
                     if invoice_type == "cash" and purchase.payment_method not in ["credit", ""]:
                         # payment_method هو account code (مثل 10100)
                         payment_account_code = purchase.payment_method
                         if payment_account_code:
                             try:
-                                from financial.models.chart_of_accounts import (
-                                    ChartOfAccounts,
-                                )
-
-                                financial_account = ChartOfAccounts.objects.get(
-                                    code=payment_account_code
-                                )
-
-                                # إنشاء دفعة تلقائية بالمبلغ الكامل
-                                payment = PurchasePayment.objects.create(
+                                from purchase.services.purchase_service import PurchaseService
+                                
+                                # استخدام PurchaseService.process_payment للتوحيد
+                                # الدفعة تُنشأ غير مرحلة (draft) عشان المستخدم يراجعها ويرحلها
+                                payment_data = {
+                                    'amount': purchase.total,
+                                    'payment_date': purchase.date,
+                                    'payment_method': payment_account_code,
+                                    'notes': 'دفعة تلقائية - فاتورة نقدية'
+                                }
+                                
+                                payment = PurchaseService.process_payment(
                                     purchase=purchase,
-                                    amount=purchase.total,
-                                    payment_date=purchase.date,
-                                    payment_method=payment_account_code,
-                                    financial_account=financial_account,
-                                    created_by=request.user,
-                                    notes="دفعة تلقائية - فاتورة نقدية",
-                                    status="posted",
-                                )
-
-                                # إنشاء قيد محاسبي للدفعة
-                                from financial.services.accounting_integration_service import (
-                                    AccountingIntegrationService,
-                                )
-
-                                journal_entry = AccountingIntegrationService.create_payment_journal_entry(
-                                    payment=payment,
-                                    payment_type="purchase_payment",
+                                    payment_data=payment_data,
                                     user=request.user,
+                                    auto_post=False  # الدفعة غير مرحلة
                                 )
-
-                                if journal_entry:
-                                    payment.financial_transaction = journal_entry
-                                    payment.financial_status = "synced"
-                                    payment.save(
-                                        update_fields=[
-                                            "financial_transaction",
-                                            "financial_status",
-                                        ]
-                                    )
-                                    logger.info(
-                                        f"✅ تم إنشاء دفعة تلقائية وقيد محاسبي للفاتورة النقدية: {purchase.number}"
-                                    )
+                                
+                                logger.info(
+                                    f"✅ تم إنشاء دفعة غير مرحلة للفاتورة النقدية: {purchase.number}"
+                                )
+                                messages.info(
+                                    request,
+                                    "تم إنشاء دفعة غير مرحلة - يرجى مراجعتها وترحيلها من صفحة تفاصيل الفاتورة"
+                                )
 
                             except Exception as e:
                                 logger.error(

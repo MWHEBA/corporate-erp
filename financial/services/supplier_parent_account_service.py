@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 class SupplierParentAccountService:
     """
-    خدمة مركزية لإدارة ربط الموردين وأولياء الأمور بدليل الحسابات
+    خدمة مركزية لإدارة ربط الموردين والعملاء بدليل الحسابات
     
     ⚠️ DEPRECATED: Use unified services instead:
     - For suppliers: SupplierService.create_financial_account_for_supplier()
@@ -57,10 +57,10 @@ class SupplierParentAccountService:
     @staticmethod
     def create_parent_account(parent, user=None):
         """
-        إنشاء حساب محاسبي لولي الأمر
+        إنشاء حساب محاسبي لالعميل
 
         Args:
-            parent: كائن ولي الأمر
+            parent: كائن العميل
             user: المستخدم الذي ينشئ الحساب (اختياري)
 
         Returns:
@@ -85,7 +85,7 @@ class SupplierParentAccountService:
                     # إنشاء الحساب الرئيسي إذا لم يكن موجوداً
                     parent_account = ChartOfAccounts.objects.create(
                         code="10300",
-                        name="مدينو أولياء الأمور",
+                        name="العملاء",
                         account_type=receivables_type,
                         is_active=True,
                         is_leaf=False,
@@ -107,7 +107,7 @@ class SupplierParentAccountService:
                 from student_products.models import ProductRequest
                 from decimal import Decimal
                 
-                # إجمالي طلبات المنتجات المُسلمة لأبناء ولي الأمر
+                # إجمالي طلبات المنتجات المُسلمة لأبناء العميل
                 opening_balance = Decimal('0')
                 for student in parent.students.all():
                     student_debt = ProductRequest.objects.filter(
@@ -128,21 +128,21 @@ class SupplierParentAccountService:
                     is_active=True,
                     is_leaf=True,
                     opening_balance=opening_balance,
-                    description=f"حساب ولي الأمر: {parent.name} (كود: {parent.id})",
+                    description=f"حساب العميل: {parent.name} (كود: {parent.id})",
                     created_by=user,
                 )
 
-                # ربط الحساب بولي الأمر
+                # ربط الحساب بالعميل
                 parent.financial_account = account
                 parent.save(update_fields=["financial_account"])
 
                 logger.info(
-                    f"تم إنشاء حساب محاسبي {account.code} لولي الأمر {parent.name}"
+                    f"تم إنشاء حساب محاسبي {account.code} لالعميل {parent.name}"
                 )
                 return account
 
         except Exception as e:
-            logger.error(f"فشل إنشاء حساب لولي الأمر {parent.name}: {e}")
+            logger.error(f"فشل إنشاء حساب لالعميل {parent.name}: {e}")
             raise
 
     @staticmethod
@@ -178,10 +178,10 @@ class SupplierParentAccountService:
     @staticmethod
     def get_or_create_parent_account(parent, user=None):
         """
-        الحصول على الحساب المحاسبي لولي الأمر أو إنشاؤه إذا لم يكن موجوداً
+        الحصول على الحساب المحاسبي لالعميل أو إنشاؤه إذا لم يكن موجوداً
 
         Args:
-            parent: كائن ولي الأمر
+            parent: كائن العميل
             user: المستخدم (اختياري)
 
         Returns:

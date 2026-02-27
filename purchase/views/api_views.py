@@ -19,22 +19,19 @@ def get_supplier_type_api(request, supplier_id):
     Get supplier type and filter products accordingly
     """
     try:
-        supplier = Supplier.objects.get(id=supplier_id, is_active=True)
+        supplier = Supplier.objects.select_related('primary_type', 'primary_type__settings').get(
+            id=supplier_id, 
+            is_active=True
+        )
         
-        # تحديد نوع المورد من إعدادات النوع (ديناميكي)
-        is_service = False
-        if supplier.primary_type and hasattr(supplier.primary_type, 'settings') and supplier.primary_type.settings:
-            # استخدام الحقل الديناميكي من SupplierTypeSettings
-            is_service = supplier.primary_type.settings.is_service_provider
-        else:
-            # Fallback للطريقة القديمة (hardcoded)
-            is_service = supplier.is_service_provider() or supplier.is_driver()
+        # استخدام الـ method الموجود في الـ model - Single Source of Truth
+        is_service = supplier.is_service_provider()
         
         # جلب المنتجات/الخدمات المناسبة
         products = Product.objects.filter(
             is_active=True,
             is_service=is_service
-        ).values('id', 'name', 'sku', 'cost', 'selling_price')
+        ).values('id', 'name', 'sku', 'cost_price', 'selling_price')
         
         return JsonResponse({
             'success': True,
@@ -49,7 +46,7 @@ def get_supplier_type_api(request, supplier_id):
             'message': 'المورد غير موجود'
         }, status=404)
     except Exception as e:
-        logger.error(f"خطأ في API نوع المورد: {str(e)}")
+        logger.error(f"خطأ في API نوع المورد للمورد {supplier_id}: {str(e)}", exc_info=True)
         return JsonResponse({
             'success': False,
             'message': 'حدث خطأ في جلب بيانات المورد'

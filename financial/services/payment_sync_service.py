@@ -329,7 +329,7 @@ class PaymentSyncService:
                     
                     entry = JournalEntryService.create_simple_entry(
                         debit_account="10100",  # الخزنة
-                        credit_account="10300",  # مدينو أولياء الأمور
+                        credit_account="10300",  # العملاء
                         amount=payment_obj.amount,
                         description=f"دفعة من العميل - فاتورة {payment_obj.sale.number}",
                         date=payment_obj.payment_date,
@@ -380,7 +380,7 @@ class PaymentSyncService:
             affected_accounts = []
 
             if hasattr(payment_obj, "sale"):
-                affected_accounts.extend(["10100", "10300"])  # الخزنة ومدينو أولياء الأمور
+                affected_accounts.extend(["10100", "10300"])  # الخزنة والعملاء
             elif hasattr(payment_obj, "purchase"):
                 affected_accounts.extend(["10100", "20100"])  # الخزنة والموردين
 

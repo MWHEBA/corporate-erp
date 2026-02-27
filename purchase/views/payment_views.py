@@ -9,6 +9,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.urls import reverse
+from django.http import JsonResponse
 from datetime import datetime
 import logging
 
@@ -137,40 +138,41 @@ def add_payment(request, pk):
                     payment.status = "draft"
                     payment.save()
 
-                    # إنشاء قيد محاسبي للدفعة وترحيلها
-                    from financial.services.accounting_integration_service import (
-                        AccountingIntegrationService,
-                    )
+                    # إنشاء قيد محاسبي للدفعة وترحيلها باستخدام PurchaseService
+                    from purchase.services.purchase_service import PurchaseService
 
-                    journal_entry = AccountingIntegrationService.create_payment_journal_entry(
-                        payment=payment,
-                        payment_type="purchase_payment",
-                        user=request.user,
-                    )
+                    try:
+                        journal_entry = PurchaseService._create_payment_journal_entry(
+                            payment=payment,
+                            user=request.user,
+                        )
 
-                    if journal_entry:
-                        # ربط القيد بالدفعة وتحديث الحالة إلى مرحلة
-                        payment.financial_transaction = journal_entry
-                        payment.financial_status = "synced"
-                        payment.status = "posted"
-                        payment.posted_at = timezone.now()
-                        payment.posted_by = request.user
-                        payment.save(
-                            update_fields=[
-                                "financial_transaction",
-                                "financial_status",
-                                "status",
-                                "posted_at",
-                                "posted_by",
-                            ]
-                        )
-                        logger.info(
-                            f"✅ تم إنشاء دفعة وقيد محاسبي للفاتورة: {purchase.number}"
-                        )
-                    else:
-                        logger.warning(
-                            f"⚠️ تم إنشاء الدفعة لكن فشل إنشاء القيد المحاسبي للفاتورة: {purchase.number}"
-                        )
+                        if journal_entry:
+                            # ربط القيد بالدفعة وتحديث الحالة إلى مرحلة
+                            payment.financial_transaction = journal_entry
+                            payment.financial_status = "synced"
+                            payment.status = "posted"
+                            payment.posted_at = timezone.now()
+                            payment.posted_by = request.user
+                            payment.save(
+                                update_fields=[
+                                    "financial_transaction",
+                                    "financial_status",
+                                    "status",
+                                    "posted_at",
+                                    "posted_by",
+                                ]
+                            )
+                            logger.info(
+                                f"✅ تم إنشاء دفعة وقيد محاسبي للفاتورة: {purchase.number}"
+                            )
+                        else:
+                            logger.warning(
+                                f"⚠️ تم إنشاء الدفعة لكن فشل إنشاء القيد المحاسبي للفاتورة: {purchase.number}"
+                            )
+                    except Exception as e:
+                        logger.error(f"❌ خطأ في إنشاء القيد المحاسبي: {str(e)}")
+                        raise
 
                     # تحديث حالة فاتورة الشراء
                     purchase.refresh_from_db()
@@ -242,44 +244,66 @@ def add_payment(request, pk):
 @login_required
 def post_payment(request, payment_id):
     """
-    ترحيل دفعة مشتريات - إنشاء القيود المحاسبية وحركات الخزن
+    ترحيل دفعة مشتريات - إنشاء القيود المحاسبية
     """
     payment = get_object_or_404(PurchasePayment, pk=payment_id)
 
     # التحقق من أن الدفعة مسودة
     if payment.status != "draft":
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'success': False, 'error': 'لا يمكن ترحيل دفعة مرحّلة مسبقاً'}, status=400)
         messages.error(request, "لا يمكن ترحيل دفعة مرحّلة مسبقاً")
         return redirect("purchase:purchase_detail", pk=payment.purchase.pk)
 
     try:
         with transaction.atomic():
-            # استخدام خدمة التكامل المالي
-            from financial.services.payment_integration_service import (
-                payment_integration_service,
+            # استخدام PurchaseService للترحيل (Single Source of Truth)
+            from purchase.services.purchase_service import PurchaseService
+
+            journal_entry = PurchaseService._create_payment_journal_entry(
+                payment=payment,
+                user=request.user
             )
 
-            integration_result = payment_integration_service.process_payment(
-                payment=payment, payment_type="purchase", user=request.user
-            )
-
-            if integration_result["success"]:
+            if journal_entry:
                 # تحديث حالة الدفعة
+                # ملاحظة: القيد تم ربطه بالدفعة في الـ service، نحتاج فقط تحديث الحالة
+                payment.refresh_from_db()  # تحديث البيانات من قاعدة البيانات
                 payment.status = "posted"
                 payment.posted_at = timezone.now()
                 payment.posted_by = request.user
                 payment.save(update_fields=["status", "posted_at", "posted_by"])
+                
+                # تحديث حالة الدفع للفاتورة
+                payment.purchase.update_payment_status()
 
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({
+                        'success': True,
+                        'message': f'تم ترحيل الدفعة بنجاح - القيد: {journal_entry.number}'
+                    })
+                
                 messages.success(
                     request,
-                    f'تم ترحيل الدفعة بنجاح - القيد: {integration_result.get("journal_entry_number")}',
+                    f'تم ترحيل الدفعة بنجاح - القيد: {journal_entry.number}',
                 )
             else:
-                messages.error(
-                    request, f'فشل الترحيل: {integration_result.get("message")}'
-                )
+                error_msg = 'فشل إنشاء القيد المحاسبي - تحقق من الحسابات المحاسبية'
+                logger.error(f"Journal entry is None for payment {payment_id}")
+                
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({'success': False, 'error': error_msg}, status=500)
+                messages.error(request, error_msg)
 
     except Exception as e:
         logger.error(f"خطأ في ترحيل الدفعة {payment_id}: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        
+        error_msg = f"خطأ: {str(e)}"
+        
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'success': False, 'error': error_msg}, status=500)
         messages.error(request, f"حدث خطأ أثناء الترحيل: {str(e)}")
 
     return redirect("purchase:purchase_detail", pk=payment.purchase.pk)

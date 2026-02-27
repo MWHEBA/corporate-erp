@@ -157,25 +157,25 @@
       <table class="table inventory-table table-hover mb-0">
         <thead>
           <tr>
-            <th style="width: 100px;">كود الحساب</th>
-            <th>اسم الحساب</th>
-            <th class="text-end" style="width: 130px;">القيمة الحالية</th>
+            <th class="text-center" style="width: 100px;">كود الحساب</th>
+            <th class="text-center">اسم الحساب</th>
+            <th class="text-center" style="width: 130px;">القيمة الحالية</th>
             <th class="text-center" style="width: 100px;">عدد المعاملات</th>
             <th class="text-center" style="width: 120px;">حركات (30 يوم)</th>
-            <th class="text-end" style="width: 80px;">النسبة</th>
+            <th class="text-center" style="width: 80px;">النسبة</th>
             <th class="text-center" style="width: 90px;">الحالة</th>
           </tr>
         </thead>
         <tbody>
           {% for item in inventory_data %}
           <tr>
-            <td>
+            <td class="text-center">
               <span class="account-code-badge">{{ item.account.code }}</span>
             </td>
-            <td>
+            <td class="text-center">
               <strong class="text-dark">{{ item.account.name }}</strong>
             </td>
-            <td class="text-end">
+            <td class="text-center">
               {{ item.balance|smart_float }}
             </td>
             <td class="text-center">
@@ -184,7 +184,7 @@
             <td class="text-center">
               {{ item.recent_movements }}
             </td>
-            <td class="text-end">
+            <td class="text-center">
               {% if total_inventory_value > 0 %}
                 {% widthratio item.balance total_inventory_value 100 %}%
               {% else %}
@@ -203,13 +203,13 @@
         </tbody>
         <tfoot>
           <tr class="table-active">
-            <td colspan="2">
+            <td class="text-center" colspan="2">
               <i class="fas fa-sigma me-2"></i>الإجمالي
             </td>
-            <td class="text-end">{{ total_inventory_value|smart_float }}</td>
+            <td class="text-center">{{ total_inventory_value|smart_float }}</td>
             <td class="text-center">-</td>
             <td class="text-center">-</td>
-            <td class="text-end">100%</td>
+            <td class="text-center">100%</td>
             <td class="text-center">{{ active_accounts }}/{{ total_accounts }}</td>
           </tr>
         </tfoot>

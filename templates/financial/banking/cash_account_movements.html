@@ -1198,10 +1198,10 @@
         invoiceBtn.style.display = 'inline-block';
       }
       
-      // زر عرض ولي الأمر أو المورد
+      // زر عرض العميل أو المورد
       if (data.source.parent_url) {
         clientBtn.href = data.source.parent_url;
-        clientBtnText.textContent = 'عرض ولي الأمر';
+        clientBtnText.textContent = 'عرض العميل';
         clientBtn.style.display = 'inline-block';
       } else if (data.source.supplier_url) {
         clientBtn.href = data.source.supplier_url;

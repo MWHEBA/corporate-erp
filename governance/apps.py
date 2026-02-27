@@ -63,6 +63,16 @@ class GovernanceConfig(AppConfig):
             except Exception as e:
                 logger.error(f"Auto-activation signal initialization failed: {e}", exc_info=True)
             
+            # Initialize security signals
+            try:
+                from .signals import security_signals
+                from .middleware import security_middleware
+                logger.info("✅ Security monitoring signals initialized")
+            except ImportError as e:
+                logger.warning(f"Could not initialize security signals: {e}")
+            except Exception as e:
+                logger.error(f"Security signal initialization failed: {e}", exc_info=True)
+            
             # Ensure Governance is active on startup
             try:
                 from .signals.auto_activation import GovernanceAutoActivation

@@ -14,9 +14,9 @@ from django.forms.models import model_to_dict
 from django.apps import apps
 from django.db.models.signals import post_save, post_delete, pre_save
 from django.dispatch import receiver
-from .models import AuditTrail, GovernanceContext
-from .services import AuditService
-from .thread_safety import monitor_operation
+from governance.models import AuditTrail, GovernanceContext
+from governance.services import AuditService
+from governance.thread_safety import monitor_operation
 import json
 
 logger = logging.getLogger(__name__)

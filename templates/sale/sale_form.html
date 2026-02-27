@@ -83,14 +83,17 @@
                             <input type="text" name="date" id="id_date" class="form-control" data-date-picker placeholder="اختر تاريخ الفاتورة" value="{{ form.date.value|date:'Y-m-d'|default:'' }}" required>
                         </div>
                         
-                        <div class="col-lg-6 col-md-12">
-                            <label class="form-label text-dark">طريقة الدفع <span class="text-danger">*</span></label>
-                            <select name="payment_method" id="id_payment_method" class="form-control" required>
-                                <option value="">اختر طريقة الدفع</option>
-                                <option value="cash" {% if form.payment_method.value == 'cash' %}selected{% endif %}>نقداً</option>
+                        <div class="col-lg-3 col-md-6">
+                            <label class="form-label text-dark">نوع الفاتورة <span class="text-danger">*</span></label>
+                            <select name="invoice_type" id="id_invoice_type" class="form-control" required>
+                                <option value="">اختر نوع الفاتورة</option>
+                                <option value="cash" {% if form.payment_method.value and form.payment_method.value != 'credit' %}selected{% endif %}>نقدي</option>
                                 <option value="credit" {% if form.payment_method.value == 'credit' %}selected{% endif %}>آجل</option>
-                                <option value="bank_transfer" {% if form.payment_method.value == 'bank_transfer' %}selected{% endif %}>تحويل بنكي</option>
                             </select>
+                        </div>
+                        
+                        <div class="col-lg-3 col-md-6" id="payment-method-field" style="display: none;">
+                            {% include "components/payment_account_select.html" with field_name="payment_method" field_id="id_payment_method" label="طريقة الدفع" required=False selected_value=form.payment_method.value %}
                         </div>
                     </div>
                 </div>
@@ -137,31 +140,7 @@
                     </div>
                 </div>
                 
-                <!-- حقل الخزينة للفواتير النقدية -->
-                <div class="mb-4" id="financial_account_wrapper" style="display: none;">
-                    <h6 class="text-muted mb-3 fw-medium">إعدادات الدفع النقدي</h6>
-                    <div class="alert alert-info border-0 mb-3">
-                        <div class="row g-4">
-                            <div class="col-lg-5 col-md-6">
-                                {% include "components/payment_account_select.html" with field_name="payment_method" field_id="payment_account_select" label="الخزينة/البنك" required=True %}
-                                <small class="form-text text-muted">اختر الخزينة التي سيتم استلام المبلغ فيها</small>
-                            </div>
-                            <div class="col-lg-7 col-md-6">
-                                <div class="d-flex align-items-start">
-                                    <i class="fas fa-info-circle me-3 text-info mt-1"></i>
-                                    <div>
-                                        <strong>تنبيه:</strong> عند اختيار الدفع النقدي، سيتم:
-                                        <ul class="mb-0 mt-2 small">
-                                            <li>إنشاء دفعة تلقائية بالمبلغ الكامل</li>
-                                            <li>تسجيل الفاتورة كمدفوعة بالكامل</li>
-                                            <li>إضافة المبلغ إلى الخزينة المختارة</li>
-                                        </ul>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+
                 
                 <!-- بنود الفاتورة -->
                 <div class="mb-4">
@@ -361,6 +340,43 @@
             placeholder: "اختر المخزن",
             width: '100%',
             allowClear: true
+        });
+        
+        // التحكم في إظهار/إخفاء حقل طريقة الدفع حسب نوع الفاتورة
+        $('#id_invoice_type').on('change', function() {
+            const invoiceType = $(this).val();
+            const paymentMethodField = $('#payment-method-field');
+            const paymentMethodSelect = $('#id_payment_method');
+            
+            if (invoiceType === 'cash') {
+                // نقدي: إظهار حقل طريقة الدفع وجعله مطلوب
+                paymentMethodField.show();
+                paymentMethodSelect.prop('required', true);
+            } else if (invoiceType === 'credit') {
+                // آجل: إخفاء حقل طريقة الدفع وتعيين قيمة 'credit'
+                paymentMethodField.hide();
+                paymentMethodSelect.val('credit').trigger('change');
+                paymentMethodSelect.prop('required', false);
+            } else {
+                // لم يتم الاختيار: إخفاء الحقل
+                paymentMethodField.hide();
+                paymentMethodSelect.prop('required', false);
+            }
+        });
+        
+        // تفعيل الحالة الافتراضية عند تحميل الصفحة
+        // في حالة التعديل، تحديد نوع الفاتورة بناءً على payment_method الموجود
+        $(document).ready(function() {
+            const paymentMethodValue = $('#id_payment_method').val();
+            const invoiceTypeSelect = $('#id_invoice_type');
+            
+            if (paymentMethodValue === 'credit' || paymentMethodValue === '') {
+                // فاتورة آجلة أو فارغة
+                invoiceTypeSelect.val('credit').trigger('change');
+            } else {
+                // فاتورة نقدية (لها account code)
+                invoiceTypeSelect.val('cash').trigger('change');
+            }
         });
         
         // تحميل بيانات المخزون عند بدء الصفحة (في حالة التعديل)
@@ -658,29 +674,6 @@
         if ($('#id_discount').val()) {
             $('#discount-total').text(parseFloat($('#id_discount').val()).toFixed(2));
         }
-        
-        // التحكم في إظهار/إخفاء حقل الخزينة بناءً على طريقة الدفع
-        function toggleFinancialAccount() {
-            var paymentMethod = $('#id_payment_method').val();
-            var financialAccountWrapper = $('#financial_account_wrapper');
-            var financialAccountSelect = $('#id_financial_account');
-            
-            if (paymentMethod === 'cash') {
-                financialAccountWrapper.slideDown();
-                financialAccountSelect.prop('required', true);
-            } else {
-                financialAccountWrapper.slideUp();
-                financialAccountSelect.prop('required', false);
-            }
-        }
-        
-        // تشغيل عند تحميل الصفحة
-        toggleFinancialAccount();
-        
-        // تشغيل عند تغيير طريقة الدفع
-        $('#id_payment_method').on('change', function() {
-            toggleFinancialAccount();
-        });
         
         // التحقق من النموذج قبل الإرسال
         $('#sale-form').on('submit', function(e) {

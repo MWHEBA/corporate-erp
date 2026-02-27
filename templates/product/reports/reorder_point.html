@@ -26,13 +26,20 @@
     font-size: 0.85em;
   }
   
-  .status-critical { 
+  .stock-status.status-danger { 
     background-color: #dc3545; 
     animation: pulse 2s infinite;
   }
-  .status-low { background-color: #ffc107; color: #000; }
-  .status-normal { background-color: #28a745; }
-  .status-overstock { background-color: #17a2b8; }
+  .stock-status.status-warning { 
+    background-color: #ffc107; 
+    color: #000; 
+  }
+  .stock-status.status-success { 
+    background-color: #28a745; 
+  }
+  .stock-status.status-info { 
+    background-color: #17a2b8; 
+  }
 
   /* تنبيه عاجل */
   .urgent-alert {
@@ -183,9 +190,9 @@
                         <div class="stats-card-icon">
                             <i class="fas fa-exclamation-triangle"></i>
                         </div>
-                        <div class="stats-card-title">حالة حرجة</div>
-                        <div class="stats-card-value">{{ summary.critical_count|default:"0" }}</div>
-                        <div class="stats-card-unit">منتج - نفد أو وصل للحد الأدنى</div>
+                        <div class="stats-card-title">نفد المخزون</div>
+                        <div class="stats-card-value">{{ summary.out_of_stock|default:"0" }}</div>
+                        <div class="stats-card-unit">منتج</div>
                     </div>
                 </div>
             </div>
@@ -196,9 +203,22 @@
                         <div class="stats-card-icon">
                             <i class="fas fa-arrow-down"></i>
                         </div>
-                        <div class="stats-card-title">مخزون منخفض</div>
-                        <div class="stats-card-value">{{ summary.low_count|default:"0" }}</div>
-                        <div class="stats-card-unit">منتج - قارب على نقطة الطلب</div>
+                        <div class="stats-card-title">يحتاج طلب</div>
+                        <div class="stats-card-value">{{ summary.need_reorder|default:"0" }}</div>
+                        <div class="stats-card-unit">منتج</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 mb-4">
+                <div class="stats-card stats-card-info">
+                    <div class="stats-card-header"></div>
+                    <div class="stats-card-body">
+                        <div class="stats-card-icon">
+                            <i class="fas fa-eye"></i>
+                        </div>
+                        <div class="stats-card-title">تحت المراقبة</div>
+                        <div class="stats-card-value">{{ summary.under_watch|default:"0" }}</div>
+                        <div class="stats-card-unit">منتج</div>
                     </div>
                 </div>
             </div>
@@ -210,21 +230,8 @@
                             <i class="fas fa-check-circle"></i>
                         </div>
                         <div class="stats-card-title">مخزون طبيعي</div>
-                        <div class="stats-card-value">{{ summary.normal_count|default:"0" }}</div>
-                        <div class="stats-card-unit">منتج - ضمن المستوى الآمن</div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-3 col-md-6 mb-4">
-                <div class="stats-card stats-card-info">
-                    <div class="stats-card-header"></div>
-                    <div class="stats-card-body">
-                        <div class="stats-card-icon">
-                            <i class="fas fa-arrow-up"></i>
-                        </div>
-                        <div class="stats-card-title">مخزون زائد</div>
-                        <div class="stats-card-value">{{ summary.overstock_count|default:"0" }}</div>
-                        <div class="stats-card-unit">منتج - أعلى من الحد الأقصى</div>
+                        <div class="stats-card-value">{{ summary.normal|default:"0" }}</div>
+                        <div class="stats-card-unit">منتج</div>
                     </div>
                 </div>
             </div>
@@ -254,9 +261,8 @@
                             <th class="text-center">اسم المنتج</th>
                             <th class="text-center">المخزون الحالي</th>
                             <th class="text-center">نقطة الطلب</th>
-                            <th class="text-center">الحد الأقصى</th>
+                            <th class="text-center">متوسط الاستهلاك اليومي</th>
                             <th class="text-center">مستوى المخزون</th>
-                            <th class="text-center">أيام التوريد</th>
                             <th class="text-center">الكمية المقترحة</th>
                             <th class="text-center">الحالة</th>
                             <th class="text-center">الإجراءات</th>
@@ -264,62 +270,53 @@
                     </thead>
                     <tbody>
                         {% for item in reorder_data %}
-                        <tr {% if item.urgency == 'critical' %}class="table-danger"{% elif item.urgency == 'high' %}class="table-warning"{% endif %}>
+                        <tr {% if item.status == 'out_of_stock' %}class="table-danger"{% elif item.status == 'need_reorder' %}class="table-warning"{% endif %}>
                             <td class="text-center">
-                                {% if item.urgency == 'critical' %}
+                                {% if item.priority == 1 %}
                                     <span class="badge bg-danger">عاجل</span>
-                                {% elif item.urgency == 'high' %}
+                                {% elif item.priority == 2 %}
                                     <span class="badge bg-warning">عالي</span>
-                                {% elif item.urgency == 'medium' %}
+                                {% elif item.priority == 3 %}
                                     <span class="badge bg-info">متوسط</span>
                                 {% else %}
                                     <span class="badge bg-secondary">منخفض</span>
                                 {% endif %}
                             </td>
-                            <td class="text-center">{{ item.product.code }}</td>
+                            <td class="text-center"><strong>{{ item.product.sku }}</strong></td>
                             <td class="text-center">
                                 <strong>{{ item.product.name }}</strong>
                                 {% if item.product.category %}
                                     <br><small class="text-muted">{{ item.product.category.name }}</small>
                                 {% endif %}
-                                {% if item.supplier %}
-                                    <br><small class="text-info">{{ item.supplier.name }}</small>
-                                {% endif %}
                             </td>
-                            <td class="text-end text-center">
+                            <td class="text-center">
                                 <strong>{{ item.current_stock|smart_float }}</strong>
-                                {% if item.unit %}
-                                    <small class="text-muted">{{ item.unit.name }}</small>
-                                {% endif %}
                             </td>
-                            <td class="text-end text-center">{{ item.reorder_point|smart_float }}</td>
-                            <td class="text-end text-center">-</td>
+                            <td class="text-center">{{ item.reorder_point|smart_float }}</td>
+                            <td class="text-center">
+                                <span class="badge bg-primary">{{ item.daily_consumption|smart_float }}</span>
+                                <br><small class="text-muted">وحدة/يوم</small>
+                            </td>
                             <td class="text-center">
                                 <div class="progress progress-stock">
+                                    {% widthratio item.current_stock 1 item.reorder_point as stock_percentage %}
                                     <div class="progress-bar 
-                                        {% if item.stock_percentage <= 25 %}bg-danger progress-bar-animated
-                                        {% elif item.stock_percentage <= 50 %}bg-warning
-                                        {% elif item.stock_percentage <= 100 %}bg-success
+                                        {% if stock_percentage <= 25 %}bg-danger progress-bar-animated
+                                        {% elif stock_percentage <= 75 %}bg-warning
+                                        {% elif stock_percentage <= 100 %}bg-success
                                         {% else %}bg-info{% endif %}" 
-                                        style="width: {{ item.stock_percentage|smart_float }}%">
+                                        style="width: {% if stock_percentage > 100 %}100{% else %}{{ stock_percentage }}{% endif %}%">
                                     </div>
                                 </div>
-                                <small class="text-muted">{{ item.stock_percentage|smart_float }}%</small>
+                                <small class="text-muted">{{ stock_percentage }}%</small>
                             </td>
-                            <td class="text-end text-center">
-                                {% if item.days_supply %}
-                                    {{ item.days_supply|smart_float }} يوم
-                                {% else %}
-                                    <span class="text-muted">غير محدد</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-end text-center">
-                                {% if item.suggested_quantity > 0 %}
-                                    <strong class="text-primary">{{ item.suggested_quantity|smart_float }}</strong>
+                            <td class="text-center">
+                                {% if item.suggested_order_qty > 0 %}
+                                    <strong class="text-primary">{{ item.suggested_order_qty|smart_float }}</strong>
                                     <div class="reorder-suggestion">
                                         <small>
                                             <i class="fas fa-lightbulb text-warning"></i>
-                                            اطلب {{ item.suggested_quantity|smart_float }} وحدة
+                                            اطلب {{ item.suggested_order_qty|smart_float }} وحدة
                                         </small>
                                     </div>
                                 {% else %}
@@ -327,29 +324,18 @@
                                 {% endif %}
                             </td>
                             <td class="text-center">
-                                {% if item.current_stock <= 0 %}
-                                    <span class="stock-status status-critical">نفد</span>
-                                {% elif item.current_stock <= item.reorder_point %}
-                                    <span class="stock-status status-critical">حرج</span>
-                                {% elif item.current_stock <= item.reorder_point_threshold %}
-                                    <span class="stock-status status-low">منخفض</span>
-                                {% else %}
-                                    <span class="stock-status status-normal">طبيعي</span>
-                                {% endif %}
+                                <span class="stock-status status-{{ item.status_color }}">{{ item.status_label }}</span>
                             </td>
                             <td class="text-center">
                                 <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-outline-primary" title="عرض التفاصيل" onclick="alert('عرض تفاصيل المنتج')">
+                                    <a href="{% url 'product:product_detail' item.product.id %}" class="btn btn-outline-primary" title="عرض التفاصيل">
                                         <i class="fas fa-eye"></i>
-                                    </button>
-                                    {% if item.suggested_quantity > 0 %}
-                                    <button class="btn btn-outline-success" title="إنشاء أمر شراء" onclick="alert('إنشاء أمر شراء للمنتج')">
+                                    </a>
+                                    {% if item.suggested_order_qty > 0 %}
+                                    <button class="btn btn-outline-success" title="إنشاء أمر شراء" onclick="Swal.fire('قريباً', 'سيتم إضافة ميزة إنشاء أمر شراء', 'info')">
                                         <i class="fas fa-shopping-cart"></i>
                                     </button>
                                     {% endif %}
-                                    <button class="btn btn-outline-info" title="حركة المخزون" onclick="alert('عرض حركة المخزون')">
-                                        <i class="fas fa-history"></i>
-                                    </button>
                                 </div>
                             </td>
                         </tr>
@@ -576,11 +562,11 @@
         order: [[0, 'desc']], // ترتيب حسب الأولوية
         columnDefs: [
             {
-                targets: [3, 4, 5, 7, 8], // الأعمدة الرقمية
+                targets: [3, 4, 5, 7], // الأعمدة الرقمية
                 className: 'text-end'
             },
             {
-                targets: [10], // عمود الإجراءات
+                targets: [9], // عمود الإجراءات
                 orderable: false
             }
         ]

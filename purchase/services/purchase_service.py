@@ -2,7 +2,7 @@
 Purchase Service - خدمة موحدة لإدارة المشتريات
 
 هذه الخدمة تستخدم:
-- AccountingGateway للقيود المحاسبية (مع الحوكمة الكاملة)
+- AccountingIntegrationService للقيود المحاسبية (Single Source of Truth)
 - MovementService لحركات المخزون (مع الحوكمة الكاملة)
 
 الهدف: ضمان الالتزام الكامل بمعايير الحوكمة والتدقيق
@@ -14,9 +14,7 @@ from django.contrib.auth import get_user_model
 import logging
 
 from purchase.models import Purchase, PurchaseItem, PurchasePayment, PurchaseReturn, PurchaseReturnItem
-from governance.services.accounting_gateway import AccountingGateway, JournalEntryLineData
 from governance.services.movement_service import MovementService
-from financial.models import ChartOfAccounts
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -124,87 +122,21 @@ class PurchaseService:
     @staticmethod
     def _create_purchase_journal_entry(purchase, user):
         """
-        إنشاء القيد المحاسبي للفاتورة عبر AccountingGateway
+        إنشاء القيد المحاسبي للفاتورة
         
-        القيد:
-        - مدين: المخزون (أو المصروفات للخدمات)
-        - دائن: الموردين (أو الخزينة/البنك إذا نقدي)
+        ملاحظة: هذه الدالة تستدعي AccountingIntegrationService (Single Source of Truth)
         """
         try:
-            # تحديد حساب المدين حسب نوع الفاتورة
-            if purchase.is_service:
-                # للخدمات: استخدام حساب المصروفات من التصنيف المالي
-                if purchase.financial_category and purchase.financial_category.expense_account:
-                    debit_account_code = purchase.financial_category.expense_account.code
-                else:
-                    # حساب مصروفات عامة افتراضي
-                    debit_account_code = '50200'  # مصروفات عامة
-            else:
-                # للمنتجات: حساب المخزون
-                debit_account_code = '10300'  # المخزون
+            from financial.services.accounting_integration_service import AccountingIntegrationService
             
-            # تحديد حساب الدائن حسب طريقة الدفع
-            payment_method = purchase.payment_method
-            
-            if payment_method == 'cash' or payment_method == '10100':
-                credit_account_code = '10100'  # الخزينة
-            elif payment_method == 'bank_transfer' or payment_method == '10200':
-                credit_account_code = '10200'  # البنك
-            elif payment_method and payment_method.isdigit():
-                # إذا كان account code مباشرة
-                credit_account_code = payment_method
-            else:  # credit (آجل)
-                # حساب المورد - إنشاء حساب إذا لم يكن موجوداً
-                if not purchase.supplier.financial_account:
-                    try:
-                        from supplier.services.supplier_service import SupplierService
-                        supplier_service = SupplierService()
-                        supplier_service.create_financial_account_for_supplier(purchase.supplier, user)
-                        purchase.supplier.refresh_from_db()
-                    except Exception as e:
-                        logger.warning(f"فشل إنشاء حساب مالي للمورد {purchase.supplier.name}: {str(e)}")
-                
-                # إذا لم ينجح إنشاء الحساب، استخدم حساب الموردين الرئيسي
-                if purchase.supplier.financial_account:
-                    credit_account_code = purchase.supplier.financial_account.code
-                else:
-                    credit_account_code = '21010'  # حساب الموردين الرئيسي
-                    logger.warning(f"استخدام حساب الموردين الرئيسي للمورد {purchase.supplier.name}")
-            
-            # إعداد بيانات القيد باستخدام JournalEntryLineData
-            lines = [
-                # مدين: المخزون/المصروفات
-                JournalEntryLineData(
-                    account_code=debit_account_code,
-                    debit=purchase.total,
-                    credit=Decimal('0'),
-                    description=f'مشتريات - فاتورة {purchase.number}'
-                ),
-                # دائن: الموردين/الخزينة/البنك
-                JournalEntryLineData(
-                    account_code=credit_account_code,
-                    debit=Decimal('0'),
-                    credit=purchase.total,
-                    description=f'مشتريات - فاتورة {purchase.number}'
-                )
-            ]
-            
-            # إنشاء القيد عبر AccountingGateway (مع الحوكمة الكاملة)
-            gateway = AccountingGateway()
-            journal_entry = gateway.create_journal_entry(
-                source_module='purchase',
-                source_model='Purchase',
-                source_id=purchase.id,
-                lines=lines,
-                idempotency_key=f'purchase_{purchase.id}_journal_entry',
-                user=user,
-                entry_type='automatic',
-                description=f'فاتورة مشتريات رقم {purchase.number} - {purchase.supplier.name}',
-                reference=purchase.number,
-                date=purchase.date
+            journal_entry = AccountingIntegrationService.create_purchase_journal_entry(
+                purchase=purchase,
+                user=user
             )
             
-            logger.info(f"✅ تم إنشاء القيد المحاسبي: {journal_entry.number} للفاتورة: {purchase.number}")
+            if journal_entry:
+                logger.info(f"✅ تم إنشاء القيد المحاسبي: {journal_entry.number} للفاتورة: {purchase.number}")
+            
             return journal_entry
             
         except Exception as e:
@@ -242,7 +174,7 @@ class PurchaseService:
 
     @staticmethod
     @transaction.atomic
-    def process_payment(purchase, payment_data, user):
+    def process_payment(purchase, payment_data, user, auto_post=True):
         """
         معالجة دفعة على فاتورة مشتريات
         
@@ -250,6 +182,7 @@ class PurchaseService:
             purchase: الفاتورة
             payment_data: بيانات الدفعة
             user: المستخدم
+            auto_post: هل يتم ترحيل الدفعة تلقائياً (default: True)
             
         Returns:
             PurchasePayment: الدفعة المنشأة
@@ -268,16 +201,21 @@ class PurchaseService:
             
             logger.info(f"✅ تم إنشاء دفعة: {payment.id} للفاتورة: {purchase.number}")
             
-            # 2. إنشاء القيد المحاسبي للدفعة عبر AccountingGateway
-            journal_entry = PurchaseService._create_payment_journal_entry(payment, user)
-            if journal_entry:
-                payment.financial_transaction = journal_entry
-                payment.status = 'posted'
-                payment.save(update_fields=['financial_transaction', 'status'])
-                logger.info(f"✅ تم ترحيل الدفعة: {payment.id}")
-            
-            # 3. تحديث حالة الدفع للفاتورة
-            purchase.update_payment_status()
+            # 2. إنشاء القيد المحاسبي وترحيل الدفعة (إذا كان auto_post=True)
+            if auto_post:
+                journal_entry = PurchaseService._create_payment_journal_entry(payment, user)
+                if journal_entry:
+                    payment.financial_transaction = journal_entry
+                    payment.status = 'posted'
+                    payment.posted_at = timezone.now()
+                    payment.posted_by = user
+                    payment.save(update_fields=['financial_transaction', 'status', 'posted_at', 'posted_by'])
+                    logger.info(f"✅ تم ترحيل الدفعة: {payment.id}")
+                
+                # 3. تحديث حالة الدفع للفاتورة
+                purchase.update_payment_status()
+            else:
+                logger.info(f"ℹ️ الدفعة {payment.id} في حالة مسودة - تحتاج للترحيل اليدوي")
             
             return payment
             
@@ -288,73 +226,49 @@ class PurchaseService:
     @staticmethod
     def _create_payment_journal_entry(payment, user):
         """
-        إنشاء القيد المحاسبي للدفعة عبر AccountingGateway
+        إنشاء القيد المحاسبي للدفعة
         
-        القيد:
-        - مدين: الموردين
-        - دائن: الخزينة/البنك
+        ملاحظة: هذه الدالة تستدعي AccountingIntegrationService (Single Source of Truth)
         """
         try:
-            # تحديد حساب الدائن حسب طريقة الدفع
-            payment_method = payment.payment_method
+            from financial.services.accounting_integration_service import AccountingIntegrationService
             
-            if payment_method == 'cash' or payment_method == '10100':
-                credit_account_code = '10100'  # الخزينة
-            elif payment_method == 'bank_transfer' or payment_method == '10200':
-                credit_account_code = '10200'  # البنك
-            elif payment_method and payment_method.isdigit():
-                # إذا كان account code مباشرة
-                credit_account_code = payment_method
-            else:
-                credit_account_code = '10100'  # افتراضي: الخزينة
+            print(f"\n{'='*60}")
+            print(f"🔄 بدء إنشاء قيد محاسبي للدفعة {payment.id}")
+            print(f"   Payment method: {payment.payment_method}")
+            print(f"   Amount: {payment.amount}")
+            print(f"   Purchase: {payment.purchase.number}")
+            print(f"   Supplier: {payment.purchase.supplier.name}")
+            print(f"   Supplier Account: {payment.purchase.supplier.financial_account}")
+            print(f"{'='*60}\n")
             
-            # حساب المورد
-            if not payment.purchase.supplier.financial_account:
-                from supplier.services.supplier_service import SupplierService
-                supplier_service = SupplierService()
-                supplier_service.create_financial_account_for_supplier(payment.purchase.supplier, user)
-                payment.purchase.supplier.refresh_from_db()
-            
-            debit_account_code = payment.purchase.supplier.financial_account.code if payment.purchase.supplier.financial_account else '21010'
-            
-            # إعداد بيانات القيد باستخدام JournalEntryLineData
-            lines = [
-                # مدين: الموردين
-                JournalEntryLineData(
-                    account_code=debit_account_code,
-                    debit=payment.amount,
-                    credit=Decimal('0'),
-                    description=f'دفعة - فاتورة {payment.purchase.number}'
-                ),
-                # دائن: الخزينة/البنك
-                JournalEntryLineData(
-                    account_code=credit_account_code,
-                    debit=Decimal('0'),
-                    credit=payment.amount,
-                    description=f'دفعة - فاتورة {payment.purchase.number}'
-                )
-            ]
-            
-            # إنشاء القيد عبر AccountingGateway
-            gateway = AccountingGateway()
-            journal_entry = gateway.create_journal_entry(
-                source_module='purchase',
-                source_model='PurchasePayment',
-                source_id=payment.id,
-                lines=lines,
-                idempotency_key=f'purchase_payment_{payment.id}_journal_entry',
-                user=user,
-                entry_type='automatic',
-                description=f'دفعة على فاتورة {payment.purchase.number} - {payment.purchase.supplier.name}',
-                reference=f'PAY-{payment.purchase.number}',
-                date=payment.payment_date
+            journal_entry = AccountingIntegrationService.create_payment_journal_entry(
+                payment=payment,
+                payment_type='purchase_payment',
+                user=user
             )
             
-            logger.info(f"✅ تم إنشاء القيد المحاسبي: {journal_entry.number} للدفعة: {payment.id}")
+            print(f"\n{'='*60}")
+            if journal_entry:
+                print(f"✅ تم إنشاء القيد المحاسبي: {journal_entry.number}")
+            else:
+                print(f"❌ AccountingIntegrationService returned None!")
+            print(f"{'='*60}\n")
+            
+            logger.info(f"✅ تم إنشاء القيد المحاسبي: {journal_entry.number} للدفعة: {payment.id}" if journal_entry else f"❌ Failed to create journal entry for payment {payment.id}")
+            
             return journal_entry
             
         except Exception as e:
+            print(f"\n{'='*60}")
+            print(f"❌ EXCEPTION في إنشاء القيد المحاسبي للدفعة {payment.id}")
+            print(f"   Error: {str(e)}")
+            print(f"{'='*60}\n")
+            
             logger.error(f"❌ خطأ في إنشاء القيد المحاسبي للدفعة {payment.id}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            logger.error(traceback.format_exc())
             raise
 
     @staticmethod
@@ -373,9 +287,12 @@ class PurchaseService:
         """
         try:
             # 1. إنشاء المرتجع
+            # Support both 'date' and 'return_date' for backward compatibility
+            return_date = return_data.get('date') or return_data.get('return_date', timezone.now().date())
+            
             purchase_return = PurchaseReturn.objects.create(
                 purchase=purchase,
-                date=return_data.get('return_date', timezone.now().date()),
+                date=return_date,
                 warehouse=purchase.warehouse,
                 subtotal=Decimal('0'),
                 discount=Decimal('0'),

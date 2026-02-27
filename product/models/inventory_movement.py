@@ -41,6 +41,7 @@ class InventoryMovement(models.Model):
         ("manual", _("يدوي")),
         ("receipt_voucher", _("إذن استلام")),
         ("issue_voucher", _("إذن صرف")),
+        ("batch_voucher", _("إذن جماعي")),
     )
 
     VOUCHER_TYPES = (
@@ -89,7 +90,7 @@ class InventoryMovement(models.Model):
         _("نوع الحركة"), max_length=20, choices=MOVEMENT_TYPES
     )
     document_type = models.CharField(
-        _("نوع المستند"), max_length=20, choices=DOCUMENT_TYPES, default="manual"
+        _("نوع المستند"), max_length=50, choices=DOCUMENT_TYPES, default="manual"
     )
     document_number = models.CharField(
         _("رقم المستند"), max_length=50, blank=True, null=True
@@ -226,6 +227,17 @@ class InventoryMovement(models.Model):
         help_text=_("اسم الشخص المُصدر (لأذون الصرف)"),
     )
 
+    # ربط بالإذن الجماعي
+    batch_voucher = models.ForeignKey(
+        "BatchVoucher",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="inventory_movements",
+        verbose_name=_("الإذن الجماعي"),
+        help_text=_("الإذن الجماعي الذي أنشأ هذه الحركة (إن وجد)"),
+    )
+
     class Meta:
         verbose_name = _("حركة مخزون")
         verbose_name_plural = _("حركات المخزون")
@@ -242,14 +254,18 @@ class InventoryMovement(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.movement_number:
-            # توليد رقم الحركة تلقائياً
+            # توليد رقم الحركة تلقائياً (thread-safe)
             from .system_utils import SerialNumber
+            from django.db.models import F
 
-            serial = SerialNumber.objects.get_or_create(
+            # الحصول على أو إنشاء SerialNumber
+            serial, created = SerialNumber.objects.get_or_create(
                 document_type="inventory_movement",
                 year=timezone.now().year,
-                defaults={"prefix": "INV"},
-            )[0]
+                defaults={"prefix": "INV", "last_number": 0},
+            )
+            
+            # استخدام F() expression لعمل atomic increment
             next_number = serial.get_next_number()
             self.movement_number = f"{serial.prefix}{next_number:04d}"
 
@@ -269,14 +285,12 @@ class InventoryMovement(models.Model):
     def approve(self, user):
         """
         اعتماد الحركة وتطبيقها على المخزون
-        ✅ UNIFIED: Uses MovementService for stock updates
         """
         if not self.can_approve():
             return False
 
         try:
             from .stock_management import Stock
-            from governance.services.movement_service import MovementService
             
             # الحصول على سجل المخزون للحفظ الحالة قبل التغيير
             stock = Stock.objects.filter(
@@ -291,38 +305,41 @@ class InventoryMovement(models.Model):
                 self.quantity_before = Decimal('0')
                 self.average_cost_before = self.product.cost_price or Decimal('0')
 
-            # ✅ استخدام MovementService لتطبيق الحركة
-            movement_service = MovementService()
-            
-            # تحديد نوع الحركة (in أو out)
-            if self.movement_type in [
-                "in", "transfer_in", "adjustment_in", "return_in", "found"
-            ]:
-                movement_type = 'in'
-            elif self.movement_type in [
-                "out", "transfer_out", "adjustment_out", "return_out",
-                "damaged", "expired", "lost"
-            ]:
-                movement_type = 'out'
-            else:
-                movement_type = self.movement_type
-            
-            # معالجة الحركة عبر MovementService
-            movement_service.process_movement(
-                product_id=self.product.id,
-                quantity_change=self.quantity,
-                movement_type=movement_type,
-                source_reference=f"VOUCHER:{self.voucher_type}:{self.movement_number}",
-                idempotency_key=f"SM:inventory_movement:{self.id}:approve",
-                user=user,
-                warehouse_id=self.warehouse.id,
-                unit_cost=self.unit_cost if movement_type == 'in' else None,
-                document_number=self.movement_number,
-                notes=self.notes or f"اعتماد {self.get_voucher_type_display()}"
-            )
+            # تطبيق الحركة على المخزون مباشرة
+            if self.movement_type in ["in", "transfer_in", "adjustment_in", "return_in", "found"]:
+                # حركة دخول - زيادة المخزون
+                if stock:
+                    # حساب متوسط التكلفة الجديد
+                    total_cost = (stock.quantity * stock.average_cost) + (self.quantity * self.unit_cost)
+                    new_quantity = stock.quantity + self.quantity
+                    stock.average_cost = total_cost / new_quantity if new_quantity > 0 else self.unit_cost
+                    stock.quantity = new_quantity
+                    stock.last_movement_date = timezone.now()
+                    stock.save()
+                else:
+                    # إنشاء سجل مخزون جديد
+                    stock = Stock.objects.create(
+                        product=self.product,
+                        warehouse=self.warehouse,
+                        quantity=self.quantity,
+                        average_cost=self.unit_cost,
+                        last_movement_date=timezone.now()
+                    )
+                    
+            elif self.movement_type in ["out", "transfer_out", "adjustment_out", "return_out", "damaged", "expired", "lost"]:
+                # حركة خروج - تقليل المخزون
+                if not stock:
+                    raise ValueError(f'المنتج غير موجود في المخزن')
+                    
+                if stock.quantity < self.quantity:
+                    raise ValueError(f'الكمية المتاحة ({stock.quantity}) أقل من المطلوبة ({self.quantity})')
+                
+                stock.quantity -= self.quantity
+                stock.last_movement_date = timezone.now()
+                stock.save()
 
             # حفظ الحالة بعد التغيير
-            stock = Stock.objects.get(product=self.product, warehouse=self.warehouse)
+            stock.refresh_from_db()
             self.quantity_after = stock.quantity
             self.average_cost_after = stock.average_cost
 
@@ -335,9 +352,6 @@ class InventoryMovement(models.Model):
             return True
 
         except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Error approving inventory movement {self.id}: {e}")
             return False
 
     def reverse(self, user, reason=None):

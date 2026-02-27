@@ -44,7 +44,7 @@ class PurchaseForm(forms.ModelForm):
     payment_method = forms.ChoiceField(
         label="طريقة الدفع",
         help_text="اختر طريقة الدفع (نقدي/آجل) أو حساب محدد",
-        required=True,
+        required=False,  # سيتم التحقق منه في clean() حسب نوع الفاتورة
         widget=forms.Select(
             attrs={"class": "form-control", "id": "id_payment_method"}
         ),
@@ -92,7 +92,7 @@ class PurchaseForm(forms.ModelForm):
             ('credit', 'آجل'),
         ]
         
-        # إضافة حسابات الدفع من النظام المالي
+        # إضافة حسابات الدفع من النظام المالي (للفواتير النقدية فقط)
         try:
             from financial.models import ChartOfAccounts
             payment_accounts = ChartOfAccounts.objects.filter(
@@ -156,8 +156,11 @@ class PurchaseForm(forms.ModelForm):
         """معالجة التصنيف المالي - تحويل من ID إلى كائن"""
         financial_category_value = self.cleaned_data.get('financial_category')
         
+        # التحقق من أن الحقل مطلوب فقط إذا كان required=True
         if not financial_category_value:
-            raise ValidationError('التصنيف المالي مطلوب')
+            if self.fields['financial_category'].required:
+                raise ValidationError('التصنيف المالي مطلوب')
+            return None
         
         try:
             from financial.models import FinancialCategory, FinancialSubcategory
@@ -195,10 +198,11 @@ class PurchaseForm(forms.ModelForm):
         cleaned_data = super().clean()
         supplier = cleaned_data.get('supplier')
         warehouse = cleaned_data.get('warehouse')
+        payment_method = cleaned_data.get('payment_method')
         
         # التحقق من المخزن للفواتير غير الخدمية
         if supplier:
-            is_service = supplier.is_service_provider() or supplier.is_driver()
+            is_service = supplier.is_service_provider()
             
             if is_service:
                 # فواتير خدمية لا تحتاج مخزن - نتأكد إنه فاضي
@@ -208,6 +212,16 @@ class PurchaseForm(forms.ModelForm):
                 # لو المخزن مش موجود والمورد مش خدمي، نفترض إنه خدمي
                 # (الـ JavaScript بيخفي المخزن للموردين الخدميين)
                 pass
+        
+        # التحقق من payment_method: مطلوب فقط للفواتير النقدية
+        # الـ view بيبعت invoice_type في الـ POST data
+        # لكن في الـ form validation مش موجود، فهنعتمد على القيمة نفسها
+        if payment_method and payment_method not in ['', 'credit']:
+            # فاتورة نقدية - payment_method لازم يكون موجود
+            pass
+        elif not payment_method or payment_method == '':
+            # لو فاضي، نفترض إنه آجل ونحط 'credit'
+            cleaned_data['payment_method'] = 'credit'
         
         return cleaned_data
 

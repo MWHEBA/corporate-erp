@@ -4,7 +4,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from decimal import Decimal
-from financial.models.audit_trail import PaymentAuditMixin
+from financial.mixins import PaymentAuditMixin
 
 
 class PurchasePayment(PaymentAuditMixin, models.Model):

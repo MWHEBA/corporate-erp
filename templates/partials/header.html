@@ -70,60 +70,92 @@
                     </div>
                     
                     <div class="quick-actions-body">
+                        <!-- المبيعات -->
+                        <div class="quick-actions-category">
+                            <h6 class="dropdown-header text-primary">
+                                <i class="fas fa-shopping-cart me-2"></i>
+                                <span>المبيعات</span>
+                            </h6>
+                            <a class="dropdown-item quick-action-item" href="{% url 'sale:sale_create' %}">
+                                <div class="quick-action-icon bg-soft-primary">
+                                    <i class="fas fa-file-invoice text-primary"></i>
+                                </div>
+                                <div class="quick-action-content">
+                                    <div class="quick-action-title">فاتورة مبيعات جديدة</div>
+                                    <div class="quick-action-desc">إنشاء فاتورة مبيعات للعملاء</div>
+                                </div>
+                            </a>
+                        </div>
+                        
+                        <!-- المشتريات -->
+                        <div class="quick-actions-category">
+                            <h6 class="dropdown-header text-success">
+                                <i class="fas fa-truck me-2"></i>
+                                <span>المشتريات</span>
+                            </h6>
+                            <a class="dropdown-item quick-action-item" href="{% url 'purchase:purchase_create' %}">
+                                <div class="quick-action-icon bg-soft-success">
+                                    <i class="fas fa-shopping-bag text-success"></i>
+                                </div>
+                                <div class="quick-action-content">
+                                    <div class="quick-action-title">فاتورة شراء جديدة</div>
+                                    <div class="quick-action-desc">إنشاء فاتورة شراء من الموردين</div>
+                                </div>
+                            </a>
+                        </div>
+                        
                         <!-- المالية -->
                         <div class="quick-actions-category">
-                            <h6 class="dropdown-header text-info">
+                            <h6 class="dropdown-header text-warning">
                                 <i class="fas fa-money-bill-wave me-2"></i>
                                 <span>المالية</span>
                             </h6>
                             <a class="dropdown-item quick-action-item" href="{% url 'financial:cash_and_bank_accounts_list' %}">
-                                <div class="quick-action-icon bg-soft-info">
-                                    <i class="fas fa-cash-register text-info"></i>
+                                <div class="quick-action-icon bg-soft-warning">
+                                    <i class="fas fa-cash-register text-warning"></i>
                                 </div>
                                 <div class="quick-action-content">
-                                    <div class="quick-action-title">عرض الخزينة</div>
+                                    <div class="quick-action-title">الخزينة والبنوك</div>
                                     <div class="quick-action-desc">عرض حسابات الخزينة والبنوك</div>
                                 </div>
                             </a>
                         </div>
                         
-                        <!-- الأكاديمي -->
+                        <!-- المنتجات والمخزون -->
                         <div class="quick-actions-category">
-                            <h6 class="dropdown-header text-primary">
-                                <i class="fas fa-graduation-cap me-2"></i>
-                                <span>الأكاديمي</span>
+                            <h6 class="dropdown-header text-secondary">
+                                <i class="fas fa-box-open me-2"></i>
+                                <span>المنتجات والمخزون</span>
                             </h6>
-                            {% comment %}
-                            <a class="dropdown-item quick-action-item" href="{% url 'courses:course_create' %}">
-                                <div class="quick-action-icon bg-soft-primary">
-                                    <i class="fas fa-book text-primary"></i>
+                            <a class="dropdown-item quick-action-item" href="{% url 'product:product_create' %}">
+                                <div class="quick-action-icon bg-soft-secondary">
+                                    <i class="fas fa-box text-secondary"></i>
                                 </div>
                                 <div class="quick-action-content">
-                                    <div class="quick-action-title">إضافة كورس</div>
-                                    <div class="quick-action-desc">إنشاء كورس تعليمي جديد</div>
+                                    <div class="quick-action-title">منتج جديد</div>
+                                    <div class="quick-action-desc">إضافة منتج جديد للمخزون</div>
                                 </div>
                             </a>
-                            <a class="dropdown-item quick-action-item" href="{% url 'activities:activity_create' %}">
-                                <div class="quick-action-icon bg-soft-info">
-                                    <i class="fas fa-futbol text-info"></i>
+                            <a class="dropdown-item quick-action-item" href="{% url 'product:product_list' %}">
+                                <div class="quick-action-icon bg-soft-dark">
+                                    <i class="fas fa-boxes text-dark"></i>
                                 </div>
                                 <div class="quick-action-content">
-                                    <div class="quick-action-title">إضافة خدمة</div>
-                                    <div class="quick-action-desc">إنشاء خدمة جديدة</div>
+                                    <div class="quick-action-title">قائمة المنتجات</div>
+                                    <div class="quick-action-desc">عرض جميع المنتجات</div>
                                 </div>
                             </a>
-                            {% endcomment %}
                         </div>
                         
                         <!-- الموارد البشرية -->
                         <div class="quick-actions-category">
-                            <h6 class="dropdown-header text-success">
+                            <h6 class="dropdown-header text-danger">
                                 <i class="fas fa-users me-2"></i>
                                 <span>الموارد البشرية</span>
                             </h6>
                             <a class="dropdown-item quick-action-item" href="{% url 'hr:leave_request' %}">
-                                <div class="quick-action-icon bg-soft-success">
-                                    <i class="fas fa-calendar-times text-success"></i>
+                                <div class="quick-action-icon bg-soft-danger">
+                                    <i class="fas fa-calendar-times text-danger"></i>
                                 </div>
                                 <div class="quick-action-content">
                                     <div class="quick-action-title">طلب إجازة</div>
@@ -136,59 +168,16 @@
                                 </div>
                                 <div class="quick-action-content">
                                     <div class="quick-action-title">طلب إذن</div>
-                                    <div class="quick-action-desc">تقديم طلب إذن خروج أو تأخير</div>
+                                    <div class="quick-action-desc">طلب إذن خروج أو تأخير</div>
                                 </div>
                             </a>
                             <a class="dropdown-item quick-action-item" href="{% url 'hr:advance_request' %}">
-                                <div class="quick-action-icon bg-soft-danger">
-                                    <i class="fas fa-hand-holding-usd text-danger"></i>
+                                <div class="quick-action-icon bg-soft-info">
+                                    <i class="fas fa-hand-holding-usd text-info"></i>
                                 </div>
                                 <div class="quick-action-content">
                                     <div class="quick-action-title">طلب سلفة</div>
                                     <div class="quick-action-desc">تقديم طلب سلفة مالية</div>
-                                </div>
-                            </a>
-                        </div>
-                        
-                        <!-- المشتريات -->
-                        <div class="quick-actions-category">
-                            <h6 class="dropdown-header text-success">
-                                <i class="fas fa-truck me-2"></i>
-                                <span>المشتريات</span>
-                            </h6>
-                            <a class="dropdown-item quick-action-item" href="{% url 'core:dashboard' %}">
-                                <div class="quick-action-icon bg-soft-success">
-                                    <i class="fas fa-shopping-bag text-success"></i>
-                                </div>
-                                <div class="quick-action-content">
-                                    <div class="quick-action-title">فاتورة شراء جديدة</div>
-                                    <div class="quick-action-desc">إنشاء فاتورة شراء جديدة من الموردين</div>
-                                </div>
-                            </a>
-                        </div>
-                        
-                        <!-- المنتجات والمخزون -->
-                        <div class="quick-actions-category">
-                            <h6 class="dropdown-header text-secondary">
-                                <i class="fas fa-box-open me-2"></i>
-                                <span>المنتجات والمخزون</span>
-                            </h6>
-                            <a class="dropdown-item quick-action-item" href="{% url 'core:dashboard' %}">
-                                <div class="quick-action-icon bg-soft-secondary">
-                                    <i class="fas fa-box text-secondary"></i>
-                                </div>
-                                <div class="quick-action-content">
-                                    <div class="quick-action-title">منتج جديد</div>
-                                    <div class="quick-action-desc">إضافة منتج جديد للمخزون</div>
-                                </div>
-                            </a>
-                            <a class="dropdown-item quick-action-item" href="{% url 'core:dashboard' %}">
-                                <div class="quick-action-icon bg-soft-dark">
-                                    <i class="fas fa-exchange-alt text-dark"></i>
-                                </div>
-                                <div class="quick-action-content">
-                                    <div class="quick-action-title">تحويل مخزني</div>
-                                    <div class="quick-action-desc">تحويل منتجات بين المخازن</div>
                                 </div>
                             </a>
                         </div>

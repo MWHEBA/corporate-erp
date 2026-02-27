@@ -56,22 +56,22 @@
                                     <thead class="table-light">
                                         <tr>
                                             <th class="text-center">الحساب</th>
-                                            <th class="text-end text-center">مدين</th>
-                                            <th class="text-end text-center">دائن</th>
+                                            <th class="text-center">مدين</th>
+                                            <th class="text-center">دائن</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {% for line in entry.lines.all %}
                                         <tr>
                                             <td class="text-center">{{ line.account.code }} - {{ line.account.name }}</td>
-                                            <td class="text-end text-center">
+                                            <td class="text-center">
                                                 {% if line.debit > 0 %}
                                                 {{ line.debit|smart_float }}
                                                 {% else %}
                                                 -
                                                 {% endif %}
                                             </td>
-                                            <td class="text-end text-center">
+                                            <td class="text-center">
                                                 {% if line.credit > 0 %}
                                                 {{ line.credit|smart_float }}
                                                 {% else %}

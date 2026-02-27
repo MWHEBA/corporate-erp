@@ -132,18 +132,24 @@ class SaleService:
         try:
             from governance.services.accounting_gateway import JournalEntryLineData
             from financial.models import ChartOfAccounts
+            from django.core.exceptions import ValidationError
+            
+            logger.info(f"🔍 بدء إنشاء القيد المحاسبي للفاتورة: {sale.number}")
+            logger.info(f"   - العميل: {sale.customer.name} (ID: {sale.customer.id})")
+            logger.info(f"   - طريقة الدفع: {sale.payment_method}")
+            logger.info(f"   - الإجمالي: {sale.total}")
             
             # تحديد حساب المدين حسب طريقة الدفع
-            if sale.payment_method == 'cash':
-                debit_account = ChartOfAccounts.objects.get(code='10100')  # الخزينة
-            elif sale.payment_method == 'bank_transfer':
-                debit_account = ChartOfAccounts.objects.get(code='10200')  # البنك
-            else:  # credit
+            # payment_method ممكن يكون: 'cash', 'bank_transfer', 'credit', أو account code مباشرة (مثل '10100')
+            payment_method = sale.payment_method
+            
+            if payment_method == 'credit':
+                # فاتورة آجلة - حساب العميل
                 # حساب العميل - التأكد من وجود الحساب المحاسبي
                 if not sale.customer.financial_account:
                     # استدعاء الـ signal لإنشاء الحساب (Single Source of Truth)
                     logger.warning(
-                        f"العميل '{sale.customer.name}' ليس لديه حساب محاسبي. "
+                        f"⚠️ العميل '{sale.customer.name}' (ID: {sale.customer.id}) ليس لديه حساب محاسبي. "
                         f"سيتم إنشاؤه تلقائياً عبر signal."
                     )
                     sale.customer.save()  # Trigger post_save signal
@@ -151,23 +157,94 @@ class SaleService:
                     
                     # التحقق من نجاح الإنشاء
                     if not sale.customer.financial_account:
-                        raise ValidationError(
-                            f"فشل إنشاء حساب محاسبي للعميل '{sale.customer.name}'. "
-                            f"يرجى التواصل مع الدعم الفني."
+                        from django.core.exceptions import ValidationError
+                        error_msg = (
+                            f"❌ فشل إنشاء حساب محاسبي للعميل '{sale.customer.name}' (ID: {sale.customer.id}). "
+                            f"يرجى التأكد من:\n"
+                            f"1. وجود حساب العملاء الرئيسي (11030)\n"
+                            f"2. تفعيل AUTO_CREATE_CUSTOMER_ACCOUNTS في settings\n"
+                            f"3. عدم وجود أخطاء في CustomerService.create_financial_account_for_customer()"
                         )
+                        logger.error(error_msg)
+                        raise ValidationError(error_msg)
                 
                 debit_account = sale.customer.financial_account
+                logger.info(f"✅ استخدام حساب العميل: {debit_account.code} - {debit_account.name}")
+            elif payment_method == 'cash':
+                # نقدي - الخزينة الافتراضية
+                try:
+                    debit_account = ChartOfAccounts.objects.get(code='10100', is_active=True)
+                    logger.info(f"✅ استخدام الخزينة الافتراضية: {debit_account.code} - {debit_account.name}")
+                except ChartOfAccounts.DoesNotExist:
+                    from django.core.exceptions import ValidationError
+                    error_msg = "❌ الحساب النقدي (10100) غير موجود في دليل الحسابات. يرجى إنشاؤه أولاً."
+                    logger.error(error_msg)
+                    raise ValidationError(error_msg)
+            elif payment_method == 'bank_transfer':
+                # تحويل بنكي - البنك الافتراضي
+                try:
+                    debit_account = ChartOfAccounts.objects.get(code='10200', is_active=True)
+                    logger.info(f"✅ استخدام البنك الافتراضي: {debit_account.code} - {debit_account.name}")
+                except ChartOfAccounts.DoesNotExist:
+                    from django.core.exceptions import ValidationError
+                    error_msg = "❌ الحساب البنكي (10200) غير موجود في دليل الحسابات. يرجى إنشاؤه أولاً."
+                    logger.error(error_msg)
+                    raise ValidationError(error_msg)
+            elif payment_method and (payment_method.isdigit() or len(payment_method) == 5):
+                # account code مباشرة (مثل '10100' أو '10200')
+                try:
+                    debit_account = ChartOfAccounts.objects.get(code=payment_method, is_active=True)
+                    logger.info(f"✅ استخدام الحساب المحدد: {debit_account.code} - {debit_account.name}")
+                except ChartOfAccounts.DoesNotExist:
+                    from django.core.exceptions import ValidationError
+                    error_msg = f"❌ الحساب المحاسبي '{payment_method}' غير موجود أو غير نشط في دليل الحسابات."
+                    logger.error(error_msg)
+                    raise ValidationError(error_msg)
+            else:
+                # افتراضي: الخزينة
+                logger.warning(f"⚠️ طريقة دفع غير معروفة '{payment_method}' - استخدام الخزينة الافتراضية")
+                try:
+                    debit_account = ChartOfAccounts.objects.get(code='10100', is_active=True)
+                    logger.info(f"✅ استخدام الخزينة الافتراضية: {debit_account.code} - {debit_account.name}")
+                except ChartOfAccounts.DoesNotExist:
+                    from django.core.exceptions import ValidationError
+                    error_msg = "❌ الحساب النقدي (10100) غير موجود في دليل الحسابات. يرجى إنشاؤه أولاً."
+                    logger.error(error_msg)
+                    raise ValidationError(error_msg)
             
             # حساب تكلفة البضاعة المباعة
-            cost_of_goods_sold = sum(
-                item.product.cost_price * item.quantity 
-                for item in sale.items.all()
-            )
+            cost_of_goods_sold = Decimal('0')
+            for item in sale.items.all():
+                if not item.product.cost_price or item.product.cost_price == 0:
+                    logger.warning(f"⚠️ المنتج '{item.product.name}' ليس له سعر تكلفة - سيتم استخدام 0")
+                cost_of_goods_sold += (item.product.cost_price or Decimal('0')) * item.quantity
             
-            # الحصول على الحسابات
-            sales_revenue_account = ChartOfAccounts.objects.get(code='40100')  # إيرادات المبيعات
-            cogs_account = ChartOfAccounts.objects.get(code='50100')  # تكلفة البضاعة المباعة
-            inventory_account = ChartOfAccounts.objects.get(code='10300')  # المخزون
+            logger.info(f"   - تكلفة البضاعة المباعة: {cost_of_goods_sold}")
+            
+            # الحصول على الحسابات المطلوبة
+            try:
+                sales_revenue_account = ChartOfAccounts.objects.get(code='40100', is_active=True)
+                logger.info(f"✅ حساب إيرادات المبيعات: {sales_revenue_account.code} - {sales_revenue_account.name}")
+            except ChartOfAccounts.DoesNotExist:
+                error_msg = "❌ حساب إيرادات المبيعات (40100) غير موجود في دليل الحسابات. يرجى إنشاؤه أولاً."
+                logger.error(error_msg)
+                raise ValidationError(error_msg)
+            
+            try:
+                cogs_account = ChartOfAccounts.objects.get(code='50100', is_active=True)
+                logger.info(f"✅ حساب تكلفة البضاعة المباعة: {cogs_account.code} - {cogs_account.name}")
+            except ChartOfAccounts.DoesNotExist:
+                error_msg = "❌ حساب تكلفة البضاعة المباعة (50100) غير موجود في دليل الحسابات. يرجى إنشاؤه أولاً."
+                logger.error(error_msg)
+                raise ValidationError(error_msg)
+            
+            try:
+                inventory_account = ChartOfAccounts.objects.get(code='10400', is_active=True)
+                logger.info(f"✅ حساب المخزون: {inventory_account.code} - {inventory_account.name}")
+            except ChartOfAccounts.DoesNotExist:
+                error_msg = "❌ حساب المخزون (10400) غير موجود في دليل الحسابات. يرجى إنشاؤه أولاً."
+                logger.error(error_msg)
+                raise ValidationError(error_msg)
             
             # إعداد بيانات القيد باستخدام JournalEntryLineData
             lines = [
@@ -227,6 +304,9 @@ class SaleService:
     def _create_stock_movements(sale, user):
         """
         إنشاء حركات المخزون للفاتورة عبر MovementService
+        
+        ملاحظة: لا نستخدم document_number هنا لأن AccountingGateway يفترض أن أي
+        حركة لها document_number هي فاتورة مشتريات ويحاول البحث عن المورد
         """
         try:
             movement_service = MovementService()
@@ -237,11 +317,11 @@ class SaleService:
                     product_id=item.product.id,
                     quantity_change=-item.quantity,  # Negative for outbound
                     movement_type='out',
-                    source_reference=f"SALE-{sale.number}-ITEM-{item.id}",
+                    source_reference=f"SALE_ITEM_{item.id}",
                     idempotency_key=f'sale_{sale.id}_item_{item.id}_movement',
                     user=user,
                     unit_cost=item.product.cost_price,
-                    document_number=sale.number,
+                    document_number=None,  # لا نستخدم document_number لتجنب مشاكل parsing
                     notes=f'مبيعات - فاتورة رقم {sale.number}',
                     movement_date=sale.date
                 )
@@ -398,9 +478,12 @@ class SaleService:
         """
         try:
             # 1. إنشاء المرتجع
+            # Support both 'date' and 'return_date' for backward compatibility
+            return_date = return_data.get('date') or return_data.get('return_date', timezone.now().date())
+            
             sale_return = SaleReturn.objects.create(
                 sale=sale,
-                date=return_data.get('return_date', timezone.now().date()),
+                date=return_date,
                 warehouse=sale.warehouse,
                 subtotal=Decimal('0'),
                 discount=Decimal('0'),
@@ -530,7 +613,7 @@ class SaleService:
                 ),
                 # مدين: المخزون (إرجاع)
                 JournalEntryLineData(
-                    account_code='10300',
+                    account_code='10400',
                     debit=cost_of_goods_returned,
                     credit=Decimal('0'),
                     description=f'مرتجع - فاتورة {sale.number}'
@@ -570,6 +653,9 @@ class SaleService:
     def _create_return_stock_movements(sale_return, user):
         """
         إنشاء حركات المخزون للمرتجع (إرجاع للمخزن)
+        
+        ملاحظة: لا نستخدم document_number هنا لأن AccountingGateway يفترض أن أي
+        حركة لها document_number هي فاتورة مشتريات ويحاول البحث عن المورد
         """
         try:
             movement_service = MovementService()
@@ -580,11 +666,11 @@ class SaleService:
                     product_id=item.product.id,
                     quantity_change=item.quantity,  # Positive for inbound
                     movement_type='in',
-                    source_reference=f"RETURN-{sale_return.number}-ITEM-{item.id}",
+                    source_reference=f"RETURN_ITEM_{item.id}",
                     idempotency_key=f'sale_return_{sale_return.id}_item_{item.id}_movement',
                     user=user,
                     unit_cost=item.product.cost_price,
-                    document_number=sale_return.number,
+                    document_number=None,  # لا نستخدم document_number لتجنب مشاكل parsing
                     notes=f'مرتجع مبيعات - فاتورة {sale_return.sale.number}',
                     movement_date=sale_return.date
                 )

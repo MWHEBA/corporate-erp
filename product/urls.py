@@ -1,6 +1,6 @@
 from django.urls import path
 from .views_modules import inventory_views
-from .views import voucher_views
+from .views import voucher_views, transfer_views
 from . import views
 
 app_name = "product"
@@ -146,11 +146,6 @@ urlpatterns = [
     ),
     # التقارير المتقدمة
     path(
-        "reports/abc-analysis/",
-        inventory_views.abc_analysis_report,
-        name="abc_analysis_report",
-    ),
-    path(
         "reports/inventory-turnover/",
         inventory_views.inventory_turnover_report,
         name="inventory_turnover_report",
@@ -185,4 +180,19 @@ urlpatterns = [
     path("vouchers/issue/create/", voucher_views.IssueVoucherCreateView.as_view(), name="issue_voucher_create"),
     path("vouchers/issue/<int:pk>/", voucher_views.IssueVoucherDetailView.as_view(), name="issue_voucher_detail"),
     path("vouchers/issue/<int:pk>/approve/", voucher_views.IssueVoucherApproveView.as_view(), name="issue_voucher_approve"),
+    
+    # أذون التحويل المخزني (Transfer Vouchers)
+    path("vouchers/transfer/", transfer_views.TransferVoucherListView.as_view(), name="transfer_voucher_list"),
+    path("vouchers/transfer/create/", transfer_views.TransferVoucherCreateView.as_view(), name="transfer_voucher_create"),
+    path("vouchers/transfer/<int:pk>/", transfer_views.TransferVoucherDetailView.as_view(), name="transfer_voucher_detail"),
+    path("vouchers/transfer/<int:pk>/approve/", transfer_views.TransferVoucherApproveView.as_view(), name="transfer_voucher_approve"),
+    
+    # الأذون الجماعية (Batch Vouchers)
+    path("batch-vouchers/", views.BatchVoucherListView.as_view(), name="batch_voucher_list"),
+    path("batch-vouchers/create/", views.BatchVoucherCreateView.as_view(), name="batch_voucher_create"),
+    path("batch-vouchers/<int:pk>/", views.BatchVoucherDetailView.as_view(), name="batch_voucher_detail"),
+    path("batch-vouchers/<int:pk>/edit/", views.BatchVoucherUpdateView.as_view(), name="batch_voucher_update"),
+    path("batch-vouchers/<int:pk>/approve/", views.BatchVoucherApproveView.as_view(), name="batch_voucher_approve"),
+    path("batch-vouchers/<int:pk>/delete/", views.BatchVoucherDeleteView.as_view(), name="batch_voucher_delete"),
+    path("api/product-cost/", views.GetProductCostView.as_view(), name="get_product_cost"),
 ]

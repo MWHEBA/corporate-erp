@@ -93,13 +93,13 @@ class SupplierTypeTest(TestCase):
     def test_supplier_type_settings_creation(self):
         """اختبار إنشاء إعدادات نوع المورد"""
         settings = SupplierTypeSettings.objects.create(
-            name="سائق",
-            code="driver",
-            description="سائقي الحافلات المدرسية",
-            icon="fas fa-car",
-            color="#28a745"
+            name="مقدم خدمات",
+            code="service_provider",
+            description="مقدمي الخدمات المختلفة",
+            icon="fas fa-tools",
+            color="#ffc107"
         )
         
-        self.assertEqual(settings.name, "سائق")
-        self.assertEqual(settings.code, "driver")
+        self.assertEqual(settings.name, "مقدم خدمات")
+        self.assertEqual(settings.code, "service_provider")
         self.assertTrue(settings.is_active)

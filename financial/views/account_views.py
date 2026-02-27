@@ -633,7 +633,7 @@ def chart_of_accounts_list(request):
 
         # جلب الحسابات الرئيسية فقط (عرض شجرة)
         if type_filter == "parents":
-            # في حالة فلتر أولياء الأمور، نعرض الحساب الأساسي فقط كـ root
+            # في حالة فلتر العملاء، نعرض الحساب الأساسي فقط كـ root
             parents_main_account = ChartOfAccounts.objects.filter(code="10300", is_active=True).first()
             if parents_main_account:
                 root_accounts = [parents_main_account]
@@ -2874,7 +2874,7 @@ def payment_list(request):
         payment_headers = [
             {"key": "type_display", "label": "النوع", "sortable": True, "width": "10%"},
             {"key": "invoice_number", "label": "رقم الفاتورة", "sortable": True, "width": "12%", "template": "components/cells/invoice_link.html"},
-            {"key": "party_name", "label": "ولي الأمر/المورد", "sortable": True, "width": "20%"},
+            {"key": "party_name", "label": "المورد", "sortable": True, "width": "20%"},
             {"key": "amount", "label": "المبلغ", "sortable": True, "template": "components/cells/payment_amount.html", "class": "text-end", "width": "12%"},
             {"key": "date", "label": "التاريخ", "sortable": True, "format": "date", "class": "text-center", "width": "12%"},
             {"key": "method", "label": "طريقة الدفع", "sortable": False, "width": "12%"},

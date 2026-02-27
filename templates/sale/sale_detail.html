@@ -613,7 +613,6 @@
                                         <th>{% trans "تاريخ ووقت الدفع" %}</th>
                                         <th>{% trans "المبلغ" %}</th>
                                         <th>{% trans "طريقة الدفع" %}</th>
-                                        <th>{% trans "الحساب المالي" %}</th>
                                         <th>{% trans "القيد المحاسبي" %}</th>
                                         <th>{% trans "ملاحظات" %}</th>
                                         <th>{% trans "إجراءات" %}</th>
@@ -656,15 +655,6 @@
                                             <span class="badge bg-warning">{% trans "شيك" %}</span>
                                             {% else %}
                                             <span class="badge bg-secondary">{{ payment.get_payment_method_display }}</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {% if payment.financial_account %}
-                                            <span class="text-primary">
-                                                <i class="fas fa-wallet me-1"></i>{{ payment.financial_account.name }}
-                                            </span>
-                                            {% else %}
-                                            <span class="text-muted">-</span>
                                             {% endif %}
                                         </td>
                                         <td>

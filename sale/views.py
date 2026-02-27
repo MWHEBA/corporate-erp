@@ -48,12 +48,24 @@ def sale_create(request, customer_id=None):
                     'date': form.cleaned_data['date'],
                     'customer_id': form.cleaned_data['customer'].id,
                     'warehouse_id': form.cleaned_data['warehouse'].id,
-                    'payment_method': form.cleaned_data['payment_method'],
                     'discount': Decimal(request.POST.get("discount", "0")),
                     'tax': Decimal(request.POST.get("tax", "0")),
                     'notes': form.cleaned_data.get('notes', ''),
                     'items': []
                 }
+                
+                # معالجة نوع الفاتورة (نقدي/آجل)
+                invoice_type = request.POST.get("invoice_type", "")
+                if invoice_type == "credit":
+                    # فاتورة آجلة: تعيين payment_method كـ credit
+                    sale_data['payment_method'] = "credit"
+                elif invoice_type == "cash":
+                    # فاتورة نقدية: استخدام payment_method من الفورم (account code)
+                    payment_method = form.cleaned_data.get('payment_method', '')
+                    sale_data['payment_method'] = payment_method if payment_method else "cash"
+                else:
+                    # افتراضي: آجل
+                    sale_data['payment_method'] = "credit"
                 
                 # تجهيز بيانات البنود
                 product_ids = request.POST.getlist("product[]")
@@ -74,17 +86,24 @@ def sale_create(request, customer_id=None):
                 sale = SaleService.create_sale(data=sale_data, user=request.user)
                 
                 # معالجة الدفعة التلقائية للفواتير النقدية
-                if sale.payment_method == "cash":
-                    payment_account_code = request.POST.get("payment_method")  # من payment_account_select
+                if invoice_type == "cash" and sale.payment_method not in ["credit", ""]:
+                    # payment_method هو account code (مثل 10100)
+                    payment_account_code = sale.payment_method
                     if payment_account_code:
-                        payment_data = {
-                            'amount': sale.total,
-                            'payment_method': payment_account_code,
-                            'payment_date': sale.date,
-                            'notes': 'دفعة تلقائية - فاتورة نقدية'
-                        }
-                        SaleService.process_payment(sale, payment_data, request.user)
-                        logger.info(f"✅ تم إنشاء دفعة تلقائية للفاتورة النقدية: {sale.number}")
+                        try:
+                            payment_data = {
+                                'amount': sale.total,
+                                'payment_method': payment_account_code,
+                                'payment_date': sale.date,
+                                'notes': 'دفعة تلقائية - فاتورة نقدية'
+                            }
+                            SaleService.process_payment(sale, payment_data, request.user)
+                            logger.info(f"✅ تم إنشاء دفعة تلقائية للفاتورة النقدية: {sale.number}")
+                        except Exception as e:
+                            logger.error(f"❌ خطأ في إنشاء الدفعة التلقائية: {str(e)}")
+                            messages.warning(request, f"تم إنشاء الفاتورة لكن فشل إنشاء الدفعة التلقائية: {str(e)}")
+                    else:
+                        messages.warning(request, "تحذير: لم يتم اختيار حساب دفع للفاتورة النقدية")
                 
                 messages.success(request, "تم إنشاء فاتورة المبيعات بنجاح")
                 return redirect("sale:sale_detail", pk=sale.pk)
@@ -235,11 +254,20 @@ def add_payment(request, pk):
         form = SalePaymentForm(initial=initial_data)
 
     context = {
-        "sale": sale,
+        "invoice": sale,  # الـ template بيستخدم invoice مش sale
+        "sale": sale,  # للتوافق
         "form": form,
+        "is_purchase": False,  # للتمييز بين المبيعات والمشتريات
+        "title": f"إضافة دفعة - فاتورة {sale.number}",
         "page_title": f"إضافة دفعة - فاتورة {sale.number}",
         "page_subtitle": f"المبلغ المتبقي: {sale.amount_due} ج.م",
         "page_icon": "fas fa-money-bill-wave",
+        "breadcrumb_items": [
+            {"title": "الرئيسية", "url": reverse("core:dashboard"), "icon": "fas fa-home"},
+            {"title": "المبيعات", "url": reverse("sale:sale_list"), "icon": "fas fa-shopping-cart"},
+            {"title": f"فاتورة {sale.number}", "url": reverse("sale:sale_detail", kwargs={"pk": sale.pk}), "icon": "fas fa-file-invoice"},
+            {"title": "إضافة دفعة", "active": True},
+        ],
         "header_buttons": [
             {
                 "url": reverse("sale:sale_detail", kwargs={"pk": sale.pk}),
@@ -249,7 +277,7 @@ def add_payment(request, pk):
             }
         ],
     }
-    return render(request, "sale/add_payment.html", context)
+    return render(request, "sale/sale_payment_form.html", context)
 
 
 @login_required
@@ -266,7 +294,7 @@ def sale_return(request, pk):
             try:
                 # تجهيز بيانات المرتجع
                 return_data = {
-                    'return_date': form.cleaned_data.get('return_date', timezone.now().date()),
+                    'date': form.cleaned_data.get('date', timezone.now().date()),
                     'reason': form.cleaned_data.get('reason', ''),
                     'notes': form.cleaned_data.get('notes', ''),
                     'items': []
@@ -298,7 +326,7 @@ def sale_return(request, pk):
             messages.error(request, "يرجى تصحيح الأخطاء في النموذج")
     else:
         initial_data = {
-            'return_date': timezone.now().date(),
+            'date': timezone.now().date(),
         }
         form = SaleReturnForm(initial=initial_data)
 
@@ -335,7 +363,7 @@ def sale_detail(request, pk):
     # الحصول على البنود والدفعات والمرتجعات
     items = sale.items.all()
     payments = sale.payments.all().order_by('-payment_date')
-    returns = sale.returns.filter(status='confirmed').order_by('-return_date')
+    returns = sale.returns.filter(status='confirmed').order_by('-date')
 
     context = {
         "sale": sale,
@@ -348,7 +376,7 @@ def sale_detail(request, pk):
         "page_icon": "fas fa-file-invoice-dollar",
         "header_buttons": [
             {
-                "url": reverse("sale:add_payment", kwargs={"pk": sale.pk}),
+                "url": reverse("sale:sale_add_payment", kwargs={"pk": sale.pk}),
                 "icon": "fa-money-bill-wave",
                 "text": "إضافة دفعة",
                 "class": "btn-success",
@@ -412,7 +440,37 @@ def sale_list(request):
     from django.core.paginator import Paginator
     paginator = Paginator(sales_query, 25)
     page = request.GET.get("page")
-    sales = paginator.get_page(page)
+    sales_page = paginator.get_page(page)
+    
+    # تحويل الـ queryset لـ list of dicts للجدول الموحد
+    sales_data = []
+    for sale in sales_page:
+        # تحديد حالة الدفع badge
+        if sale.payment_status == 'paid':
+            payment_status_html = '<span class="badge bg-success">مدفوعة</span>'
+        elif sale.payment_status == 'partially_paid':
+            payment_status_html = '<span class="badge bg-warning">مدفوعة جزئياً</span>'
+        else:
+            payment_status_html = '<span class="badge bg-danger">غير مدفوعة</span>'
+        
+        # أزرار الإجراءات
+        actions = [
+            {'url': reverse('sale:sale_detail', args=[sale.pk]), 'icon': 'fas fa-eye', 'label': 'عرض', 'class': 'btn-outline-info btn-sm action-view'},
+            {'url': reverse('sale:sale_print', args=[sale.pk]), 'icon': 'fas fa-print', 'label': 'طباعة', 'class': 'btn-outline-secondary btn-sm', 'target': '_blank'},
+        ]
+        
+        sales_data.append({
+            'id': sale.id,
+            'number': sale.number,
+            'date': sale.date,
+            'customer': sale.customer.name,
+            'warehouse': sale.warehouse.name,
+            'total': sale.total,
+            'amount_paid': sale.amount_paid,
+            'amount_due': sale.amount_due,
+            'payment_status': payment_status_html,
+            'actions': actions
+        })
 
     # إحصائيات
     paid_sales_count = Sale.objects.filter(payment_status="paid").count()
@@ -423,8 +481,23 @@ def sale_list(request):
 
     customers = Customer.objects.filter(is_active=True).order_by("name")
 
+    # إعداد headers للجدول الموحد
+    sale_headers = [
+        {'key': 'number', 'label': 'رقم الفاتورة', 'sortable': True, 'width': '10%', 'class': 'text-center'},
+        {'key': 'date', 'label': 'التاريخ', 'sortable': True, 'width': '10%', 'class': 'text-center', 'format': 'date'},
+        {'key': 'customer', 'label': 'العميل', 'sortable': True, 'width': '20%'},
+        {'key': 'warehouse', 'label': 'المخزن', 'sortable': True, 'width': '12%'},
+        {'key': 'total', 'label': 'الإجمالي', 'sortable': True, 'width': '10%', 'class': 'text-center', 'format': 'currency'},
+        {'key': 'amount_paid', 'label': 'المدفوع', 'sortable': True, 'width': '10%', 'class': 'text-center', 'format': 'currency'},
+        {'key': 'amount_due', 'label': 'المتبقي', 'sortable': True, 'width': '10%', 'class': 'text-center', 'format': 'currency'},
+        {'key': 'payment_status', 'label': 'حالة الدفع', 'sortable': True, 'width': '10%', 'class': 'text-center', 'format': 'html'},
+        {'key': 'actions', 'label': 'الإجراءات', 'width': '8%', 'class': 'text-center'}
+    ]
+
     context = {
-        "sales": sales,
+        "sales": sales_data,
+        "sale_headers": sale_headers,
+        "page_obj": sales_page,  # للـ pagination
         "paid_sales_count": paid_sales_count,
         "partially_paid_sales_count": partially_paid_sales_count,
         "unpaid_sales_count": unpaid_sales_count,

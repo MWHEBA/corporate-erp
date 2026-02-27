@@ -103,13 +103,71 @@ class ChartOfAccountsAdmin(admin.ModelAdmin):
 @admin.register(AccountingPeriod)
 class AccountingPeriodAdmin(admin.ModelAdmin):
     """
-    إدارة الفترات المحاسبية
+    إدارة السنوات المالية
     """
 
-    list_display = ("name", "start_date", "end_date", "status", "created_at")
-    list_filter = ("status", "created_at")
-    search_fields = ("name",)
-    readonly_fields = ("created_at",)
+    list_display = ("fiscal_year", "name", "start_date", "end_date", "status", "is_current", "progress_display", "created_at")
+    list_filter = ("status", "is_current", "created_at")
+    search_fields = ("name", "fiscal_year", "description")
+    readonly_fields = ("created_at", "updated_at", "closed_at", "progress_display", "duration_display", "remaining_display")
+    
+    fieldsets = (
+        (
+            _("معلومات السنة المالية"),
+            {
+                "fields": (
+                    "name",
+                    "fiscal_year",
+                    "start_date",
+                    "end_date",
+                    "status",
+                    "is_current",
+                )
+            },
+        ),
+        (
+            _("معلومات إضافية"),
+            {
+                "fields": ("description",)
+            },
+        ),
+        (
+            _("إحصائيات"),
+            {
+                "fields": ("progress_display", "duration_display", "remaining_display"),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            _("معلومات الإغلاق"),
+            {
+                "fields": ("closed_at", "closed_by"),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            _("معلومات النظام"),
+            {
+                "fields": ("created_at", "updated_at", "created_by"),
+                "classes": ("collapse",),
+            },
+        ),
+    )
+    
+    def progress_display(self, obj):
+        """عرض نسبة التقدم"""
+        return f"{obj.progress_percentage}%"
+    progress_display.short_description = _("نسبة التقدم")
+    
+    def duration_display(self, obj):
+        """عرض مدة السنة المالية"""
+        return f"{obj.duration_days} يوم"
+    duration_display.short_description = _("المدة")
+    
+    def remaining_display(self, obj):
+        """عرض الأيام المتبقية"""
+        return f"{obj.remaining_days} يوم"
+    remaining_display.short_description = _("الأيام المتبقية")
 
 
 @admin.register(JournalEntry)

@@ -133,10 +133,12 @@ class FinancialAnalyticsService:
             collected = total_sales - total_receivables
             collection_rate = (collected / total_sales) * 100 if collected >= 0 else Decimal("0")
 
-        # عدد أولياء الأمور الجدد
-        new_parents = Parent.objects.filter(
-            created_at__date__range=[self.date_from, self.date_to]
-        ).count()
+        # عدد العملاء الجدد
+        new_customers = 0
+        if Customer:
+            new_customers = Customer.objects.filter(
+                created_at__date__range=[self.date_from, self.date_to]
+            ).count()
 
         # متوسط دورة المبيعات (من تاريخ القيد إلى التحصيل)
         # نحسبها من متوسط عمر أرصدة العملاء
@@ -147,7 +149,7 @@ class FinancialAnalyticsService:
 
         return {
             "collection_rate": collection_rate.quantize(Decimal("0.1")),
-            "new_parents": new_parents,
+            "new_parents": new_customers,
             "sales_cycle": avg_sales_cycle,
             "due_debt": due_debt,
             "total_receivables": total_receivables,

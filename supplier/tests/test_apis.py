@@ -25,14 +25,24 @@ class SupplierListAPITest(TestCase):
         )
         self.client.login(username='testuser', password='test123')
         
+        # إنشاء نوع مورد
+        from supplier.models import SupplierType
+        self.supplier_type = SupplierType.objects.create(
+            name='مورد عام',
+            code='general',
+            description='مورد عام'
+        )
+        
         # إنشاء موردين
         self.supplier1 = Supplier.objects.create(
             name="مورد 1",
-            code="SUP001"
+            code="SUP001",
+            primary_type=self.supplier_type
         )
         self.supplier2 = Supplier.objects.create(
             name="مورد 2",
-            code="SUP002"
+            code="SUP002",
+            primary_type=self.supplier_type
         )
         
     def test_api_returns_json(self):
@@ -168,14 +178,15 @@ class ServiceDataUniversalAPITest(TestCase):
         
         self.supplier = Supplier.objects.create(
             name="مورد الكتب",
-            code="BOOKS001"
+            code="BOOK001",
+            primary_type=supplier_type
         )
         
     def test_supplier_api_functionality(self):
         """اختبار وظائف API الأساسية للموردين"""
         # اختبار أساسي للتأكد من أن الموردين يعملون
         self.assertEqual(self.supplier.name, "مورد الكتب")
-        self.assertEqual(self.supplier.code, "BOOKS001")
+        self.assertEqual(self.supplier.code, "BOOK001")
         
         # ملاحظة: تم حذف APIs الخدمات المتخصصة من النظام
         # هذا الاختبار يركز على الوظائف الأساسية للموردين فقط

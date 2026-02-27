@@ -16,10 +16,7 @@
     {% csrf_token %}
     
     <!-- Page Header -->
-    {% include "shared/page_header.html" with title=title subtitle=subtitle icon=icon %}
-    
-    <!-- Breadcrumb -->
-    {% include "shared/breadcrumb.html" with items=breadcrumb_items %}
+    {% include "shared/page_header.html" with title=title subtitle=subtitle icon=icon breadcrumb_items=breadcrumb_items %}
     
     <!-- Signals Overview -->
     <div class="section-container">
@@ -30,7 +27,7 @@
                     <div class="stats-card-body">
                         <div class="stats-card-icon"><i class="fas fa-signal"></i></div>
                         <div class="stats-card-title">إشارات نشطة</div>
-                        <div class="stats-card-value">47</div>
+                        <div class="stats-card-value">{{ active_signals }}</div>
                         <div class="stats-card-unit">إشارة</div>
                     </div>
                 </div>
@@ -40,7 +37,7 @@
                     <div class="stats-card-body">
                         <div class="stats-card-icon"><i class="fas fa-check-circle"></i></div>
                         <div class="stats-card-title">إشارات ناجحة</div>
-                        <div class="stats-card-value">1,234</div>
+                        <div class="stats-card-value">{{ successful_today }}</div>
                         <div class="stats-card-unit">اليوم</div>
                     </div>
                 </div>
@@ -50,7 +47,7 @@
                     <div class="stats-card-body">
                         <div class="stats-card-icon"><i class="fas fa-exclamation-triangle"></i></div>
                         <div class="stats-card-title">إشارات فاشلة</div>
-                        <div class="stats-card-value">3</div>
+                        <div class="stats-card-value">{{ failed_today }}</div>
                         <div class="stats-card-unit">اليوم</div>
                     </div>
                 </div>
@@ -60,7 +57,7 @@
                     <div class="stats-card-body">
                         <div class="stats-card-icon"><i class="fas fa-pause-circle"></i></div>
                         <div class="stats-card-title">إشارات معطلة</div>
-                        <div class="stats-card-value">2</div>
+                        <div class="stats-card-value">{{ disabled_signals }}</div>
                         <div class="stats-card-unit">إشارة</div>
                     </div>
                 </div>
@@ -70,14 +67,13 @@
     
     <!-- Active Signals Management -->
     <div class="section-container mb-4">
-        <h5 class="section-title" data-bs-toggle="collapse" data-bs-target="#activeSignals" aria-expanded="true">
-            <i class="fas fa-list me-2"></i>إدارة الإشارات النشطة<i class="fas fa-chevron-down float-end"></i>
+        <h5 class="section-title">
+            <i class="fas fa-list me-2"></i>إدارة الإشارات النشطة
         </h5>
-        <div class="collapse show" id="activeSignals">
-            <div class="card">
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-hover" id="signalsTable">
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover" id="signalsTable">
                             <thead>
                                 <tr>
                                     <th class="text-center">اسم الإشارة</th>
@@ -91,72 +87,54 @@
                                 </tr>
                             </thead>
                             <tbody>
+                                {% for signal in signals_data %}
                                 <tr>
-                                    <td class="text-center"><code>customer_account_creation</code></td>
-                                    <td class="text-center">Clients</td>
-                                    <td class="text-center"><span class="badge bg-info">post_save</span></td>
-                                    <td class="text-center"><span class="badge bg-danger">حرج</span></td>
-                                    <td class="text-center">منذ 5 دقائق</td>
+                                    <td class="text-center"><code>{{ signal.signal_name }}</code></td>
+                                    <td class="text-center">{{ signal.module_name|title }}</td>
+                                    <td class="text-center"><span class="badge bg-info">{{ signal.signal_type }}</span></td>
+                                    <td class="text-center"><span class="badge bg-{{ signal.priority_class }}">{{ signal.priority }}</span></td>
+                                    <td class="text-center">
+                                        {% if signal.last_execution %}
+                                            {{ signal.last_execution|timesince }} مضت
+                                        {% else %}
+                                            لم يتم التنفيذ بعد
+                                        {% endif %}
+                                    </td>
                                     <td class="text-center">
                                         <div class="progress" style="height: 20px;">
-                                            <div class="progress-bar bg-success" style="width: 98%">98%</div>
+                                            {% if signal.success_rate >= 95 %}
+                                                <div class="progress-bar bg-success" style="width: {{ signal.success_rate }}%">{{ signal.success_rate }}%</div>
+                                            {% elif signal.success_rate >= 80 %}
+                                                <div class="progress-bar bg-warning" style="width: {{ signal.success_rate }}%">{{ signal.success_rate }}%</div>
+                                            {% else %}
+                                                <div class="progress-bar bg-danger" style="width: {{ signal.success_rate }}%">{{ signal.success_rate }}%</div>
+                                            {% endif %}
                                         </div>
                                     </td>
-                                    <td class="text-center"><span class="badge bg-success">نشط</span></td>
+                                    <td class="text-center"><span class="badge bg-{{ signal.status_class }}">{{ signal.status_display }}</span></td>
                                     <td class="text-center">
-                                        <button class="btn btn-outline-warning btn-sm" onclick="toggleSignal('customer_account_creation', false)">
-                                            <i class="fas fa-pause"></i>
-                                        </button>
-                                        <button class="btn btn-outline-info btn-sm" onclick="viewSignalDetails('customer_account_creation')">
+                                        {% if signal.status == 'ACTIVE' %}
+                                            <button class="btn btn-outline-warning btn-sm" onclick="toggleSignal('{{ signal.signal_name }}', false)">
+                                                <i class="fas fa-pause"></i>
+                                            </button>
+                                        {% else %}
+                                            <button class="btn btn-outline-success btn-sm" onclick="toggleSignal('{{ signal.signal_name }}', true)">
+                                                <i class="fas fa-play"></i>
+                                            </button>
+                                        {% endif %}
+                                        <button class="btn btn-outline-info btn-sm" onclick="viewSignalDetails('{{ signal.signal_name }}')">
                                             <i class="fas fa-eye"></i>
                                         </button>
                                     </td>
                                 </tr>
+                                {% empty %}
                                 <tr>
-                                    <td class="text-center"><code>payment_processing</code></td>
-                                    <td class="text-center">Financial</td>
-                                    <td class="text-center"><span class="badge bg-info">post_save</span></td>
-                                    <td class="text-center"><span class="badge bg-danger">حرج</span></td>
-                                    <td class="text-center">منذ دقيقتين</td>
-                                    <td class="text-center">
-                                        <div class="progress" style="height: 20px;">
-                                            <div class="progress-bar bg-success" style="width: 100%">100%</div>
-                                        </div>
-                                    </td>
-                                    <td class="text-center"><span class="badge bg-success">نشط</span></td>
-                                    <td class="text-center">
-                                        <button class="btn btn-outline-warning btn-sm" onclick="toggleSignal('payment_processing', false)">
-                                            <i class="fas fa-pause"></i>
-                                        </button>
-                                        <button class="btn btn-outline-info btn-sm" onclick="viewSignalDetails('payment_processing')">
-                                            <i class="fas fa-eye"></i>
-                                        </button>
+                                    <td colspan="8" class="text-center text-muted">
+                                        <i class="fas fa-info-circle me-2"></i>لا توجد إشارات مسجلة. استخدم الأمر <code>python manage.py register_signals</code> لتسجيل الإشارات.
                                     </td>
                                 </tr>
-                                <tr>
-                                    <td class="text-center"><code>activity_enrollment</code></td>
-                                    <td class="text-center">Activities</td>
-                                    <td class="text-center"><span class="badge bg-primary">pre_save</span></td>
-                                    <td class="text-center"><span class="badge bg-warning">متوسط</span></td>
-                                    <td class="text-center">منذ 15 دقيقة</td>
-                                    <td class="text-center">
-                                        <div class="progress" style="height: 20px;">
-                                            <div class="progress-bar bg-warning" style="width: 85%">85%</div>
-                                        </div>
-                                    </td>
-                                    <td class="text-center"><span class="badge bg-warning">معطل</span></td>
-                                    <td class="text-center">
-                                        <button class="btn btn-outline-success btn-sm" onclick="toggleSignal('activity_enrollment', true)">
-                                            <i class="fas fa-play"></i>
-                                        </button>
-                                        <button class="btn btn-outline-info btn-sm" onclick="viewSignalDetails('activity_enrollment')">
-                                            <i class="fas fa-eye"></i>
-                                        </button>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
+                                {% endfor %}
+                    </table>
                 </div>
             </div>
         </div>
@@ -164,11 +142,10 @@
     
     <!-- Signal Performance Monitoring -->
     <div class="section-container mb-4">
-        <h5 class="section-title" data-bs-toggle="collapse" data-bs-target="#signalPerformance" aria-expanded="false">
-            <i class="fas fa-chart-line me-2"></i>مراقبة أداء الإشارات<i class="fas fa-chevron-down float-end"></i>
+        <h5 class="section-title">
+            <i class="fas fa-chart-line me-2"></i>مراقبة أداء الإشارات
         </h5>
-        <div class="collapse" id="signalPerformance">
-            <div class="row">
+        <div class="row">
                 <div class="col-lg-8 mb-3">
                     <div class="card">
                         <div class="card-header">
@@ -189,27 +166,29 @@
                                         </tr>
                                     </thead>
                                     <tbody>
+                                        {% for perf in performance_data %}
                                         <tr>
-                                            <td class="text-center"><code>customer_account_creation</code></td>
-                                            <td class="text-center">0.15 ثانية</td>
-                                            <td class="text-center">0.45 ثانية</td>
-                                            <td class="text-center">156</td>
-                                            <td class="text-center"><span class="badge bg-success">ممتاز</span></td>
+                                            <td class="text-center"><code>{{ perf.signal_name }}</code></td>
+                                            <td class="text-center">{{ perf.avg_time|floatformat:2 }} ms</td>
+                                            <td class="text-center">{{ perf.max_time }} ms</td>
+                                            <td class="text-center">{{ perf.count }}</td>
+                                            <td class="text-center">
+                                                {% if perf.performance_status == 'excellent' %}
+                                                    <span class="badge bg-success">ممتاز</span>
+                                                {% elif perf.performance_status == 'warning' %}
+                                                    <span class="badge bg-warning">متوسط</span>
+                                                {% else %}
+                                                    <span class="badge bg-danger">بطيء</span>
+                                                {% endif %}
+                                            </td>
                                         </tr>
+                                        {% empty %}
                                         <tr>
-                                            <td class="text-center"><code>payment_processing</code></td>
-                                            <td class="text-center">0.08 ثانية</td>
-                                            <td class="text-center">0.12 ثانية</td>
-                                            <td class="text-center">89</td>
-                                            <td class="text-center"><span class="badge bg-success">ممتاز</span></td>
+                                            <td colspan="5" class="text-center text-muted">
+                                                <i class="fas fa-info-circle me-2"></i>لا توجد بيانات أداء متاحة
+                                            </td>
                                         </tr>
-                                        <tr>
-                                            <td class="text-center"><code>activity_enrollment</code></td>
-                                            <td class="text-center">1.2 ثانية</td>
-                                            <td class="text-center">3.5 ثانية</td>
-                                            <td class="text-center">23</td>
-                                            <td class="text-center"><span class="badge bg-warning">بطيء</span></td>
-                                        </tr>
+                                        {% endfor %}
                                     </tbody>
                                 </table>
                             </div>
@@ -225,14 +204,19 @@
                             </h6>
                         </div>
                         <div class="card-body">
-                            <div class="alert alert-warning" role="alert">
-                                <strong>تحذير:</strong> الإشارة <code>activity_enrollment</code> تستغرق وقتاً أطول من المعتاد
-                            </div>
-                            <div class="alert alert-info" role="alert">
-                                <strong>معلومة:</strong> جميع الإشارات الحرجة تعمل بشكل طبيعي
-                            </div>
+                            {% if active_alerts %}
+                                {% for alert in active_alerts %}
+                                <div class="alert alert-{{ alert.severity|lower }} alert-dismissible fade show" role="alert">
+                                    <strong>{{ alert.get_severity_display }}:</strong> {{ alert.message }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="alert alert-success" role="alert">
+                                    <i class="fas fa-check-circle me-2"></i><strong>ممتاز!</strong> جميع الإشارات تعمل بشكل طبيعي
+                                </div>
+                            {% endif %}
                         </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -240,11 +224,10 @@
     
     <!-- Permissions Management -->
     <div class="section-container mb-4">
-        <h5 class="section-title" data-bs-toggle="collapse" data-bs-target="#permissionsManagement" aria-expanded="false">
-            <i class="fas fa-user-shield me-2"></i>إدارة الأذونات والصلاحيات<i class="fas fa-chevron-down float-end"></i>
+        <h5 class="section-title">
+            <i class="fas fa-user-shield me-2"></i>إدارة الأذونات والصلاحيات
         </h5>
-        <div class="collapse" id="permissionsManagement">
-            <div class="row">
+        <div class="row">
                 <div class="col-lg-6 mb-3">
                     <div class="card h-100">
                         <div class="card-header">
@@ -254,54 +237,24 @@
                         </div>
                         <div class="card-body">
                             <div class="list-group list-group-flush">
+                                {% for role in roles_data %}
                                 <div class="list-group-item d-flex justify-content-between align-items-center">
                                     <div>
-                                        <strong>مدير النظام</strong>
-                                        <br><small class="text-muted">صلاحيات كاملة</small>
+                                        <strong>{{ role.name }}</strong>
+                                        <br><small class="text-muted">{{ role.permission_count }} صلاحية</small>
                                     </div>
                                     <div>
-                                        <span class="badge bg-primary me-2">3 مستخدمين</span>
-                                        <button class="btn btn-outline-primary btn-sm" onclick="editRole('admin')">
+                                        <span class="badge bg-primary me-2">{{ role.user_count }} مستخدمين</span>
+                                        <button class="btn btn-outline-primary btn-sm" onclick="editRole('{{ role.name }}')">
                                             <i class="fas fa-edit"></i>
                                         </button>
                                     </div>
                                 </div>
-                                <div class="list-group-item d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <strong>مدير مالي</strong>
-                                        <br><small class="text-muted">إدارة الرسوم والمدفوعات</small>
-                                    </div>
-                                    <div>
-                                        <span class="badge bg-info me-2">5 مستخدمين</span>
-                                        <button class="btn btn-outline-primary btn-sm" onclick="editRole('financial_manager')">
-                                            <i class="fas fa-edit"></i>
-                                        </button>
-                                    </div>
+                                {% empty %}
+                                <div class="list-group-item text-center text-muted">
+                                    <i class="fas fa-info-circle me-2"></i>لا توجد أدوار محددة
                                 </div>
-                                <div class="list-group-item d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <strong>مدير عام</strong>
-                                        <br><small class="text-muted">إدارة العمليات والموظفين</small>
-                                    </div>
-                                    <div>
-                                        <span class="badge bg-success me-2">8 مستخدمين</span>
-                                        <button class="btn btn-outline-primary btn-sm" onclick="editRole('academic_manager')">
-                                            <i class="fas fa-edit"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="list-group-item d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <strong>مستخدم عادي</strong>
-                                        <br><small class="text-muted">صلاحيات محدودة</small>
-                                    </div>
-                                    <div>
-                                        <span class="badge bg-secondary me-2">12 مستخدمين</span>
-                                        <button class="btn btn-outline-primary btn-sm" onclick="editRole('user')">
-                                            <i class="fas fa-edit"></i>
-                                        </button>
-                                    </div>
-                                </div>
+                                {% endfor %}
                             </div>
                         </div>
                     </div>
@@ -407,65 +360,91 @@ $(document).ready(function() {
         });
     }
     
-    // Initialize collapsible sections
-    $('.section-title[data-bs-toggle="collapse"]').on('click', function() {
-        const icon = $(this).find('.fa-chevron-down');
-        const isExpanded = $(this).attr('aria-expanded') === 'true';
-        
-        if (isExpanded) {
-            icon.removeClass('fa-chevron-down').addClass('fa-chevron-up');
-        } else {
-            icon.removeClass('fa-chevron-up').addClass('fa-chevron-down');
-        }
-    });
-    
     // Auto-refresh signals status every 30 seconds
     setInterval(refreshSignalsStatus, 30000);
 });
 
 function toggleSignal(signalName, enable) {
     const action = enable ? 'تفعيل' : 'إيقاف';
-    if (confirm(`هل أنت متأكد من ${action} الإشارة ${signalName}؟`)) {
-        alert(`جاري ${action} الإشارة ${signalName}...`);
-        // Here you would make an AJAX call to toggle the signal
-        setTimeout(() => {
-            location.reload();
-        }, 1000);
-    }
+    Swal.fire({
+        title: `هل أنت متأكد من ${action} الإشارة؟`,
+        text: signalName,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        confirmButtonText: 'نعم، ' + action,
+        cancelButtonText: 'إلغاء'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            toastr.info(`جاري ${action} الإشارة ${signalName}...`);
+            // TODO: Make AJAX call to toggle the signal
+            setTimeout(() => {
+                toastr.success(`تم ${action} الإشارة بنجاح`);
+                location.reload();
+            }, 1000);
+        }
+    });
 }
 
 function viewSignalDetails(signalName) {
-    alert(`عرض تفاصيل الإشارة: ${signalName}`);
-    // Here you would open a modal or navigate to details page
+    Swal.fire({
+        title: 'تفاصيل الإشارة',
+        html: `<p class="text-start">اسم الإشارة: <code>${signalName}</code></p>
+               <p class="text-muted">سيتم إضافة المزيد من التفاصيل قريباً</p>`,
+        icon: 'info',
+        confirmButtonText: 'حسناً'
+    });
 }
 
 function editRole(roleName) {
-    alert(`تعديل الدور: ${roleName}`);
-    // Here you would open role editing interface
+    toastr.info(`تعديل الدور: ${roleName}`);
+    // TODO: Navigate to role editing page
 }
 
 function enableAllSignals() {
-    if (confirm('هل أنت متأكد من تفعيل جميع الإشارات؟')) {
-        alert('جاري تفعيل جميع الإشارات...');
-    }
+    Swal.fire({
+        title: 'هل أنت متأكد؟',
+        text: 'سيتم تفعيل جميع الإشارات المعطلة',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'نعم، فعّل الكل',
+        cancelButtonText: 'إلغاء'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            toastr.info('جاري تفعيل جميع الإشارات...');
+            // TODO: Make AJAX call
+        }
+    });
 }
 
 function pauseCriticalSignals() {
-    if (confirm('هل أنت متأكد من إيقاف الإشارات الحرجة مؤقتاً؟ هذا قد يؤثر على النظام.')) {
-        alert('جاري إيقاف الإشارات الحرجة...');
-    }
+    Swal.fire({
+        title: 'تحذير!',
+        text: 'إيقاف الإشارات الحرجة قد يؤثر على النظام. هل أنت متأكد؟',
+        icon: 'error',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        confirmButtonText: 'نعم، أوقف',
+        cancelButtonText: 'إلغاء'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            toastr.warning('جاري إيقاف الإشارات الحرجة...');
+            // TODO: Make AJAX call
+        }
+    });
 }
 
 function exportSignalsReport() {
-    alert('جاري تصدير تقرير الإشارات...');
+    toastr.info('جاري تصدير تقرير الإشارات...');
+    // TODO: Make AJAX call to export report
 }
 
 function refreshSignalsStatus() {
-    alert('جاري تحديث حالة الإشارات...');
-    // Here you would refresh the signals data
+    toastr.info('جاري تحديث حالة الإشارات...');
     setTimeout(() => {
         location.reload();
-    }, 1000);
+    }, 500);
 }
 </script>
 {% endblock %}

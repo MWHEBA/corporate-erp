@@ -43,7 +43,7 @@ class PaymentIntegrationService:
     DEFAULT_ACCOUNTS = {
         "cash": "10100",  # الخزنة
         "bank": "10200",  # البنك
-        "accounts_receivable": "10300",  # مدينو أولياء الأمور
+        "accounts_receivable": "10300",  # العملاء
         "accounts_payable": "20100",  # الموردون
         "sales_revenue": "40100",  # إيرادات الرسوم الدراسية
         "purchase_expense": "50100",  # تكلفة الخدمات المقدمة
@@ -212,23 +212,23 @@ class PaymentIntegrationService:
         if payment_type == "sale":
             # دفعة مبيعات: مدين الخزينة/البنك، دائن حساب العميل المحدد
 
-            # استخدام الحساب المالي لولي الأمر المحدد بدلاً من الحساب العام
+            # استخدام الحساب المالي لالعميل المحدد بدلاً من الحساب العام
             parent = payment.sale.parent
             if parent.financial_account:
                 parent_account = parent.financial_account
                 logger.info(
-                    f"استخدام حساب ولي الأمر المحدد: {parent_account.code} - {parent_account.name}"
+                    f"استخدام حساب العميل المحدد: {parent_account.code} - {parent_account.name}"
                 )
             else:
-                # إذا لم يكن لولي الأمر حساب محدد، رفض العملية
-                error_msg = f"❌ ولي الأمر {parent.name} ليس له حساب محاسبي. يجب إنشاء حساب محاسبي لولي الأمر أولاً."
+                # إذا لم يكن لالعميل حساب محدد، رفض العملية
+                error_msg = f"❌ العميل {parent.name} ليس له حساب محاسبي. يجب إنشاء حساب محاسبي لالعميل أولاً."
                 logger.error(error_msg)
                 raise PaymentIntegrationError(error_msg)
 
             # التحقق من أن الحساب يمكن إدراج قيود عليه
             if not parent_account.can_post_entries():
                 raise PaymentIntegrationError(
-                    f"لا يمكن إدراج قيود على حساب ولي الأمر {parent_account.code} - {parent_account.name}"
+                    f"لا يمكن إدراج قيود على حساب العميل {parent_account.code} - {parent_account.name}"
                 )
 
             # إنشاء القيد
@@ -236,7 +236,7 @@ class PaymentIntegrationService:
                 debit_account=cash_account_code,
                 credit_account=parent_account.code,
                 amount=payment.amount,
-                description=f"دفعة من ولي الأمر {payment.sale.parent.name} - فاتورة {payment.sale.number}",
+                description=f"دفعة من العميل {payment.sale.parent.name} - فاتورة {payment.sale.number}",
                 date=payment.payment_date,
                 reference=f"SALE-PAY-{payment.id}",
                 user=user or payment.created_by,

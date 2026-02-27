@@ -275,7 +275,7 @@ class Command(BaseCommand):
             # الحصول على الطالب من student_fee
             student = payment.student_fee.student
             
-            # التحقق من الحساب المحاسبي (حساب ولي الأمر)
+            # التحقق من الحساب المحاسبي (حساب العميل)
             if self.check_type in ['all', 'account']:
                 account_valid, account_error, account = FinancialValidationService.validate_chart_of_accounts(
                     entity=student,

@@ -18,6 +18,8 @@ from .models import (
     PriceHistory,
     BundleComponent,
     BundleComponentAlternative,
+    BatchVoucher,
+    BatchVoucherItem,
 )
 
 # Import governance security controls
@@ -886,3 +888,50 @@ class BundleComponentAlternativeAdmin(admin.ModelAdmin):
         return obj.bundle_component.component_product.name
     get_component_name.short_description = _('المكون الأساسي')
     get_component_name.admin_order_field = 'bundle_component__component_product__name'
+
+
+
+# ==================== Batch Voucher Admin ====================
+
+@admin.register(BatchVoucher)
+class BatchVoucherAdmin(admin.ModelAdmin):
+    """إدارة الأذون الجماعية"""
+    list_display = ['voucher_number', 'voucher_type', 'warehouse', 'total_items', 'total_value', 'status', 'created_at']
+    list_filter = ['voucher_type', 'status', 'warehouse', 'created_at']
+    search_fields = ['voucher_number', 'party_name', 'reference_document']
+    readonly_fields = ['voucher_number', 'total_items', 'total_quantity', 'total_value', 'created_by', 'updated_by', 'approved_by', 'approval_date', 'created_at', 'updated_at']
+    
+    fieldsets = (
+        ('معلومات أساسية', {
+            'fields': ('voucher_number', 'voucher_type', 'status', 'voucher_date')
+        }),
+        ('المخازن', {
+            'fields': ('warehouse', 'target_warehouse')
+        }),
+        ('تفاصيل إضافية', {
+            'fields': ('purpose_type', 'party_name', 'reference_document', 'notes')
+        }),
+        ('الإجماليات', {
+            'fields': ('total_items', 'total_quantity', 'total_value')
+        }),
+        ('معلومات التدقيق', {
+            'fields': ('created_by', 'created_at', 'updated_by', 'updated_at', 'approved_by', 'approval_date'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.created_by = request.user
+        else:
+            obj.updated_by = request.user
+        super().save_model(request, obj, form, change)
+
+
+@admin.register(BatchVoucherItem)
+class BatchVoucherItemAdmin(admin.ModelAdmin):
+    """إدارة بنود الأذون الجماعية"""
+    list_display = ['batch_voucher', 'product', 'quantity', 'unit_cost', 'total_cost']
+    list_filter = ['batch_voucher__voucher_type', 'batch_voucher__status']
+    search_fields = ['batch_voucher__voucher_number', 'product__name']
+    readonly_fields = ['total_cost', 'created_at']

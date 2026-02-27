@@ -16,10 +16,7 @@
     {% csrf_token %}
     
     <!-- Page Header -->
-    {% include "shared/page_header.html" with title=title subtitle=subtitle icon=icon %}
-    
-    <!-- Breadcrumb -->
-    {% include "shared/breadcrumb.html" with items=breadcrumb_items %}
+    {% include "shared/page_header.html" with title=title subtitle=subtitle icon=icon header_buttons=header_buttons %}
     
     <!-- Audit Overview Stats -->
     <div class="section-container">
@@ -30,7 +27,7 @@
                     <div class="stats-card-body">
                         <div class="stats-card-icon"><i class="fas fa-clipboard-list"></i></div>
                         <div class="stats-card-title">إجمالي السجلات</div>
-                        <div class="stats-card-value">{{ total_audit_records|smart_float|default:"1,245" }}</div>
+                        <div class="stats-card-value">{{ total_audit_records|smart_float }}</div>
                         <div class="stats-card-unit">سجل</div>
                     </div>
                 </div>
@@ -40,7 +37,7 @@
                     <div class="stats-card-body">
                         <div class="stats-card-icon"><i class="fas fa-clock"></i></div>
                         <div class="stats-card-title">سجلات اليوم</div>
-                        <div class="stats-card-value">{{ today_records|default:"87" }}</div>
+                        <div class="stats-card-value">{{ today_records|smart_float }}</div>
                         <div class="stats-card-unit">سجل</div>
                     </div>
                 </div>
@@ -50,7 +47,7 @@
                     <div class="stats-card-body">
                         <div class="stats-card-icon"><i class="fas fa-exclamation-triangle"></i></div>
                         <div class="stats-card-title">عناصر محجورة</div>
-                        <div class="stats-card-value">{{ quarantined_items|default:"3" }}</div>
+                        <div class="stats-card-value">{{ quarantined_items|smart_float }}</div>
                         <div class="stats-card-unit">عنصر</div>
                     </div>
                 </div>
@@ -60,7 +57,7 @@
                     <div class="stats-card-body">
                         <div class="stats-card-icon"><i class="fas fa-check-circle"></i></div>
                         <div class="stats-card-title">عمليات ناجحة</div>
-                        <div class="stats-card-value">98.5%</div>
+                        <div class="stats-card-value">{{ success_rate }}%</div>
                         <div class="stats-card-unit">نسبة</div>
                     </div>
                 </div>
@@ -75,21 +72,7 @@
         </h5>
         <div class="card">
             <div class="card-header">
-                <div class="row align-items-center">
-                    <div class="col">
-                        <h6 class="card-title mb-0">سجلات التدقيق الحديثة</h6>
-                    </div>
-                    <div class="col-auto">
-                        <div class="btn-group" role="group">
-                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="refreshAuditLogs()">
-                                <i class="fas fa-sync-alt me-1"></i>تحديث
-                            </button>
-                            <button type="button" class="btn btn-outline-success btn-sm" onclick="exportAuditLogs()">
-                                <i class="fas fa-download me-1"></i>تصدير
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <h6 class="card-title mb-0">سجلات التدقيق الحديثة</h6>
             </div>
             <div class="card-body">
                 <div class="table-responsive">
@@ -105,45 +88,136 @@
                             </tr>
                         </thead>
                         <tbody>
+                            {% for audit in recent_audits %}
                             <tr>
-                                <td class="text-center">2026-02-03 14:30:25</td>
-                                <td class="text-center">admin</td>
-                                <td class="text-center">إنشاء عميل</td>
-                                <td class="text-center">Customer</td>
-                                <td class="text-center"><span class="badge bg-success">نجح</span></td>
                                 <td class="text-center">
-                                    <button class="btn btn-outline-info btn-sm" onclick="viewAuditDetails(1)">
+                                    <div>{{ audit.timestamp|date:"Y-m-d" }}</div>
+                                    <small class="text-muted">{{ audit.timestamp|date:"h:i A" }}</small>
+                                </td>
+                                <td class="text-center">{{ audit.user.username|default:"نظام" }}</td>
+                                <td class="text-center">
+                                    {% if audit.operation == 'CREATE' %}إنشاء
+                                    {% elif audit.operation == 'UPDATE' %}تحديث
+                                    {% elif audit.operation == 'DELETE' %}حذف
+                                    {% elif audit.operation == 'VIEW' %}عرض
+                                    {% elif audit.operation == 'ADMIN_ACCESS' %}وصول إداري
+                                    {% elif audit.operation == 'AUTHORITY_VIOLATION' %}انتهاك صلاحية
+                                    {% elif audit.operation == 'EXCEPTION' %}خطأ برمجي
+                                    {% elif audit.operation == 'ENFORCE_IMMUTABILITY' %}فرض عدم التعديل
+                                    {% else %}{{ audit.operation }}
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if audit.model_name == 'Student' %}طالب
+                                    {% elif audit.model_name == 'Teacher' %}معلم
+                                    {% elif audit.model_name == 'Parent' %}ولي أمر
+                                    {% elif audit.model_name == 'Customer' %}عميل
+                                    {% elif audit.model_name == 'Invoice' %}فاتورة
+                                    {% elif audit.model_name == 'Payment' %}دفعة
+                                    {% elif audit.model_name == 'Fee' %}رسوم
+                                    {% elif audit.model_name == 'Expense' %}مصروف
+                                    {% elif audit.model_name == 'User' %}مستخدم
+                                    {% elif audit.model_name == 'System' %}النظام
+                                    {% elif audit.model_name == 'JournalEntry' %}قيد محاسبي
+                                    {% elif audit.model_name == 'ChartOfAccounts' %}دليل الحسابات
+                                    {% elif audit.model_name == 'AcademicYear' %}سنة دراسية
+                                    {% elif audit.model_name == 'Class' %}فصل
+                                    {% elif audit.model_name == 'Subject' %}مادة
+                                    {% elif audit.model_name == 'Grade' %}درجة
+                                    {% elif audit.model_name == 'Attendance' %}حضور
+                                    {% elif audit.model_name == 'Salary' %}راتب
+                                    {% elif audit.model_name == 'Product' %}منتج
+                                    {% elif audit.model_name == 'Stock' %}مخزون
+                                    {% elif audit.model_name == 'StockMovement' %}حركة مخزون
+                                    {% elif audit.model_name == 'Supplier' %}مورد
+                                    {% elif audit.model_name == 'Purchase' %}مشتريات
+                                    {% elif audit.model_name == 'Sale' %}مبيعات
+                                    {% elif audit.model_name == 'signal.supplier_account_creation' %}إنشاء حساب مورد
+                                    {% else %}{{ audit.model_name }}
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if audit.operation == 'AUTHORITY_VIOLATION' %}
+                                        <span class="badge bg-danger">انتهاك</span>
+                                    {% elif audit.operation == 'EXCEPTION' %}
+                                        <span class="badge bg-danger">خطأ</span>
+                                    {% else %}
+                                        <span class="badge bg-success">نجح</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    <button class="btn btn-outline-info btn-sm" onclick="viewAuditDetails({{ audit.id }})">
                                         <i class="fas fa-eye"></i>
                                     </button>
                                 </td>
                             </tr>
+                            {% empty %}
                             <tr>
-                                <td class="text-center">2026-02-03 14:25:10</td>
-                                <td class="text-center">teacher1</td>
-                                <td class="text-center">تحديث فاتورة</td>
-                                <td class="text-center">Invoice</td>
-                                <td class="text-center"><span class="badge bg-success">نجح</span></td>
-                                <td class="text-center">
-                                    <button class="btn btn-outline-info btn-sm" onclick="viewAuditDetails(2)">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                </td>
+                                <td colspan="6" class="text-center text-muted">لا توجد سجلات تدقيق</td>
                             </tr>
-                            <tr>
-                                <td class="text-center">2026-02-03 14:20:45</td>
-                                <td class="text-center">system</td>
-                                <td class="text-center">مزامنة مالية</td>
-                                <td class="text-center">Payment</td>
-                                <td class="text-center"><span class="badge bg-warning">تحذير</span></td>
-                                <td class="text-center">
-                                    <button class="btn btn-outline-info btn-sm" onclick="viewAuditDetails(3)">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                </td>
-                            </tr>
+                            {% endfor %}
                         </tbody>
                     </table>
                 </div>
+                
+                <!-- Pagination -->
+                {% if recent_audits.has_other_pages %}
+                <nav aria-label="Audit logs pagination" class="mt-3">
+                    <ul class="pagination justify-content-center">
+                        {% if recent_audits.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page=1" aria-label="First">
+                                    <span aria-hidden="true">&laquo;&laquo;</span>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ recent_audits.previous_page_number }}" aria-label="Previous">
+                                    <span aria-hidden="true">&laquo;</span>
+                                </a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">&laquo;&laquo;</span>
+                            </li>
+                            <li class="page-item disabled">
+                                <span class="page-link">&laquo;</span>
+                            </li>
+                        {% endif %}
+                        
+                        {% for num in recent_audits.paginator.page_range %}
+                            {% if recent_audits.number == num %}
+                                <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                            {% elif num > recent_audits.number|add:'-3' and num < recent_audits.number|add:'3' %}
+                                <li class="page-item"><a class="page-link" href="?page={{ num }}">{{ num }}</a></li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if recent_audits.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ recent_audits.next_page_number }}" aria-label="Next">
+                                    <span aria-hidden="true">&raquo;</span>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ recent_audits.paginator.num_pages }}" aria-label="Last">
+                                    <span aria-hidden="true">&raquo;&raquo;</span>
+                                </a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">&raquo;</span>
+                            </li>
+                            <li class="page-item disabled">
+                                <span class="page-link">&raquo;&raquo;</span>
+                            </li>
+                        {% endif %}
+                    </ul>
+                    <div class="text-center text-muted small">
+                        صفحة {{ recent_audits.number }} من {{ recent_audits.paginator.num_pages }} 
+                        (إجمالي {{ recent_audits.paginator.count }} سجل)
+                    </div>
+                </nav>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -175,20 +249,46 @@
                             </tr>
                         </thead>
                         <tbody>
+                            {% for record in quarantine_records %}
                             <tr>
-                                <td class="text-center">2026-02-03 13:45:00</td>
-                                <td class="text-center">دفعة مالية</td>
-                                <td class="text-center">مبلغ غير عادي</td>
-                                <td class="text-center"><span class="badge bg-warning">معلق</span></td>
+                                <td class="text-center">{{ record.quarantined_at|date:"Y-m-d H:i:s" }}</td>
+                                <td class="text-center">{{ record.model_name }}</td>
                                 <td class="text-center">
-                                    <button class="btn btn-outline-success btn-sm" onclick="approveQuarantine(1)">
+                                    {% if record.corruption_type == 'ORPHANED_ENTRY' %}قيد يتيم
+                                    {% elif record.corruption_type == 'NEGATIVE_STOCK' %}مخزون سالب
+                                    {% elif record.corruption_type == 'UNBALANCED_ENTRY' %}قيد غير متوازن
+                                    {% elif record.corruption_type == 'MULTIPLE_ACTIVE_YEAR' %}سنوات متعددة نشطة
+                                    {% elif record.corruption_type == 'INVALID_SOURCE_LINK' %}ربط مصدر غير صالح
+                                    {% elif record.corruption_type == 'AUTHORITY_VIOLATION' %}انتهاك صلاحية
+                                    {% elif record.corruption_type == 'SUSPICIOUS_PATTERN' %}نمط مشبوه
+                                    {% else %}{{ record.corruption_type }}
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if record.status == 'QUARANTINED' %}
+                                        <span class="badge bg-warning">محجور</span>
+                                    {% elif record.status == 'UNDER_REVIEW' %}
+                                        <span class="badge bg-info">قيد المراجعة</span>
+                                    {% elif record.status == 'RESOLVED' %}
+                                        <span class="badge bg-success">تم الحل</span>
+                                    {% elif record.status == 'PERMANENT' %}
+                                        <span class="badge bg-danger">حجر دائم</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    <button class="btn btn-outline-success btn-sm" onclick="approveQuarantine({{ record.id }})">
                                         <i class="fas fa-check me-1"></i>موافقة
                                     </button>
-                                    <button class="btn btn-outline-danger btn-sm" onclick="rejectQuarantine(1)">
+                                    <button class="btn btn-outline-danger btn-sm" onclick="rejectQuarantine({{ record.id }})">
                                         <i class="fas fa-times me-1"></i>رفض
                                     </button>
                                 </td>
                             </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">لا توجد عناصر محجورة</td>
+                            </tr>
+                            {% endfor %}
                         </tbody>
                     </table>
                 </div>
@@ -231,25 +331,9 @@
                         </thead>
                         <tbody>
                             <tr>
-                                <td class="text-center">2026-02-03 14:35:12</td>
-                                <td class="text-center"><span class="badge bg-success">INFO</span></td>
-                                <td class="text-center">تم تسجيل دخول المستخدم admin</td>
-                                <td class="text-center">authentication</td>
-                                <td class="text-center">
-                                    <button class="btn btn-outline-info btn-sm" onclick="viewLogDetails(1)">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td class="text-center">2026-02-03 14:30:45</td>
-                                <td class="text-center"><span class="badge bg-warning">WARNING</span></td>
-                                <td class="text-center">محاولة وصول غير مصرح بها</td>
-                                <td class="text-center">security</td>
-                                <td class="text-center">
-                                    <button class="btn btn-outline-info btn-sm" onclick="viewLogDetails(2)">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
+                                <td colspan="5" class="text-center text-muted">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    سجلات النظام متاحة في ملفات الـ logs على السيرفر
                                 </td>
                             </tr>
                         </tbody>
@@ -280,22 +364,23 @@
 <script src="{% static 'js/global-table.js' %}"></script>
 <script>
 $(document).ready(function() {
-    // Initialize DataTables
+    // Initialize DataTables only for tables that need it (not audit logs - it has server-side pagination)
     if (typeof GlobalTableManager !== 'undefined') {
-        GlobalTableManager.initializeTable('auditLogsTable', {
-            order: [[0, 'desc']],
-            columnDefs: [{ targets: -1, orderable: false }]
-        });
+        // Quarantine table
+        if ($('#quarantineTable tbody tr').length > 0 && !$('#quarantineTable tbody tr td[colspan]').length) {
+            GlobalTableManager.initializeTable('quarantineTable', {
+                order: [[0, 'desc']],
+                columnDefs: [{ targets: -1, orderable: false }]
+            });
+        }
         
-        GlobalTableManager.initializeTable('quarantineTable', {
-            order: [[0, 'desc']],
-            columnDefs: [{ targets: -1, orderable: false }]
-        });
-        
-        GlobalTableManager.initializeTable('systemLogsTable', {
-            order: [[0, 'desc']],
-            columnDefs: [{ targets: -1, orderable: false }]
-        });
+        // System logs table
+        if ($('#systemLogsTable tbody tr').length > 0 && !$('#systemLogsTable tbody tr td[colspan]').length) {
+            GlobalTableManager.initializeTable('systemLogsTable', {
+                order: [[0, 'desc']],
+                columnDefs: [{ targets: -1, orderable: false }]
+            });
+        }
     }
     
     // Log level filter
@@ -310,58 +395,119 @@ function refreshAuditLogs() {
     location.reload();
 }
 
-function exportAuditLogs() {
-    // Export audit logs
-    alert('تصدير سجلات التدقيق...');
+function deleteOldAuditLogs() {
+    Swal.fire({
+        title: 'هل أنت متأكد؟',
+        text: "سيتم حذف جميع السجلات الأقدم من شهر. لن تتمكن من التراجع عن هذا الإجراء!",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'نعم، احذف السجلات القديمة',
+        cancelButtonText: 'إلغاء'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            // Show loading
+            Swal.fire({
+                title: 'جاري الحذف...',
+                text: 'يرجى الانتظار',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+            
+            // Send delete request
+            $.ajax({
+                url: '{% url "governance:delete_old_audit_logs" %}',
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                success: function(response) {
+                    if (response.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'تم الحذف بنجاح!',
+                            text: response.message,
+                            confirmButtonText: 'حسناً'
+                        }).then(() => {
+                            location.reload();
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'خطأ!',
+                            text: response.message
+                        });
+                    }
+                },
+                error: function(xhr) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'خطأ!',
+                        text: 'حدث خطأ أثناء حذف السجلات'
+                    });
+                }
+            });
+        }
+    });
 }
 
 function viewAuditDetails(id) {
-    // Load audit details
-    $('#auditDetailsContent').html(`
-        <div class="row">
-            <div class="col-md-6">
-                <strong>معرف السجل:</strong> ${id}<br>
-                <strong>المستخدم:</strong> admin<br>
-                <strong>العملية:</strong> إنشاء عميل<br>
-                <strong>الوقت:</strong> 2026-02-03 14:30:25
-            </div>
-            <div class="col-md-6">
-                <strong>النموذج:</strong> Customer<br>
-                <strong>معرف الكائن:</strong> 123<br>
-                <strong>الحالة:</strong> نجح<br>
-                <strong>عنوان IP:</strong> 192.168.1.100
-            </div>
-        </div>
-        <hr>
-        <h6>التغييرات:</h6>
-        <pre class="bg-light p-3 rounded">
-{
-    "name": "أحمد محمد علي",
-    "national_id": "12345678901234",
-    "parent_id": 456
-}
-        </pre>
-    `);
-    $('#auditDetailsModal').modal('show');
+    // Load audit details via AJAX
+    $.ajax({
+        url: `/governance/audit/${id}/details/`,
+        method: 'GET',
+        success: function(data) {
+            $('#auditDetailsContent').html(data);
+            $('#auditDetailsModal').modal('show');
+        },
+        error: function() {
+            toastr.error('فشل تحميل تفاصيل السجل');
+        }
+    });
 }
 
 function viewLogDetails(id) {
-    // View system log details
-    alert(`عرض تفاصيل السجل ${id}`);
+    toastr.info('عرض تفاصيل السجل...');
+    // TODO: Implement log details view
 }
 
 function approveQuarantine(id) {
-    if (confirm('هل أنت متأكد من الموافقة على هذا العنصر؟')) {
-        // Approve quarantined item
-        alert(`تم الموافقة على العنصر ${id}`);
-    }
+    Swal.fire({
+        title: 'هل أنت متأكد من الموافقة؟',
+        text: "سيتم إلغاء الحجر عن هذا العنصر",
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#28a745',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'نعم، وافق',
+        cancelButtonText: 'إلغاء'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            toastr.info('جاري معالجة الموافقة...');
+            // TODO: Implement actual approval logic
+        }
+    });
 }
 
 function rejectQuarantine(id) {
-    if (confirm('هل أنت متأكد من رفض هذا العنصر؟')) {
-        // Reject quarantined item
-        alert(`تم رفض العنصر ${id}`);
-    }
+    Swal.fire({
+        title: 'هل أنت متأكد من الرفض؟',
+        text: "سيتم رفض هذا العنصر نهائياً",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'نعم، ارفض',
+        cancelButtonText: 'إلغاء'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            toastr.info('جاري معالجة الرفض...');
+            // TODO: Implement actual rejection logic
+        }
+    });
 }
 </script>
 {% endblock %}

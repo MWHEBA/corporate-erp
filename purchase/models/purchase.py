@@ -24,7 +24,6 @@ class Purchase(models.Model):
     
     SERVICE_TYPES = (
         ("course", _("كورس تعليمي")),
-        ("transportation", _("مواصلات")),
         ("consultation", _("استشارة")),
         ("maintenance", _("صيانة")),
         ("other", _("أخرى")),
@@ -154,8 +153,7 @@ class Purchase(models.Model):
         if not self.supplier:
             return False
         return (
-            self.supplier.is_service_provider() or 
-            self.supplier.is_driver() or
+            self.supplier.is_service_provider() or
             self.is_service
         )
     
@@ -180,7 +178,6 @@ class Purchase(models.Model):
         if self.is_service_invoice:
             icons = {
                 'course': 'fas fa-graduation-cap',
-                'transportation': 'fas fa-bus',
                 'consultation': 'fas fa-user-tie',
                 'maintenance': 'fas fa-tools',
                 'other': 'fas fa-concierge-bell',
@@ -196,13 +193,7 @@ class Purchase(models.Model):
         if not self.supplier:
             return
         
-        if self.supplier.is_driver():
-            self.is_service = True
-            self.service_type = 'transportation'
-            if not self.service_metadata:
-                self.service_metadata = {'auto_set': True, 'supplier_type': 'driver'}
-        
-        elif self.supplier.is_service_provider():
+        if self.supplier.is_service_provider():
             self.is_service = True
             if not self.service_type:
                 self.service_type = 'other'
@@ -432,3 +423,30 @@ class Purchase(models.Model):
         ترجع URL لعرض تفاصيل فاتورة المشتريات
         """
         return reverse("purchase:purchase_detail", kwargs={"pk": self.pk})
+    
+    def get_payment_method_display(self):
+        """
+        عرض طريقة الدفع بشكل مفهوم
+        """
+        # التعامل مع القيم القديمة
+        if self.payment_method == 'cash':
+            return 'نقداً'
+        elif self.payment_method == 'credit':
+            return 'آجل'
+        elif self.payment_method == 'bank_transfer':
+            return 'تحويل بنكي'
+
+        # محاولة الحصول على اسم الحساب من الكود
+        if self.payment_method:
+            try:
+                from financial.models import ChartOfAccounts
+                account = ChartOfAccounts.objects.filter(
+                    code=self.payment_method, 
+                    is_active=True
+                ).first()
+                if account:
+                    return f"{account.name} ({account.code})"
+            except Exception:
+                pass
+
+        return self.payment_method or 'غير محدد'

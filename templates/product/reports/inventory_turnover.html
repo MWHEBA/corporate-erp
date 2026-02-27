@@ -157,9 +157,9 @@
             <div class="stats-card-icon">
               <i class="fas fa-arrow-up"></i>
             </div>
-            <div class="stats-card-title">{% trans "دوران عالي" %}</div>
+            <div class="stats-card-title">{% trans "دوران سريع" %}</div>
             <div class="stats-card-value">{{ summary.high_turnover_count|default:"0" }}</div>
-            <div class="stats-card-unit">{% trans "منتج" %}</div>
+            <div class="stats-card-unit">{% trans "منتج (6+ مرات/سنة)" %}</div>
           </div>
         </div>
       </div>
@@ -172,7 +172,7 @@
             </div>
             <div class="stats-card-title">{% trans "دوران متوسط" %}</div>
             <div class="stats-card-value">{{ summary.medium_turnover_count|default:"0" }}</div>
-            <div class="stats-card-unit">{% trans "منتج" %}</div>
+            <div class="stats-card-unit">{% trans "منتج (3-6 مرات/سنة)" %}</div>
           </div>
         </div>
       </div>
@@ -183,12 +183,26 @@
             <div class="stats-card-icon">
               <i class="fas fa-arrow-down"></i>
             </div>
-            <div class="stats-card-title">{% trans "دوران منخفض" %}</div>
-            <div class="stats-card-value">{{ summary.low_turnover_count|default:"0" }}</div>
-            <div class="stats-card-unit">{% trans "منتج" %}</div>
+            <div class="stats-card-title">{% trans "دوران بطيء/راكد" %}</div>
+            <div class="stats-card-value">{{ summary.low_turnover_count|default:"0"|add:summary.zero_turnover_count|default:"0" }}</div>
+            <div class="stats-card-unit">{% trans "منتج (<3 مرات/سنة)" %}</div>
           </div>
         </div>
       </div>
+    </div>
+    
+    <!-- شرح معدل الدوران -->
+    <div class="alert alert-info">
+      <i class="fas fa-info-circle me-2"></i>
+      <strong>معدل الدوران:</strong> عدد المرات اللي بيتباع فيها المنتج خلال الفترة المحددة.
+      <br>
+      <strong>الحساب:</strong> تكلفة البضاعة المباعة ÷ متوسط قيمة المخزون
+      <br>
+      <strong>التقييم:</strong> 
+      <span class="turnover-indicator turnover-high">سريع (6+)</span> = ممتاز | 
+      <span class="turnover-indicator turnover-medium">متوسط (3-6)</span> = جيد | 
+      <span class="turnover-indicator turnover-low">بطيء (1-3)</span> = يحتاج مراجعة | 
+      <span class="turnover-indicator turnover-zero">راكد (0)</span> = لا توجد مبيعات
     </div>
   </div>
 
@@ -221,13 +235,13 @@
                         <tr>
                             <th class="text-center">كود المنتج</th>
                             <th class="text-center">اسم المنتج</th>
+                            <th class="text-center">تكلفة الوحدة</th>
                             <th class="text-center">الرصيد الحالي</th>
                             <th class="text-center">متوسط المخزون</th>
+                            <th class="text-center">الكمية المباعة</th>
                             <th class="text-center">تكلفة البضاعة المباعة</th>
                             <th class="text-center">معدل الدوران</th>
-                            <th class="text-center">أيام التخزين</th>
                             <th class="text-center">التقييم</th>
-                            <th class="text-center">الإجراءات</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -240,10 +254,19 @@
                                     <br><small class="text-muted">{{ item.product.category.name }}</small>
                                 {% endif %}
                             </td>
-                            <td class="text-end text-center">{{ item.current_stock|smart_float }}</td>
-                            <td class="text-end text-center">{{ item.average_inventory|smart_float }}</td>
-                            <td class="text-end text-center">{{ item.cogs|smart_float }}</td>
-                            <td class="text-end text-center">
+                            <td class="text-center">
+                                <span class="badge bg-secondary">{{ item.product_cost|smart_float }} ج.م</span>
+                            </td>
+                            <td class="text-center">{{ item.current_stock|smart_float }}</td>
+                            <td class="text-center">{{ item.average_inventory|smart_float }}</td>
+                            <td class="text-center">
+                                <span class="badge bg-info">{{ item.quantity_sold|smart_float }}</span>
+                            </td>
+                            <td class="text-center">
+                                <strong>{{ item.cogs|smart_float }} ج.م</strong>
+                                <br><small class="text-muted">إيراد: {{ item.revenue|smart_float }} ج.م</small>
+                            </td>
+                            <td class="text-center">
                                 <strong>{{ item.turnover_ratio|smart_float }}</strong>
                                 <div class="progress progress-thin mt-1">
                                     <div class="progress-bar 
@@ -254,30 +277,16 @@
                                     </div>
                                 </div>
                             </td>
-                            <td class="text-end text-center">{{ item.days_in_inventory|smart_float }} يوم</td>
                             <td class="text-center">
                                 {% if item.turnover_ratio >= 6 %}
-                                    <span class="turnover-indicator turnover-high">عالي</span>
+                                    <span class="turnover-indicator turnover-high">سريع</span>
                                 {% elif item.turnover_ratio >= 3 %}
                                     <span class="turnover-indicator turnover-medium">متوسط</span>
                                 {% elif item.turnover_ratio > 0 %}
-                                    <span class="turnover-indicator turnover-low">منخفض</span>
+                                    <span class="turnover-indicator turnover-low">بطيء</span>
                                 {% else %}
                                     <span class="turnover-indicator turnover-zero">راكد</span>
                                 {% endif %}
-                            </td>
-                            <td class="text-center">
-                                <div class="btn-group btn-group-sm">
-                                    <a href="{% url 'product:product_detail' item.product.id %}" 
-                                       class="btn btn-outline-primary" title="عرض التفاصيل">
-                                        <i class="fas fa-eye"></i>
-                                    </a>
-                                    {% if item.turnover_ratio < 1 %}
-                                    <button class="btn btn-outline-warning" title="يحتاج مراجعة">
-                                        <i class="fas fa-exclamation-triangle"></i>
-                                    </button>
-                                    {% endif %}
-                                </div>
                             </td>
                         </tr>
                         {% empty %}
@@ -331,11 +340,10 @@ $(document).ready(function() {
   // تهيئة جدول دوران المخزون
   initGlobalTable('dataTable', {
     ordering: true,
-    order: [[5, 'desc']], // ترتيب حسب معدل الدوران
+    order: [[7, 'desc']], // ترتيب حسب معدل الدوران (العمود الثامن)
     columnDefs: [
-      { targets: 8, orderable: false, width: '140px' }, // عمود الإجراءات
-      { targets: [2, 3, 4, 5, 6], className: 'text-end' }, // الأعمدة الرقمية
-      { targets: [0, 1, 7, 8], className: 'text-center' }
+      { targets: [2, 3, 4, 5, 6, 7], className: 'text-end' }, // الأعمدة الرقمية
+      { targets: [0, 1, 8], className: 'text-center' }
     ],
     autoWidth: true,
     responsive: true

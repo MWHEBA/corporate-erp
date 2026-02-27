@@ -60,23 +60,28 @@ class RateLimitingMiddleware(MiddlewareMixin):
         # API authentication endpoints - strict limits
         if '/api/auth/' in path or '/api/token/' in path:
             return {'requests': 5, 'window': 300}  # 5 requests per 5 minutes
-        
+
         # Biometric API - moderate limits
         elif '/api/biometric/' in path or 'biometric_bridge_sync' in path:
             return {'requests': 10, 'window': 60}  # 10 requests per minute
-        
+
+        # Notifications endpoint - relaxed limits (polling every 2 minutes)
+        elif '/api/notifications/count/' in path:
+            return {'requests': 60, 'window': 60}  # 60 requests per minute (very relaxed)
+
         # General API endpoints
         elif path.startswith('/api/'):
             if method == 'POST':
                 return {'requests': 30, 'window': 60}  # 30 POST requests per minute
             else:
                 return {'requests': 100, 'window': 60}  # 100 GET requests per minute
-        
+
         # Login attempts
         elif '/login/' in path and method == 'POST':
             return {'requests': 5, 'window': 300}  # 5 login attempts per 5 minutes
-        
+
         return None
+
     
     def is_rate_limited(self, client_ip, path, rate_limit):
         """Check if client has exceeded rate limit"""

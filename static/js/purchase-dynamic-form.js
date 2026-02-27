@@ -143,7 +143,7 @@
         // Build options HTML
         let optionsHtml = '<option value="">اختر...</option>';
         products.forEach(function(product) {
-            const price = product.cost || product.selling_price || 0;
+            const price = product.cost_price || product.selling_price || 0;
             optionsHtml += `<option value="${product.id}" data-price="${price}">${product.name} (${product.sku})</option>`;
         });
 

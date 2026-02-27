@@ -1,6 +1,6 @@
 """
 خدمة إنشاء الحسابات المحاسبية الموحدة
-تتعامل مع إنشاء حسابات أولياء الأمور والموردين بطريقة موحدة
+تتعامل مع إنشاء حسابات العملاء والموردين بطريقة موحدة
 """
 
 from django.db import transaction
@@ -19,10 +19,10 @@ class UnifiedAccountService:
     @classmethod
     def create_parent_account(cls, parent, user: Optional[User] = None) -> Optional[ChartOfAccounts]:
         """
-        إنشاء حساب محاسبي لولي الأمر
+        إنشاء حساب محاسبي لالعميل
         
         Args:
-            parent: نموذج ولي الأمر
+            parent: نموذج العميل
             user: المستخدم الذي ينشئ الحساب
             
         Returns:
@@ -32,13 +32,13 @@ class UnifiedAccountService:
             with transaction.atomic():
                 # التحقق من وجود حساب بالفعل
                 if hasattr(parent, 'financial_account') and parent.financial_account:
-                    logger.info(f"ولي الأمر {parent.name} لديه حساب محاسبي بالفعل: {parent.financial_account.code}")
+                    logger.info(f"العميل {parent.name} لديه حساب محاسبي بالفعل: {parent.financial_account.code}")
                     return parent.financial_account
                 
-                # البحث عن الحساب الأساسي لأولياء الأمور أو إنشاؤه
+                # البحث عن الحساب الأساسي لالعملاء أو إنشاؤه
                 parents_account = cls._get_or_create_parents_main_account(user)
                 if not parents_account:
-                    logger.error("فشل في الحصول على الحساب الأساسي لأولياء الأمور")
+                    logger.error("فشل في الحصول على الحساب الأساسي لالعملاء")
                     return None
                 
                 # إنشاء كود فريد للحساب الجديد
@@ -56,19 +56,19 @@ class UnifiedAccountService:
                     account_type=parents_account.account_type,
                     is_active=True,
                     is_leaf=True,
-                    description=f"حساب محاسبي لولي الأمر: {parent.name}",
+                    description=f"حساب محاسبي لالعميل: {parent.name}",
                     created_by=user
                 )
                 
-                # ربط ولي الأمر بالحساب الجديد
+                # ربط العميل بالحساب الجديد
                 parent.financial_account = new_account
                 parent.save(update_fields=['financial_account'])
                 
-                logger.info(f"✅ تم إنشاء حساب محاسبي لولي الأمر: {new_account.code} - {new_account.name}")
+                logger.info(f"✅ تم إنشاء حساب محاسبي لالعميل: {new_account.code} - {new_account.name}")
                 return new_account
                 
         except Exception as e:
-            logger.error(f"❌ فشل في إنشاء حساب محاسبي لولي الأمر {parent.name}: {e}")
+            logger.error(f"❌ فشل في إنشاء حساب محاسبي لالعميل {parent.name}: {e}")
             import traceback
             logger.error(traceback.format_exc())
             return None
@@ -132,7 +132,7 @@ class UnifiedAccountService:
     
     @classmethod
     def _get_or_create_parents_main_account(cls, user: Optional[User] = None) -> Optional[ChartOfAccounts]:
-        """الحصول على الحساب الأساسي لأولياء الأمور أو إنشاؤه"""
+        """الحصول على الحساب الأساسي لالعملاء أو إنشاؤه"""
         try:
             # البحث عن الحساب الموجود
             parents_account = ChartOfAccounts.objects.filter(code="10300").first()
@@ -161,19 +161,19 @@ class UnifiedAccountService:
                 # إنشاء الحساب الأساسي
                 parents_account = ChartOfAccounts.objects.create(
                     code="10300",
-                    name="أولياء الأمور",
+                    name="العملاء",
                     account_type=account_type,
                     is_active=True,
                     is_leaf=False,  # حساب أساسي يحتوي على حسابات فرعية
-                    description="الحساب الأساسي لجميع أولياء الأمور",
+                    description="الحساب الأساسي لجميع العملاء",
                     created_by=user
                 )
-                logger.info("✅ تم إنشاء الحساب الأساسي لأولياء الأمور (10300)")
+                logger.info("✅ تم إنشاء الحساب الأساسي لالعملاء (10300)")
             
             return parents_account
             
         except Exception as e:
-            logger.error(f"❌ فشل في الحصول على الحساب الأساسي لأولياء الأمور: {e}")
+            logger.error(f"❌ فشل في الحصول على الحساب الأساسي لالعملاء: {e}")
             return None
     
     @classmethod
@@ -224,7 +224,7 @@ class UnifiedAccountService:
     
     @classmethod
     def _generate_parent_account_code(cls, parents_account: ChartOfAccounts) -> Optional[str]:
-        """توليد كود فريد لحساب ولي الأمر"""
+        """توليد كود فريد لحساب العميل"""
         try:
             # البحث عن آخر حساب فرعي
             last_account = ChartOfAccounts.objects.filter(
@@ -254,7 +254,7 @@ class UnifiedAccountService:
             return new_code
             
         except Exception as e:
-            logger.error(f"❌ فشل في توليد كود حساب ولي الأمر: {e}")
+            logger.error(f"❌ فشل في توليد كود حساب العميل: {e}")
             return None
     
     @classmethod

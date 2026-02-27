@@ -63,7 +63,7 @@ function initializeStudentSelect2(selector, ajaxUrl) {
             }
             
             if (data.parent_name) {
-                html += '<small class="text-muted ms-2">ولي الأمر: ' + data.parent_name + '</small>';
+                html += '<small class="text-muted ms-2">العميل: ' + data.parent_name + '</small>';
             }
             
             html += '</div></div>';

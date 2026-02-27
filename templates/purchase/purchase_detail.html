@@ -1,4 +1,4 @@
-{% extends 'base.html' %}
+﻿{% extends 'base.html' %}
 {% load static %}
 {% load i18n %}
 {% load utils_extras %}
@@ -660,7 +660,6 @@
                                         <th class="text-center">{% trans "تاريخ ووقت الدفع" %}</th>
                                         <th class="text-center">{% trans "المبلغ" %}</th>
                                         <th class="text-center">{% trans "طريقة الدفع" %}</th>
-                                        <th class="text-center">{% trans "الحساب المالي" %}</th>
                                         <th class="text-center">{% trans "القيد المحاسبي" %}</th>
                                         <th class="text-center">{% trans "ملاحظات" %}</th>
                                         <th class="text-center">{% trans "إجراءات" %}</th>
@@ -694,17 +693,7 @@
                                             <small class="text-muted">{{ payment.created_at|date:"h:i A" }}</small>
                                         </td>
                                         <td class="fw-bold text-center">{{ payment.amount|smart_float }} {% currency_symbol %}</td>
-                                        <td class="text-center">
-                                            {% if payment.payment_method == 'cash' %}
-                                            <span class="badge bg-success">{% trans "نقدي" %}</span>
-                                            {% elif payment.payment_method == 'bank_transfer' %}
-                                            <span class="badge bg-info">{% trans "تحويل بنكي" %}</span>
-                                            {% else %}
-                                            <span class="badge bg-secondary">{{ payment.payment_method }}</span>
-                                            {% endif %}
-                                        </td>
-                                        <td class="text-center">
-                                            {% if payment.financial_account %}
+                                        <td class="text-center">{% if payment.financial_account %}
                                             <span class="text-primary">
                                                 <i class="fas fa-wallet me-1"></i>{{ payment.financial_account.name }}
                                             </span>
@@ -971,9 +960,16 @@
                 button.prop('disabled', false);
                 button.html('<i class="fas fa-check me-1"></i>ترحيل');
                 
+                // محاولة الحصول على رسالة الخطأ من الـ response
+                let errorMessage = 'حدث خطأ أثناء الترحيل. يرجى المحاولة مرة أخرى.';
+                if (xhr.responseJSON && xhr.responseJSON.error) {
+                    errorMessage = xhr.responseJSON.error;
+                }
+                
                 // عرض رسالة خطأ
-                alert('حدث خطأ أثناء الترحيل. يرجى المحاولة مرة أخرى.');
+                alert(errorMessage);
                 console.error('Error:', error);
+                console.error('Response:', xhr.responseText);
             }
         });
     });

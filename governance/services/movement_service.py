@@ -290,6 +290,9 @@ class MovementService:
                 except Product.DoesNotExist:
                     unit_cost = Decimal('0')
             
+            # Determine document_type from source_reference
+            document_type = self._determine_document_type(source_reference, movement_type)
+            
             stock_movement = StockMovement(
                 product_id=product_id,
                 warehouse=default_warehouse,
@@ -301,6 +304,7 @@ class MovementService:
                 timestamp=movement_date,
                 reference_number=source_reference,
                 document_number=document_number,
+                document_type=document_type,
                 notes=notes,
                 idempotency_key=idempotency_key,
                 created_by_service='MovementService',
@@ -309,6 +313,9 @@ class MovementService:
             
             # Mark as service approved to avoid development warnings
             stock_movement.mark_as_service_approved()
+            # Set flag to skip automatic journal entry creation in save()
+            # because we'll create it explicitly below via _create_accounting_entry()
+            stock_movement._skip_journal_entry = True
             stock_movement.save()
             
             # Update Stock record
@@ -629,6 +636,54 @@ class MovementService:
         """
         current_stock = self.get_current_stock(product_id)
         return current_stock >= quantity
+    
+    def _determine_document_type(self, source_reference: str, movement_type: str) -> str:
+        """
+        Determine document_type from source_reference pattern.
+        
+        Args:
+            source_reference: Reference string (e.g., 'SALE_ITEM_32', 'PUR-INV-001')
+            movement_type: Movement type ('in', 'out', etc.)
+            
+        Returns:
+            str: Document type ('sale', 'purchase', 'sale_return', 'purchase_return', 'transfer', 'adjustment', 'other')
+        """
+        if not source_reference:
+            return 'other'
+        
+        ref_upper = source_reference.upper()
+        
+        # Check for sale operations
+        if 'SALE_ITEM_' in ref_upper or 'SALE_' in ref_upper or 'SAL-' in ref_upper:
+            if 'RETURN' in ref_upper or 'CANCEL' in ref_upper:
+                return 'sale_return'
+            return 'sale'
+        
+        # Check for purchase operations
+        if 'PURCHASE_ITEM_' in ref_upper or 'PURCHASE_' in ref_upper or 'PUR-' in ref_upper:
+            if 'RETURN' in ref_upper or 'CANCEL' in ref_upper:
+                return 'purchase_return'
+            return 'purchase'
+        
+        # Check for transfer operations
+        if 'TRANSFER' in ref_upper:
+            return 'transfer'
+        
+        # Check for adjustment/inventory operations
+        if 'ADJUSTMENT' in ref_upper or 'INVENTORY' in ref_upper or 'STOCK_TAKE' in ref_upper:
+            return 'adjustment'
+        
+        # Check for opening balance
+        if 'OPENING' in ref_upper or 'INITIAL' in ref_upper:
+            return 'opening'
+        
+        # Default based on movement_type
+        if movement_type == 'adjustment':
+            return 'adjustment'
+        elif movement_type == 'transfer':
+            return 'transfer'
+        
+        return 'other'
     
     def get_movement_statistics(self) -> Dict[str, Any]:
         """

@@ -18,6 +18,17 @@ from .bundle_analytics_views import (
     bundle_analytics_report_api
 )
 
+# Import batch voucher views
+from .batch_voucher_views import (
+    BatchVoucherListView,
+    BatchVoucherCreateView,
+    BatchVoucherUpdateView,
+    BatchVoucherDetailView,
+    BatchVoucherApproveView,
+    BatchVoucherDeleteView,
+    GetProductCostView,
+)
+
 __all__ = [
     # Main views (imported with *)
     # Bundle analytics views
@@ -27,5 +38,13 @@ __all__ = [
     'bundle_analytics_report_api',
     # Bundle view modules
     'bundle_analytics_views',
-    'bundle_monitoring_views'
+    'bundle_monitoring_views',
+    # Batch voucher views
+    'BatchVoucherListView',
+    'BatchVoucherCreateView',
+    'BatchVoucherUpdateView',
+    'BatchVoucherDetailView',
+    'BatchVoucherApproveView',
+    'BatchVoucherDeleteView',
+    'GetProductCostView',
 ]

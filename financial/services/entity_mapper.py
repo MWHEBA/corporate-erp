@@ -22,45 +22,19 @@ class EntityAccountMapper:
     # خريطة أنواع الكيانات إلى حقول الحسابات المحاسبية
     # يحدد هذا القاموس اسم الحقل الذي يحتوي على الحساب المحاسبي لكل نوع كيان
     ENTITY_ACCOUNT_FIELDS = {
-        # الطلاب - يستخدمون حساب ولي الأمر
-        'student': 'parent.financial_account',  # Student.parent.financial_account
-        
         # الموردين
         'supplier': 'financial_account',  # Supplier.financial_account
         
         # الموظفين - لا يحتاجون حساب محاسبي منفصل
         # الرواتب تُسجل في حساب محاسبي واحد للشركة (مستحقات الرواتب)
         'employee': None,
-        
-        # الأنشطة - لا يوجد حساب محاسبي مباشر
-        # الأنشطة تستخدم حسابات الإيرادات العامة
-        'activity': None,
-        
-        # مسارات النقل - لا يوجد حساب محاسبي مباشر
-        # النقل يستخدم حسابات الإيرادات العامة
-        'transportation_route': None,
-        
-        # الباصات - تستخدم حساب السائق (المورد)
-        'bus': 'driver_supplier.financial_account',  # Bus.driver_supplier.financial_account
-        
-        # أولياء الأمور
-        'parent': 'financial_account',  # Parent.financial_account
-        
-        # أنواع الرسوم - تستخدم get_revenue_account() للحصول على الحساب من التصنيف المالي
-        'fee_type': None,  # سيتم استخدام get_revenue_account() بدلاً من الحقل المباشر
     }
     
     # خريطة أسماء النماذج إلى أنواع الكيانات
     # تستخدم للاستنتاج التلقائي لنوع الكيان من النموذج
     MODEL_TO_ENTITY_TYPE = {
-        'Student': 'student',
         'Supplier': 'supplier',
         'Employee': 'employee',
-        'Activity': 'activity',
-        'TransportationRoute': 'transportation_route',
-        'Bus': 'bus',
-        'Parent': 'parent',
-        'FeeType': 'fee_type',
     }
     
     @classmethod
@@ -69,7 +43,7 @@ class EntityAccountMapper:
         الحصول على الحساب المحاسبي للكيان
         
         Args:
-            entity: الكيان المالي (مثل Student, Supplier, Employee, إلخ)
+            entity: الكيان المالي (مثل Supplier, Employee, إلخ)
             entity_type: نوع الكيان (اختياري، يُستنتج تلقائياً إذا لم يُحدد)
             account_field: حقل الحساب المحدد (اختياري، للحصول على حساب بديل)
             
@@ -77,17 +51,9 @@ class EntityAccountMapper:
             ChartOfAccounts or None: الحساب المحاسبي المرتبط بالكيان أو None
             
         Examples:
-            >>> student = Student.objects.get(id=1)
-            >>> account = EntityAccountMapper.get_account(student)
-            >>> # يعيد student.parent.financial_account
-            
             >>> supplier = Supplier.objects.get(id=1)
             >>> account = EntityAccountMapper.get_account(supplier, 'supplier')
             >>> # يعيد supplier.financial_account
-            
-            >>> fee_type = FeeType.objects.get(id=1)
-            >>> revenue_account = EntityAccountMapper.get_account(fee_type)
-            >>> # يعيد fee_type.get_revenue_account() (من التصنيف المالي)
         """
         if entity is None:
             logger.warning("تم تمرير كيان None إلى get_account")
@@ -161,10 +127,6 @@ class EntityAccountMapper:
             str or None: نوع الكيان أو None إذا فشل الاستنتاج
             
         Examples:
-            >>> student = Student.objects.get(id=1)
-            >>> entity_type = EntityAccountMapper.detect_entity_type(student)
-            >>> print(entity_type)  # 'student'
-            
             >>> supplier = Supplier.objects.get(id=1)
             >>> entity_type = EntityAccountMapper.detect_entity_type(supplier)
             >>> print(entity_type)  # 'supplier'
@@ -194,20 +156,6 @@ class EntityAccountMapper:
             
         Returns:
             dict: معلومات الكيان والحساب المحاسبي
-            
-        Example:
-            >>> student = Student.objects.get(id=1)
-            >>> info = EntityAccountMapper.get_entity_info(student)
-            >>> print(info)
-            {
-                'entity': <Student object>,
-                'entity_type': 'student',
-                'entity_name': 'أحمد محمد',
-                'model_name': 'Student',
-                'account': <ChartOfAccounts object>,
-                'account_field_path': 'parent.financial_account',
-                'has_account': True
-            }
         """
         # استنتاج نوع الكيان إذا لم يُحدد
         if entity_type is None:
@@ -246,12 +194,6 @@ class EntityAccountMapper:
             
         Returns:
             tuple: (is_valid: bool, message: str)
-            
-        Example:
-            >>> student = Student.objects.get(id=1)
-            >>> is_valid, message = EntityAccountMapper.validate_entity_account(student)
-            >>> if not is_valid:
-            ...     print(message)
         """
         if entity is None:
             return False, "الكيان غير موجود"

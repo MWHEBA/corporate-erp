@@ -18,72 +18,14 @@
   <!-- Page Header المركزي -->
   {% include "shared/page_header.html" %}
   
-  <!-- الإحصائيات -->
-  <div class="section-container">
-    <h5 class="section-title"><i class="fas fa-chart-bar me-2"></i>{% trans "الإحصائيات العامة" %}</h5>
-    <div class="row">
-      <div class="col-xl-3 col-md-6 mb-4">
-        <div class="stats-card stats-card-primary">
-          <div class="stats-card-header"></div>
-          <div class="stats-card-body">
-            <div class="stats-card-icon">
-              <i class="fas fa-shopping-cart"></i>
-            </div>
-            <div class="stats-card-title">{% trans "إجمالي الفواتير" %}</div>
-            <div class="stats-card-value">{{ sales.paginator.count|default:0 }}</div>
-            <div class="stats-card-unit">{% trans "فاتورة بيع" %}</div>
-          </div>
-        </div>
-      </div>
-      
-      <div class="col-xl-3 col-md-6 mb-4">
-        <div class="stats-card stats-card-success">
-          <div class="stats-card-header"></div>
-          <div class="stats-card-body">
-            <div class="stats-card-icon">
-              <i class="fas fa-check-circle"></i>
-            </div>
-            <div class="stats-card-title">{% trans "فواتير مدفوعة" %}</div>
-            <div class="stats-card-value">{{ paid_sales_count|default:0 }}</div>
-            <div class="stats-card-unit">{% trans "فاتورة" %}</div>
-          </div>
-        </div>
-      </div>
-      
-      <div class="col-xl-3 col-md-6 mb-4">
-        <div class="stats-card stats-card-danger">
-          <div class="stats-card-header"></div>
-          <div class="stats-card-body">
-            <div class="stats-card-icon">
-              <i class="fas fa-credit-card"></i>
-            </div>
-            <div class="stats-card-title">{% trans "القيمة الإجمالية" %}</div>
-            <div class="stats-card-value">{{ total_amount|smart_float:2 }}</div>
-            <div class="stats-card-unit">{% currency_symbol %}</div>
-          </div>
-        </div>
-      </div>
-      
-      <div class="col-xl-3 col-md-6 mb-4">
-        <div class="stats-card stats-card-info">
-          <div class="stats-card-header"></div>
-          <div class="stats-card-body">
-            <div class="stats-card-icon">
-              <i class="fas fa-undo"></i>
-            </div>
-            <div class="stats-card-title">{% trans "المرتجعات" %}</div>
-            <div class="stats-card-value">{{ returned_sales_count|default:0 }}</div>
-            <div class="stats-card-unit">{% trans "فاتورة مرتجعة" %}</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-  
   <!-- تصفية وبحث -->
-  <div class="section-container">
-    <h5 class="section-title"><i class="fas fa-filter me-2"></i>{% trans "تصفية وبحث" %}</h5>
-    <div class="filter-section mb-4">
+  <div class="section-container mb-4">
+    <h5 class="section-title" data-bs-toggle="collapse" data-bs-target="#filterSection" aria-expanded="false">
+      <i class="fas fa-filter me-2"></i>{% trans "تصفية وبحث" %}
+      <i class="fas fa-chevron-down float-end"></i>
+    </h5>
+    <div class="collapse" id="filterSection">
+      <div class="filter-section mb-4">
       <form method="GET" action="" class="row g-3">
         <div class="col-md-3">
           <label for="customer" class="form-label">{% trans "العميل" %}</label>
@@ -119,6 +61,7 @@
           </button>
         </div>
       </form>
+      </div>
     </div>
   </div>
   
@@ -127,11 +70,6 @@
     <div class="card">
       <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="card-title mb-0"><i class="fas fa-list me-2"></i>{% trans "قائمة فواتير المبيعات" %}</h5>
-        <div class="actions-container">
-          <a href="{% url 'sale:sale_create' %}" class="btn btn-sm btn-primary">
-            <i class="fas fa-plus me-1"></i>{% trans "إضافة فاتورة" %}
-          </a>
-        </div>
       </div>
       <div class="card-body">
         {% if sales %}

@@ -16,8 +16,8 @@
     }
     
     .result-box {
-        background: #f8f9fa;
-        border: 1px solid #dee2e6;
+        background: var(--light-bg);
+        border: 1px solid var(--border-color);
         border-radius: 6px;
         padding: 20px;
         font-family: 'Courier New', monospace;
@@ -30,16 +30,16 @@
     }
     
     .info-box {
-        background: #e7f3ff;
-        border: 1px solid #b3d9ff;
+        background: var(--info-light-bg);
+        border: 1px solid var(--info-border);
         border-radius: 6px;
         padding: 15px;
         margin-bottom: 20px;
     }
     
     .warning-box {
-        background: #fff3cd;
-        border: 1px solid #ffc107;
+        background: var(--warning-light-bg);
+        border: 1px solid var(--warning-border);
         border-radius: 6px;
         padding: 15px;
         margin-bottom: 20px;
@@ -192,9 +192,10 @@ function copyToClipboard() {
     const text = resultBox.textContent;
     
     navigator.clipboard.writeText(text).then(function() {
-        alert('تم نسخ النتيجة إلى الحافظة!');
+        toastr.success('تم نسخ النتيجة إلى الحافظة!');
     }, function(err) {
         console.error('فشل النسخ:', err);
+        toastr.error('فشل النسخ إلى الحافظة');
     });
 }
 </script>

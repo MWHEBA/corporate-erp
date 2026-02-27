@@ -1852,6 +1852,8 @@ def create_stock_movement_entry(
     Returns:
         JournalEntry: Created journal entry
     """
+    from financial.models import ChartOfAccounts
+    
     gateway = AccountingGateway()
     
     if idempotency_key is None:
@@ -1862,134 +1864,318 @@ def create_stock_movement_entry(
     # Calculate movement value
     movement_value = stock_movement.total_cost
     
+    # Helper function to get account by code with fallback
+    def get_account_code(primary_code, fallback_code=None, account_type_code=None, required=True):
+        """Get account code with fallback options"""
+        try:
+            account = ChartOfAccounts.objects.get(code=primary_code, is_active=True)
+            return account.code
+        except ChartOfAccounts.DoesNotExist:
+            if fallback_code:
+                try:
+                    account = ChartOfAccounts.objects.get(code=fallback_code, is_active=True)
+                    logger.info(f"Using fallback account {fallback_code} instead of {primary_code}")
+                    return account.code
+                except ChartOfAccounts.DoesNotExist:
+                    pass
+            if account_type_code:
+                try:
+                    account = ChartOfAccounts.objects.filter(
+                        account_type__code=account_type_code, 
+                        is_active=True
+                    ).first()
+                    if account:
+                        logger.info(f"Using account type {account_type_code}: {account.code} instead of {primary_code}")
+                        return account.code
+                except:
+                    pass
+            
+            if required:
+                error_msg = f"Required account not found: {primary_code}"
+                if fallback_code:
+                    error_msg += f" (fallback: {fallback_code})"
+                if account_type_code:
+                    error_msg += f" (type: {account_type_code})"
+                logger.error(error_msg)
+                raise ValidationError(error_msg)
+            else:
+                logger.warning(f"Optional account not found: {primary_code}, will skip this entry")
+                return None
+    
+    # Get standard account codes
+    inventory_account_code = get_account_code('10400', '10300', 'inventory', required=True)  # المخزون
+    
+    # محاولة الحصول على حساب المصروفات من التصنيف المالي للفاتورة
+    expense_account_code = None
+    if stock_movement.document_number:
+        try:
+            from purchase.models import Purchase
+            purchase = Purchase.objects.filter(number=stock_movement.document_number).first()
+            if purchase and purchase.financial_category:
+                # الحصول على حساب المصروفات من التصنيف المالي
+                if purchase.financial_category.default_expense_account:
+                    expense_account_code = purchase.financial_category.default_expense_account.code
+                    logger.info(f"Using expense account from financial category: {expense_account_code}")
+        except Exception as e:
+            logger.warning(f"Could not get expense account from financial category: {str(e)}")
+    
+    # إذا لم نجد حساب من التصنيف المالي، نستخدم الحسابات الافتراضية
+    if not expense_account_code:
+        expense_account_code = get_account_code('50100', '5010', 'cogs', required=True)  # تكلفة البضاعة المباعة
+        logger.info(f"Using default expense account: {expense_account_code}")
+    
+    other_expenses_code = get_account_code('50200', '5020', 'expense', required=True)  # مصروفات أخرى
+    sales_returns_code = get_account_code('41030', '4103', 'sales_return', required=False)  # مردودات المبيعات (optional)
+    
+    # محاولة الحصول على حساب المورد من الفاتورة (للمشتريات فقط)
+    supplier_account_code = None
+    
+    # فقط حركات "in" (المشتريات) تحتاج حساب المورد
+    if stock_movement.movement_type == 'in' and stock_movement.document_number:
+        try:
+            from purchase.models import Purchase
+            # البحث عن الفاتورة من رقم المستند
+            purchase = Purchase.objects.filter(number=stock_movement.document_number).first()
+            if purchase and purchase.supplier:
+                # الحصول على الحساب المحاسبي للمورد
+                if hasattr(purchase.supplier, 'financial_account') and purchase.supplier.financial_account:
+                    supplier_account_code = purchase.supplier.financial_account.code
+                    logger.info(f"✅ استخدام حساب المورد: {supplier_account_code}")
+                else:
+                    raise ValidationError(
+                        f"Supplier '{purchase.supplier.name}' does not have a financial account. "
+                        f"Please create a financial account for this supplier before creating purchase invoices."
+                    )
+            else:
+                logger.warning(f"⚠️ لم يتم العثور على فاتورة مشتريات برقم: {stock_movement.document_number}")
+                # للحركات "in" بدون فاتورة، نستخدم حساب الموردين الرئيسي
+                supplier_account_code = get_account_code('21010', '2101', 'payables', required=False)
+                if not supplier_account_code:
+                    logger.warning("⚠️ حساب الموردين الرئيسي غير موجود، سيتم استخدام حساب المصروفات")
+        except Purchase.DoesNotExist:
+            logger.warning(f"⚠️ فاتورة المشتريات غير موجودة: {stock_movement.document_number}")
+            # استخدام حساب الموردين الرئيسي كـ fallback
+            supplier_account_code = get_account_code('21010', '2101', 'payables', required=False)
+        except Exception as e:
+            logger.error(f"❌ خطأ في الحصول على حساب المورد: {str(e)}")
+            # استخدام حساب الموردين الرئيسي كـ fallback
+            supplier_account_code = get_account_code('21010', '2101', 'payables', required=False)
+    
+    # للحركات "in" بدون document_number، نستخدم حساب الموردين الرئيسي
+    elif stock_movement.movement_type == 'in' and not stock_movement.document_number:
+        logger.info("ℹ️ حركة مخزون 'in' بدون document_number - استخدام حساب الموردين الرئيسي")
+        supplier_account_code = get_account_code('21010', '2101', 'payables', required=False)
+        if not supplier_account_code:
+            # إذا لم يكن هناك حساب موردين، نستخدم حساب المصروفات
+            logger.warning("⚠️ حساب الموردين غير موجود، سيتم استخدام حساب المصروفات")
+            supplier_account_code = expense_account_code
+    
     # Prepare journal entry lines based on movement type
     if stock_movement.movement_type == 'in':
-        # Stock increase: Debit Inventory, Credit appropriate account
+        # Stock increase: Debit Inventory, Credit Supplier account (or expense account if no supplier)
+        credit_account = supplier_account_code if supplier_account_code else expense_account_code
+        quantity_text = f"{stock_movement.quantity} {stock_movement.product.unit or 'وحدة'}"
+        doc_ref = f" - {stock_movement.document_number}" if stock_movement.document_number else ""
+        
         lines = [
             JournalEntryLineData(
-                account_code='10400',  # المخزون
+                account_code=inventory_account_code,
                 debit=movement_value,
                 credit=Decimal('0'),
-                description=f"Stock increase - {stock_movement.product.name}"
+                description=f"زيادة مخزون: {stock_movement.product.name} ({quantity_text}){doc_ref}"
             ),
             JournalEntryLineData(
-                account_code='2010001',  # مورد - مكتبة المعرفة التعليمية (leaf account)
+                account_code=credit_account,
                 debit=Decimal('0'),
                 credit=movement_value,
-                description=f"Stock purchase - {stock_movement.document_number}"
+                description=f"شراء بضاعة: {stock_movement.product.name} ({quantity_text}){doc_ref}"
             )
         ]
     elif stock_movement.movement_type in ['out', 'sale']:
-        # Stock decrease: Credit Inventory, Debit Cost of Goods Sold
+        # Stock decrease: Credit Inventory, Debit Cost of Goods Sold (from financial category)
+        quantity_text = f"{stock_movement.quantity} {stock_movement.product.unit or 'وحدة'}"
+        doc_ref = f" - {stock_movement.document_number}" if stock_movement.document_number else ""
+        
         lines = [
             JournalEntryLineData(
-                account_code='50100',  # تكلفة الخدمات المقدمة
+                account_code=expense_account_code,
                 debit=movement_value,
                 credit=Decimal('0'),
-                description=f"Cost of goods sold - {stock_movement.product.name}"
+                description=f"تكلفة بضاعة مباعة: {stock_movement.product.name} ({quantity_text}){doc_ref}"
             ),
             JournalEntryLineData(
-                account_code='10400',  # المخزون
+                account_code=inventory_account_code,
                 debit=Decimal('0'),
                 credit=movement_value,
-                description=f"Stock decrease - {stock_movement.product.name}"
+                description=f"نقص مخزون: {stock_movement.product.name} ({quantity_text}){doc_ref}"
             )
         ]
     elif stock_movement.movement_type == 'adjustment':
         # Stock adjustment: Debit/Credit Inventory based on quantity change
+        quantity_text = f"{abs(stock_movement.quantity)} {stock_movement.product.unit or 'وحدة'}"
+        adjustment_reason = stock_movement.notes or 'تسوية جرد'
+        
         if movement_value > 0:
             # Positive adjustment - increase inventory
             lines = [
                 JournalEntryLineData(
-                    account_code='10400',  # المخزون
+                    account_code=inventory_account_code,
                     debit=movement_value,
                     credit=Decimal('0'),
-                    description=f"Stock adjustment increase - {stock_movement.product.name}"
+                    description=f"تسوية مخزون (زيادة): {stock_movement.product.name} ({quantity_text}) - {adjustment_reason}"
                 ),
                 JournalEntryLineData(
-                    account_code='50200',  # مصروفات أخرى
+                    account_code=other_expenses_code,
                     debit=Decimal('0'),
                     credit=movement_value,
-                    description=f"Inventory adjustment - {stock_movement.notes or 'Stock count adjustment'}"
+                    description=f"تسوية مخزون (زيادة): {stock_movement.product.name} - {adjustment_reason}"
                 )
             ]
         else:
             # Negative adjustment - decrease inventory
             lines = [
                 JournalEntryLineData(
-                    account_code='50200',  # مصروفات أخرى
+                    account_code=other_expenses_code,
                     debit=abs(movement_value),
                     credit=Decimal('0'),
-                    description=f"Inventory adjustment loss - {stock_movement.notes or 'Stock count adjustment'}"
+                    description=f"تسوية مخزون (نقص): {stock_movement.product.name} ({quantity_text}) - {adjustment_reason}"
                 ),
                 JournalEntryLineData(
-                    account_code='10400',  # المخزون
+                    account_code=inventory_account_code,
                     debit=Decimal('0'),
                     credit=abs(movement_value),
-                    description=f"Stock adjustment decrease - {stock_movement.product.name}"
+                    description=f"تسوية مخزون (نقص): {stock_movement.product.name} ({quantity_text}) - {adjustment_reason}"
                 )
             ]
     elif stock_movement.movement_type == 'transfer':
         # Stock transfer: No accounting impact (internal movement)
         # Create a memo entry with zero amounts for audit trail
+        quantity_text = f"{stock_movement.quantity} {stock_movement.product.unit or 'وحدة'}"
+        from_warehouse = stock_movement.warehouse.name if stock_movement.warehouse else 'غير محدد'
+        to_warehouse = stock_movement.destination_warehouse.name if stock_movement.destination_warehouse else 'غير محدد'
+        
         lines = [
             JournalEntryLineData(
-                account_code='10400',  # المخزون
+                account_code=inventory_account_code,
                 debit=Decimal('0'),
                 credit=Decimal('0'),
-                description=f"Stock transfer memo - {stock_movement.product.name} (from {stock_movement.warehouse.name} to {stock_movement.destination_warehouse.name if stock_movement.destination_warehouse else 'unknown'})"
+                description=f"تحويل مخزون: {stock_movement.product.name} ({quantity_text}) من {from_warehouse} إلى {to_warehouse}"
             )
         ]
     else:
         # Default handling for other movement types (return_in, return_out, etc.)
+        quantity_text = f"{stock_movement.quantity} {stock_movement.product.unit or 'وحدة'}"
+        doc_ref = f" - {stock_movement.document_number}" if stock_movement.document_number else ""
+        
         if stock_movement.movement_type in ['return_in', 'purchase_return']:
-            # Return inbound: Debit Inventory, Credit Returns/Adjustments
+            # Return inbound: Debit Inventory, Credit Supplier account
             lines = [
                 JournalEntryLineData(
-                    account_code='10400',  # المخزون
+                    account_code=inventory_account_code,
                     debit=movement_value,
                     credit=Decimal('0'),
-                    description=f"Stock return inbound - {stock_movement.product.name}"
+                    description=f"مرتجع وارد: {stock_movement.product.name} ({quantity_text}){doc_ref}"
                 ),
                 JournalEntryLineData(
-                    account_code='2010001',  # مورد - مكتبة المعرفة التعليمية
+                    account_code=supplier_account_code,
                     debit=Decimal('0'),
                     credit=movement_value,
-                    description=f"Purchase return - {stock_movement.document_number}"
+                    description=f"مرتجع مشتريات: {stock_movement.product.name} ({quantity_text}){doc_ref}"
                 )
             ]
         elif stock_movement.movement_type in ['return_out', 'sale_return']:
             # Return outbound: Credit Inventory, Debit Returns/Adjustments
-            lines = [
-                JournalEntryLineData(
-                    account_code='41030',  # مردودات المبيعات
-                    debit=movement_value,
-                    credit=Decimal('0'),
-                    description=f"Sales return - {stock_movement.product.name}"
-                ),
-                JournalEntryLineData(
-                    account_code='10400',  # المخزون
-                    debit=Decimal('0'),
-                    credit=movement_value,
-                    description=f"Stock return outbound - {stock_movement.product.name}"
-                )
-            ]
+            # إذا لم يكن هناك حساب مردودات مبيعات، نستخدم حساب المصروفات الأخرى
+            if sales_returns_code:
+                lines = [
+                    JournalEntryLineData(
+                        account_code=sales_returns_code,
+                        debit=movement_value,
+                        credit=Decimal('0'),
+                        description=f"مرتجع مبيعات: {stock_movement.product.name} ({quantity_text}){doc_ref}"
+                    ),
+                    JournalEntryLineData(
+                        account_code=inventory_account_code,
+                        debit=Decimal('0'),
+                        credit=movement_value,
+                        description=f"إرجاع للمخزون: {stock_movement.product.name} ({quantity_text}){doc_ref}"
+                    )
+                ]
+            else:
+                # Fallback: use other expenses account
+                logger.warning("Sales returns account not found, using other expenses account")
+                lines = [
+                    JournalEntryLineData(
+                        account_code=other_expenses_code,
+                        debit=movement_value,
+                        credit=Decimal('0'),
+                        description=f"مرتجع مبيعات (بدون حساب مردودات): {stock_movement.product.name} ({quantity_text}){doc_ref}"
+                    ),
+                    JournalEntryLineData(
+                        account_code=inventory_account_code,
+                        debit=Decimal('0'),
+                        credit=movement_value,
+                        description=f"إرجاع للمخزون: {stock_movement.product.name} ({quantity_text}){doc_ref}"
+                    )
+                ]
         else:
             # Fallback for unknown movement types
             lines = [
                 JournalEntryLineData(
-                    account_code='10400',  # المخزون
+                    account_code=inventory_account_code,
                     debit=movement_value if movement_value > 0 else Decimal('0'),
                     credit=abs(movement_value) if movement_value < 0 else Decimal('0'),
-                    description=f"Stock movement ({stock_movement.movement_type}) - {stock_movement.product.name}"
+                    description=f"حركة مخزون ({stock_movement.movement_type}): {stock_movement.product.name} ({quantity_text}){doc_ref}"
                 ),
                 JournalEntryLineData(
-                    account_code='50200',  # مصروفات أخرى
+                    account_code=other_expenses_code,
                     debit=abs(movement_value) if movement_value < 0 else Decimal('0'),
                     credit=movement_value if movement_value > 0 else Decimal('0'),
-                    description=f"Stock movement adjustment - {stock_movement.movement_type}"
+                    description=f"تسوية حركة مخزون: {stock_movement.movement_type} - {stock_movement.product.name}"
                 )
             ]
+    
+    # تكوين وصف مفصل للقيد حسب نوع الحركة
+    movement_type_ar = {
+        'in': 'وارد',
+        'out': 'صادر',
+        'sale': 'مبيعات',
+        'purchase': 'مشتريات',
+        'adjustment': 'تسوية',
+        'transfer': 'تحويل',
+        'return_in': 'مرتجع وارد',
+        'return_out': 'مرتجع صادر',
+        'sale_return': 'مرتجع مبيعات',
+        'purchase_return': 'مرتجع مشتريات'
+    }.get(stock_movement.movement_type, stock_movement.movement_type)
+    
+    description = f"حركة مخزون ({movement_type_ar}): {stock_movement.product.name}"
+    entry_type = 'inventory'  # جميع حركات المخزون نوعها inventory
+    
+    if stock_movement.movement_type == 'in' and stock_movement.document_number:
+        # فاتورة مشتريات - نضيف اسم المورد
+        try:
+            from purchase.models import Purchase
+            purchase = Purchase.objects.filter(number=stock_movement.document_number).first()
+            if purchase and purchase.supplier:
+                description = f"فاتورة مشتريات - {purchase.supplier.name} - {stock_movement.product.name}"
+        except Exception as e:
+            logger.warning(f"Could not get supplier name for description: {str(e)}")
+    elif stock_movement.movement_type in ['out', 'sale'] and stock_movement.document_number:
+        # فاتورة مبيعات
+        description = f"فاتورة مبيعات - {stock_movement.document_number} - {stock_movement.product.name}"
+    elif stock_movement.movement_type == 'adjustment':
+        # تسوية مخزون - نبقي على inventory لأنها حركة مخزنية
+        description = f"تسوية مخزون - {stock_movement.product.name}"
+    elif stock_movement.movement_type == 'transfer':
+        # تحويل مخزون بين المخازن - نبقي على inventory
+        description = f"تحويل مخزون - {stock_movement.product.name}"
+    elif stock_movement.movement_type in ['return_in', 'purchase_return']:
+        # مردود مشتريات - نبقي على inventory
+        description = f"مردود مشتريات - {stock_movement.product.name}"
+    elif stock_movement.movement_type in ['return_out', 'sale_return']:
+        # مردود مبيعات - نبقي على inventory
+        description = f"مردود مبيعات - {stock_movement.product.name}"
     
     return gateway.create_journal_entry(
         source_module='product',
@@ -1998,7 +2184,8 @@ def create_stock_movement_entry(
         lines=lines,
         idempotency_key=idempotency_key,
         user=user,
-        description=f"Stock movement - {stock_movement.product.name}",
+        entry_type=entry_type,
+        description=description,
         reference=stock_movement.document_number or f"SM-{stock_movement.id}"
     )
 

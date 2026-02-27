@@ -30,7 +30,7 @@ class JournalEntryService:
         "activity_revenue": "40320",     # إيرادات الأنشطة (pk 44)
         "application_revenue": "40200",  # إيرادات رسوم التقديم (pk 9)
         "other_revenue": "40400",        # إيرادات أخرى (pk 35)
-        "parents_receivable": "10300",   # مدينو أولياء الأمور (pk 3)
+        "parents_receivable": "10300",   # العملاء (pk 3)
         "cash": "10100",                 # الخزنة (pk 1)
         "bank": "10200",                 # البنك (pk 2)
     }
@@ -40,7 +40,7 @@ class JournalEntryService:
         إنشاء قيد محاسبي لرسوم طالب جديدة
         
         القيد:
-        من حـ/ ذمم أولياء الأمور (مدين)
+        من حـ/ ذمم العملاء (مدين)
             إلى حـ/ إيرادات الرسوم (دائن)
         """
         try:
@@ -56,12 +56,12 @@ class JournalEntryService:
                     student_fee.fee_type.category, accounts
                 )
                 
-                # الحصول على حساب ولي الأمر
+                # الحصول على حساب العميل
                 parent_account = self._get_or_create_parent_account(
                     student_fee.student.parent
                 )
                 if not parent_account:
-                    logger.error(f"فشل في الحصول على حساب ولي الأمر {student_fee.student.parent.name}")
+                    logger.error(f"فشل في الحصول على حساب العميل {student_fee.student.parent.name}")
                     return None
                 
                 # جلب التصنيف المالي من FeeType
@@ -144,12 +144,12 @@ class JournalEntryService:
                     fee_payment.payment_method, accounts
                 )
                 
-                # الحصول على حساب ولي الأمر
+                # الحصول على حساب العميل
                 parent_account = self._get_or_create_parent_account(
                     fee_payment.student_fee.student.parent
                 )
                 if not parent_account:
-                    logger.error(f"فشل في الحصول على حساب ولي الأمر {fee_payment.student_fee.student.parent.name}")
+                    logger.error(f"فشل في الحصول على حساب العميل {fee_payment.student_fee.student.parent.name}")
                     return None
                 
                 # Prepare journal entry lines
@@ -195,7 +195,7 @@ class JournalEntryService:
         إنشاء قيد محاسبي لمرجع رسوم
         
         القيد:
-        من حـ/ ذمم أولياء الأمور (مدين) - تقليل الذمة
+        من حـ/ ذمم العملاء (مدين) - تقليل الذمة
             إلى حـ/ الصندوق/البنك (دائن) - إخراج النقدية
         """
         try:
@@ -211,12 +211,12 @@ class JournalEntryService:
                     fee_payment.payment_method, accounts
                 )
                 
-                # الحصول على حساب ولي الأمر
+                # الحصول على حساب العميل
                 parent_account = self._get_or_create_parent_account(
                     fee_payment.student_fee.student.parent
                 )
                 if not parent_account:
-                    logger.error(f"فشل في الحصول على حساب ولي الأمر {fee_payment.student_fee.student.parent.name}")
+                    logger.error(f"فشل في الحصول على حساب العميل {fee_payment.student_fee.student.parent.name}")
                     return None
                 
                 # المبلغ الموجب للمرجع
@@ -272,7 +272,7 @@ class JournalEntryService:
         
         القيد:
         من حـ/ الصندوق/البنك (مدين)
-            إلى حـ/ ذمم أولياء الأمور (دائن)
+            إلى حـ/ ذمم العملاء (دائن)
         """
         try:
             # Check if journal entry already exists for this payment
@@ -298,12 +298,12 @@ class JournalEntryService:
                     fee_payment.payment_method, accounts
                 )
                 
-                # الحصول على حساب ولي الأمر
+                # الحصول على حساب العميل
                 parent_account = self._get_or_create_parent_account(
                     fee_payment.student_fee.student.parent
                 )
                 if not parent_account:
-                    logger.error(f"فشل في الحصول على حساب ولي الأمر {fee_payment.student_fee.student.parent.name}")
+                    logger.error(f"فشل في الحصول على حساب العميل {fee_payment.student_fee.student.parent.name}")
                     return None
                 
                 # إنشاء وصف مفصل يتضمن المنتجات الإضافية
@@ -489,7 +489,7 @@ class JournalEntryService:
     
     def _create_credit_line_description(self, fee_payment) -> str:
         """
-        إنشاء وصف مفصل لبند الدائن (ذمم أولياء الأمور)
+        إنشاء وصف مفصل لبند الدائن (ذمم العملاء)
         
         Args:
             fee_payment: سجل الدفعة
@@ -599,7 +599,7 @@ class JournalEntryService:
                     idempotency_key=f"JE:students:Application:{application.id}:fee",
                     user=user,
                     entry_type='automatic',
-                    description=f"رسوم تقديم طلب {application.student_name} - ولي الأمر: {application.parent_name}",
+                    description=f"رسوم تقديم طلب {application.student_name} - العميل: {application.parent_name}",
                     reference=f"رسوم تقديم - {reference_number or 'نقدي'}",
                     date=payment_date
                 )
@@ -750,7 +750,7 @@ class JournalEntryService:
             raise
     
     def _get_or_create_parent_account(self, parent) -> Optional[ChartOfAccounts]:
-        """الحصول على حساب ولي الأمر أو إنشاؤه"""
+        """الحصول على حساب العميل أو إنشاؤه"""
         try:
             # التحقق من وجود حساب مرتبط
             if parent.financial_account and parent.financial_account.is_active:
@@ -761,7 +761,7 @@ class JournalEntryService:
             return AccountingIntegrationService._create_parent_account(parent)
             
         except Exception as e:
-            logger.error(f"خطأ في الحصول على حساب ولي الأمر: {str(e)}")
+            logger.error(f"خطأ في الحصول على حساب العميل: {str(e)}")
             return None
     
     def _generate_journal_number(self, prefix: str, reference_id: int) -> str:
@@ -1140,10 +1140,10 @@ class JournalEntryService:
                         "description": "إيرادات متنوعة أخرى",
                     },
                     "10301": {
-                        "name": "ذمم أولياء الأمور",
+                        "name": "ذمم العملاء",
                         "name_en": "Parents Receivable",
                         "type": "asset",
-                        "description": "المبالغ المستحقة من أولياء الأمور",
+                        "description": "المبالغ المستحقة من العملاء",
                     },
                 }
                 

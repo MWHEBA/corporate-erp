@@ -33,38 +33,15 @@ class SerialNumber(models.Model):
 
     def get_next_number(self):
         """
-        الحصول على الرقم التالي في التسلسل
+        الحصول على الرقم التالي في التسلسل (thread-safe using F() expression)
         """
-        # البحث عن آخر رقم مستخدم في هذا النوع من المستندات
-        from django.db.models import Max
-        from django.apps import apps
-
-        # تحديد النموذج المناسب حسب نوع المستند
-        if self.document_type == "sale":
-            model = apps.get_model("sale", "Sale")
-        elif self.document_type == "purchase":
-            model = apps.get_model("purchase", "Purchase")
-        else:
-            model = apps.get_model("product", "StockMovement")
-
-        # استخراج الرقم من آخر مستند
-        last_doc = (
-            model.objects.filter(number__startswith=self.prefix)
-            .order_by("-number")
-            .first()
-        )
-
-        if last_doc:
-            # استخراج الرقم من آخر مستند
-            try:
-                last_number = int(last_doc.number.replace(self.prefix, ""))
-                self.last_number = max(self.last_number, last_number)
-            except ValueError:
-                pass
-
-        # زيادة الرقم
-        self.last_number += 1
-        self.save()
+        from django.db.models import F
+        
+        # استخدام F() expression لعمل atomic increment
+        SerialNumber.objects.filter(pk=self.pk).update(last_number=F('last_number') + 1)
+        
+        # إعادة تحميل القيمة الجديدة
+        self.refresh_from_db()
         return self.last_number
 
     def __str__(self):

@@ -367,11 +367,10 @@ def supplier_delete(request, pk):
     # فحص المعاملات المرتبطة
     has_purchases = supplier.purchases.exists()
     has_payments = hasattr(supplier, 'supplier_payments') and supplier.supplier_payments.exists()
-    has_driver_invoices = supplier.driver_invoices.exists() if hasattr(supplier, 'driver_invoices') else False
     has_activities = hasattr(supplier, 'activities') and supplier.activities.exists()
     
     # تحديد إذا كان المورد مرتبط بأي معاملات
-    has_transactions = has_purchases or has_payments or has_driver_invoices or has_activities
+    has_transactions = has_purchases or has_payments or has_activities
     can_delete_permanently = not has_transactions
 
     if request.method == "POST":
@@ -398,9 +397,6 @@ def supplier_delete(request, pk):
     if has_payments:
         payments_count = supplier.supplier_payments.count()
         transactions_info.append(f"{payments_count} دفعة")
-    if has_driver_invoices:
-        invoices_count = supplier.driver_invoices.count()
-        transactions_info.append(f"{invoices_count} فاتورة سائق")
     if has_activities:
         activities_count = supplier.activities.count()
         transactions_info.append(f"{activities_count} نشاط")
@@ -499,6 +495,7 @@ def supplier_detail(request, pk):
 
     total_payments = payments.aggregate(total=Sum("amount"))["total"] or 0
 
+
     # جلب القيود المحاسبية المرتبطة بالمورد
     from financial.models import JournalEntry, JournalEntryLine
 
@@ -530,11 +527,8 @@ def supplier_detail(request, pk):
             )
             journal_entries_count = journal_entries.count()
 
-            # حساب إجمالي المدين لكل قيد
-            for entry in journal_entries:
-                entry.total_amount = (
-                    entry.lines.aggregate(total=Sum("debit"))["total"] or 0
-                )
+            # ملاحظة: total_amount هو property محسوب تلقائياً من lines
+            # لا حاجة لحسابه يدوياً
 
         # Debug: طباعة عدد القيود
         # عدد القيود المحاسبية للمورد
@@ -600,7 +594,20 @@ def supplier_detail(request, pk):
 
     # إضافة المدفوعات
     for payment in payments:
-        payment_desc = f"دفعة {payment.get_payment_method_display()}"
+        # تحديد طريقة الدفع من الحساب المالي أو من payment_method
+        if payment.financial_account:
+            payment_method = payment.financial_account.name
+        elif payment.payment_method:
+            # محاولة الحصول على اسم الحساب من الكود
+            try:
+                account = ChartOfAccounts.objects.filter(code=payment.payment_method).first()
+                payment_method = account.name if account else payment.payment_method
+            except:
+                payment_method = payment.payment_method
+        else:
+            payment_method = "غير محدد"
+        
+        payment_desc = f"دفعة {payment_method}"
         if payment.purchase:
             payment_desc += f" - فاتورة {payment.purchase.number}"
 
@@ -766,6 +773,35 @@ def supplier_detail(request, pk):
     # إضافة أزرار إجراءات للمنتجات (معطلة مؤقتاً - namespace غير موجود)
     products_action_buttons = []
 
+    # تحويل المدفوعات لـ list of dicts للعرض في الجدول
+    payments_data = []
+    for payment in payments:
+        # تحديد طريقة الدفع من الحساب المالي أو من payment_method
+        if payment.financial_account:
+            payment_method_display = payment.financial_account.name
+        elif payment.payment_method:
+            # محاولة الحصول على اسم الحساب من الكود
+            try:
+                from financial.models import ChartOfAccounts
+                account = ChartOfAccounts.objects.filter(code=payment.payment_method).first()
+                payment_method_display = account.name if account else payment.payment_method
+            except:
+                payment_method_display = payment.payment_method
+        else:
+            payment_method_display = "غير محدد"
+        
+        # تنسيق رقم الفاتورة كـ HTML
+        purchase_number_html = f'<a href="{reverse("purchase:purchase_detail", args=[payment.purchase.id])}" class="text-decoration-none"><code class="bg-light px-2 py-1 rounded">{payment.purchase.number}</code></a>' if payment.purchase else "لا يوجد"
+        
+        payments_data.append({
+            "id": payment.id,
+            "created_at": payment.created_at,
+            "purchase__number": purchase_number_html,
+            "amount": payment.amount,
+            "payment_method": f'<span class="badge bg-info">{payment_method_display}</span>',
+            "notes": payment.notes or "لا توجد ملاحظات",
+        })
+    
     # تعريف أعمدة جدول المدفوعات للنظام المحسن
     payments_headers = [
         {
@@ -788,7 +824,7 @@ def supplier_detail(request, pk):
             "label": "رقم الفاتورة",
             "sortable": True,
             "class": "text-center",
-            "template": "components/cells/invoice_reference.html",
+            "format": "html",
             "width": "130px",
         },
         {
@@ -796,15 +832,15 @@ def supplier_detail(request, pk):
             "label": "المبلغ",
             "sortable": True,
             "class": "text-center",
-            "template": "components/cells/payment_amount.html",
+            "format": "currency",
             "width": "120px",
         },
         {
             "key": "payment_method",
             "label": "طريقة الدفع",
-            "sortable": True,
+            "sortable": False,
             "class": "text-center",
-            "template": "components/cells/payment_method.html",
+            "format": "html",
             "width": "120px",
         },
         {"key": "notes", "label": "ملاحظات", "sortable": False, "class": "text-start"},
@@ -839,7 +875,7 @@ def supplier_detail(request, pk):
             "label": "الحالة",
             "sortable": True,
             "class": "text-center",
-            "template": "components/cells/journal_status.html",
+            "format": "status",
             "width": "90px",
         },
         {
@@ -847,7 +883,6 @@ def supplier_detail(request, pk):
             "label": "المرجع",
             "sortable": True,
             "class": "text-center",
-            "template": "components/cells/journal_reference.html",
             "width": "150px",
         },
         {
@@ -861,7 +896,7 @@ def supplier_detail(request, pk):
             "label": "المبلغ",
             "sortable": True,
             "class": "text-center",
-            "template": "components/cells/journal_amount.html",
+            "format": "currency",
             "width": "110px",
         },
     ]
@@ -1219,7 +1254,6 @@ def supplier_detail(request, pk):
             "label": "المرجع",
             "sortable": True,
             "class": "text-center",
-            "template": "components/cells/statement_reference.html",
             "width": "120px",
         },
         {
@@ -1227,7 +1261,6 @@ def supplier_detail(request, pk):
             "label": "نوع الحركة",
             "sortable": True,
             "class": "text-center",
-            "template": "components/cells/statement_type.html",
             "width": "100px",
         },
         {
@@ -1241,7 +1274,7 @@ def supplier_detail(request, pk):
             "label": "مدين",
             "sortable": True,
             "class": "text-center",
-            "template": "components/cells/statement_amount.html",
+            "format": "currency",
             "width": "120px",
         },
         {
@@ -1249,7 +1282,7 @@ def supplier_detail(request, pk):
             "label": "دائن",
             "sortable": True,
             "class": "text-center",
-            "template": "components/cells/statement_amount.html",
+            "format": "currency",
             "width": "120px",
         },
         {
@@ -1257,7 +1290,7 @@ def supplier_detail(request, pk):
             "label": "الرصيد",
             "sortable": True,
             "class": "text-center",
-            "template": "components/cells/statement_balance.html",
+            "format": "currency",
             "width": "120px",
         },
     ]
@@ -1287,7 +1320,7 @@ def supplier_detail(request, pk):
     context = {
         "supplier": supplier,
         "quick_action_buttons": quick_action_buttons,
-        "payments": payments,
+        "payments": payments_data,  # استخدام البيانات المحولة
         "purchases": purchases,
         "purchases_count": purchases_count,
         "total_purchases": total_purchases,
@@ -1368,15 +1401,6 @@ def supplier_detail(request, pk):
             "class": "btn-success",
         }
     ]
-    
-    # إضافة زر إدارة فواتير النقل للسائقين
-    if supplier.is_driver():
-        header_buttons.insert(0, {
-            "url": reverse("transportation:driver_invoice_list") + f"?driver={supplier.id}",
-            "icon": "fa-file-invoice-dollar",
-            "text": "فواتير النقل",
-            "class": "btn-info",
-        })
     
     header_buttons.append({
         "url": "#",

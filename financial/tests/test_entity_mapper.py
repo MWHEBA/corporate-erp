@@ -136,7 +136,7 @@ class TestEntityAccountMapperIntegration(TestCase):
         )
     
     def test_detect_entity_type_parent(self):
-        """اختبار استنتاج نوع الكيان لولي الأمر"""
+        """اختبار استنتاج نوع الكيان لالعميل"""
         entity_type = EntityAccountMapper.detect_entity_type(self.parent_with_account)
         self.assertEqual(entity_type, 'parent')
     
@@ -182,7 +182,7 @@ class TestEntityAccountMapperIntegration(TestCase):
         self.assertIn("لا يوجد حساب محاسبي", message)
     
     def test_get_entity_info_parent(self):
-        """اختبار الحصول على معلومات الكيان لولي الأمر"""
+        """اختبار الحصول على معلومات الكيان لالعميل"""
         info = EntityAccountMapper.get_entity_info(self.parent_with_account)
         
         # التحقق من البيانات

@@ -221,7 +221,7 @@
                             <!-- فلتر مبسط للأنواع -->
                             <select name="type" class="form-select" style="width: 150px;" onchange="this.form.submit()">
                                 <option value="">كل الأنواع</option>
-                                <option value="parents" {% if request.GET.type == 'parents' %}selected{% endif %}>أولياء الأمور</option>
+                                <option value="parents" {% if request.GET.type == 'parents' %}selected{% endif %}>الحسابات الرئيسية </option>
                             </select>
                             
                             <!-- فلتر الحسابات الصفرية -->
@@ -264,7 +264,7 @@
                         <div>
                             <strong>نتائج البحث:</strong>
                             {% if search_query %}البحث عن "{{ search_query }}" • {% endif %}
-                            {% if request.GET.type == 'parents' %}أولياء الأمور فقط • {% endif %}
+                            {% if request.GET.type == 'parents' %}الحسابات الرئيسية  فقط • {% endif %}
                             {% if request.GET.hide_zero %}إخفاء الحسابات الصفرية • {% endif %}
                         </div>
                     </div>
@@ -334,7 +334,7 @@ document.addEventListener('DOMContentLoaded', function() {
             parentRow = parentRow.previousElementSibling;
         }
         
-        // فحص إذا كان فلتر أولياء الأمور مفعل
+        // فحص إذا كان فلتر العملاء مفعل
         const isParentsFilter = new URLSearchParams(window.location.search).get('type') === 'parents';
         
         // فحص إذا كان الحساب الأب يحتوي على عدد كبير من الحسابات الفرعية
@@ -372,7 +372,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const btn = icon.closest('.expand-btn');
         const row = btn.closest('tr');
         
-        // فحص إذا كان فلتر أولياء الأمور مفعل
+        // فحص إذا كان فلتر العملاء مفعل
         const isParentsFilter = new URLSearchParams(window.location.search).get('type') === 'parents';
         
         // عد الحسابات الفرعية المباشرة

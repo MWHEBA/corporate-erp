@@ -9,6 +9,8 @@ from .models import (
     Warehouse,
     StockMovement,
     BundleComponent,
+    BatchVoucher,
+    BatchVoucherItem,
 )
 from .models.inventory_movement import InventoryMovement
 
@@ -582,3 +584,176 @@ class IssueVoucherForm(forms.ModelForm):
         self.fields['reference_document'].label = 'المستند المرجعي'
         self.fields['issued_by_name'].label = 'المُصدر'
         self.fields['notes'].label = 'ملاحظات'
+
+
+class TransferVoucherForm(forms.Form):
+    """نموذج إذن تحويل مخزني"""
+    
+    product = forms.ModelChoiceField(
+        queryset=Product.objects.filter(is_active=True),
+        label='المنتج',
+        widget=forms.Select(attrs={'class': 'form-select', 'required': True})
+    )
+    
+    from_warehouse = forms.ModelChoiceField(
+        queryset=Warehouse.objects.filter(is_active=True),
+        label='من مخزن',
+        widget=forms.Select(attrs={'class': 'form-select', 'required': True})
+    )
+    
+    to_warehouse = forms.ModelChoiceField(
+        queryset=Warehouse.objects.filter(is_active=True),
+        label='إلى مخزن',
+        widget=forms.Select(attrs={'class': 'form-select', 'required': True})
+    )
+    
+    quantity = forms.IntegerField(
+        min_value=1,
+        label='الكمية',
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'min': '1', 'required': True})
+    )
+    
+    reference_document = forms.CharField(
+        required=False,
+        label='المستند المرجعي',
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'رقم المستند المرجعي'})
+    )
+    
+    transferred_by_name = forms.CharField(
+        required=False,
+        label='المحول',
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'اسم الشخص المسؤول عن التحويل'})
+    )
+    
+    notes = forms.CharField(
+        required=False,
+        label='ملاحظات',
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'ملاحظات إضافية'})
+    )
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        from_warehouse = cleaned_data.get('from_warehouse')
+        to_warehouse = cleaned_data.get('to_warehouse')
+        
+        # التحقق من أن المخزنين مختلفين
+        if from_warehouse and to_warehouse and from_warehouse == to_warehouse:
+            raise forms.ValidationError('لا يمكن التحويل من وإلى نفس المخزن')
+        
+        return cleaned_data
+
+
+
+# ==================== Batch Voucher Forms ====================
+
+class BatchVoucherForm(forms.ModelForm):
+    """فورم الإذن الجماعي"""
+    
+    class Meta:
+        model = BatchVoucher
+        fields = [
+            'voucher_type', 'warehouse', 'target_warehouse',
+            'purpose_type', 'notes'
+        ]
+        widgets = {
+            'voucher_type': forms.Select(attrs={'class': 'form-select'}),
+            'warehouse': forms.Select(attrs={'class': 'form-select'}),
+            'target_warehouse': forms.Select(attrs={'class': 'form-select'}),
+            'purpose_type': forms.Select(attrs={'class': 'form-select'}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # تحديد الحقول المطلوبة حسب نوع الإذن
+        if self.instance and self.instance.pk:
+            voucher_type = self.instance.voucher_type
+        else:
+            voucher_type = self.data.get('voucher_type') if self.data else None
+        
+        # للتحويل: المخزن الهدف مطلوب
+        if voucher_type == 'transfer':
+            self.fields['target_warehouse'].required = True
+            self.fields['purpose_type'].required = False
+        else:
+            self.fields['target_warehouse'].required = False
+            self.fields['purpose_type'].required = True
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        voucher_type = cleaned_data.get('voucher_type')
+        
+        # التحقق من البيانات حسب نوع الإذن
+        if voucher_type == 'transfer':
+            if not cleaned_data.get('target_warehouse'):
+                raise forms.ValidationError('المخزن الهدف مطلوب لأذون التحويل')
+            
+            # التحقق من عدم تطابق المخازن
+            if cleaned_data.get('warehouse') == cleaned_data.get('target_warehouse'):
+                raise forms.ValidationError('لا يمكن التحويل من وإلى نفس المخزن')
+        else:
+            if not cleaned_data.get('purpose_type'):
+                raise forms.ValidationError('الغرض مطلوب لأذون الاستلام والصرف')
+        
+        return cleaned_data
+
+
+class BatchVoucherItemForm(forms.ModelForm):
+    """فورم بند الإذن الجماعي"""
+    
+    class Meta:
+        model = BatchVoucherItem
+        fields = ['product', 'quantity', 'unit_cost', 'notes']
+        widgets = {
+            'product': forms.Select(attrs={'class': 'form-select product-select'}),
+            'quantity': forms.NumberInput(attrs={'class': 'form-control quantity-input', 'min': '0', 'step': '0.01'}),
+            'unit_cost': forms.NumberInput(attrs={'class': 'form-control unit-cost-input', 'step': '0.01', 'min': '0'}),
+            'notes': forms.TextInput(attrs={'class': 'form-control'}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # جعل جميع الحقول اختيارية (الـ validation في JavaScript)
+        self.fields['product'].required = False
+        self.fields['quantity'].required = False
+        self.fields['unit_cost'].required = False
+        self.fields['notes'].required = False
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        
+        # لو الصف معلّم للحذف، تجاهل الـ validation
+        if cleaned_data.get('DELETE'):
+            return cleaned_data
+        
+        product = cleaned_data.get('product')
+        quantity = cleaned_data.get('quantity')
+        
+        # لو في منتج، لازم يكون في كمية
+        if product and not quantity:
+            raise forms.ValidationError('الكمية مطلوبة')
+        
+        # لو في كمية، لازم يكون في منتج
+        if quantity and not product:
+            raise forms.ValidationError('المنتج مطلوب')
+        
+        return cleaned_data
+        
+        # تحديد المنتجات النشطة فقط
+        self.fields['product'].queryset = Product.objects.filter(is_active=True)
+
+
+# Formset للبنود
+from django.forms import inlineformset_factory
+
+BatchVoucherItemFormSet = inlineformset_factory(
+    BatchVoucher,
+    BatchVoucherItem,
+    form=BatchVoucherItemForm,
+    extra=1,
+    can_delete=True,
+    min_num=0,
+    validate_min=False,
+)

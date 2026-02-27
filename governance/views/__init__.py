@@ -3,7 +3,6 @@
 # Import all main views
 from .main_views import (
     GovernanceBaseView,
-    GovernanceDashboardView,
     AuditManagementView,
     SystemHealthView,
     SecurityCenterView,
@@ -11,7 +10,21 @@ from .main_views import (
     SignalsManagementView,
     ReportsBuilderView,
     NotificationsCenterView,
-    HealthMonitoringView
+    HealthMonitoringView,
+    delete_old_audit_logs,
+    mark_exception_resolved,
+    mark_exception_ignored,
+    recheck_exception,
+    get_incident_details,
+    resolve_incident,
+    block_ip_address,
+    unblock_ip_address,
+    terminate_session,
+    rotate_encryption_key,
+    create_encryption_key,
+    run_security_scan,
+    rotate_all_keys,
+    export_security_report
 )
 
 # Import payroll signal dashboard views (commented out due to circular import)
@@ -30,7 +43,6 @@ from .main_views import (
 # Make all views available at package level
 __all__ = [
     'GovernanceBaseView',
-    'GovernanceDashboardView',
     'AuditManagementView',
     'SystemHealthView',
     'SecurityCenterView',
@@ -38,5 +50,19 @@ __all__ = [
     'SignalsManagementView',
     'ReportsBuilderView',
     'NotificationsCenterView',
-    'HealthMonitoringView'
+    'HealthMonitoringView',
+    'delete_old_audit_logs',
+    'mark_exception_resolved',
+    'mark_exception_ignored',
+    'recheck_exception',
+    'get_incident_details',
+    'resolve_incident',
+    'block_ip_address',
+    'unblock_ip_address',
+    'terminate_session',
+    'rotate_encryption_key',
+    'create_encryption_key',
+    'run_security_scan',
+    'rotate_all_keys',
+    'export_security_report'
 ]

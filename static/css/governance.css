@@ -1,5 +1,253 @@
 /* Governance System Styles */
 
+/* Health Score Circle */
+.health-score-circle {
+    width: 200px;
+    height: 200px;
+    margin: 20px auto;
+    border-radius: 50%;
+    background-color: var(--bs-light);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 8px solid var(--bs-primary);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.health-score-circle .score-value {
+    font-size: 3rem;
+    font-weight: bold;
+    color: var(--bs-primary);
+    line-height: 1;
+}
+
+.health-score-circle .score-label {
+    font-size: 0.875rem;
+    color: var(--bs-secondary);
+    margin-top: 8px;
+}
+
+/* Health Metrics */
+.health-metric {
+    text-align: center;
+    padding: 15px;
+}
+
+.health-metric .metric-icon {
+    font-size: 2rem;
+    margin-bottom: 10px;
+}
+
+.health-metric .metric-value {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--bs-dark);
+    margin-bottom: 5px;
+}
+
+.health-metric .metric-label {
+    font-size: 0.875rem;
+    color: var(--bs-secondary);
+}
+
+/* Status Items */
+.status-item {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--bs-border-color);
+}
+
+.status-item:last-child {
+    border-bottom: none;
+}
+
+/* Stats Grid */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+}
+
+.stat-box {
+    display: flex;
+    align-items: center;
+    padding: 15px;
+    background-color: var(--bs-light);
+    border-radius: 8px;
+    border: 1px solid var(--bs-border-color);
+}
+
+.stat-box .stat-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.5rem;
+    margin-left: 15px;
+    flex-shrink: 0;
+}
+
+.stat-box .stat-icon.bg-primary {
+    background-color: var(--bs-primary);
+}
+
+.stat-box .stat-icon.bg-success {
+    background-color: var(--bs-success);
+}
+
+.stat-box .stat-icon.bg-info {
+    background-color: var(--bs-info);
+}
+
+.stat-box .stat-icon.bg-warning {
+    background-color: var(--bs-warning);
+}
+
+.stat-box .stat-icon.bg-danger {
+    background-color: var(--bs-danger);
+}
+
+.stat-box .stat-details {
+    flex: 1;
+}
+
+.stat-box .stat-value {
+    font-size: 1.75rem;
+    font-weight: bold;
+    color: var(--bs-dark);
+    line-height: 1;
+    text-align: center;
+}
+
+.stat-box .stat-label {
+    font-size: 0.875rem;
+    color: var(--bs-secondary);
+    margin-top: 5px;
+}
+
+/* Network Stats */
+.network-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.network-stats .stat-item {
+    display: flex;
+    align-items: center;
+    padding: 15px;
+    background-color: var(--bs-light);
+    border-radius: 8px;
+    border: 1px solid var(--bs-border-color);
+}
+
+.network-stats .stat-icon {
+    font-size: 2rem;
+    margin-left: 15px;
+}
+
+.network-stats .stat-info {
+    flex: 1;
+}
+
+.network-stats .stat-value {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--bs-dark);
+    text-align: center;
+}
+
+.network-stats .stat-label {
+    font-size: 0.875rem;
+    color: var(--bs-secondary);
+}
+
+/* Service Status */
+.service-status {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.service-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    background-color: var(--bs-light);
+    border-radius: 6px;
+    border: 1px solid var(--bs-border-color);
+}
+
+.service-item .service-name {
+    font-weight: 500;
+    color: var(--bs-dark);
+}
+
+.service-item .service-indicator {
+    flex-shrink: 0;
+}
+
+/* Exception Analysis */
+.exception-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.exception-item {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--bs-border-color);
+}
+
+.exception-item:last-child {
+    border-bottom: none;
+}
+
+.exceptions-list {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.exception-detail-item {
+    background-color: var(--bs-light);
+    transition: all 0.2s ease;
+}
+
+.exception-detail-item:hover {
+    background-color: rgba(var(--bs-danger-rgb), 0.05);
+    border-color: var(--bs-danger) !important;
+}
+
+.exception-message code {
+    font-size: 0.875rem;
+    color: var(--bs-danger);
+    word-break: break-word;
+}
+
+.exception-location {
+    padding-top: 8px;
+    border-top: 1px solid var(--bs-border-color);
+    margin-bottom: 8px;
+}
+
+.exception-actions {
+    padding-top: 8px;
+    border-top: 1px solid var(--bs-border-color);
+}
+
+.exception-actions .btn {
+    transition: all 0.2s ease;
+}
+
+.exception-actions .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
 /* Section Collapsible Headers */
 .section-title[data-bs-toggle="collapse"] {
     cursor: pointer;
@@ -336,6 +584,44 @@
     
     .chart-preview {
         min-height: 200px;
+    }
+    
+    /* Health Score Responsive */
+    .health-score-circle {
+        width: 150px;
+        height: 150px;
+    }
+    
+    .health-score-circle .score-value {
+        font-size: 2rem;
+    }
+    
+    .health-metric .metric-icon {
+        font-size: 1.5rem;
+    }
+    
+    .health-metric .metric-value {
+        font-size: 1.25rem;
+    }
+    
+    /* Stats Grid Responsive */
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .stat-box {
+        padding: 12px;
+    }
+    
+    .stat-box .stat-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 1.25rem;
+        margin-left: 10px;
+    }
+    
+    .stat-box .stat-value {
+        font-size: 1.5rem;
     }
 }
 

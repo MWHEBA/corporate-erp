@@ -244,9 +244,11 @@ def mark_all_notifications_read(request):
         return JsonResponse({"success": False, "message": str(e)})
 
 
+@require_http_methods(["GET"])
 def get_notifications_count(request):
     """
     API لجلب عدد الإشعارات غير المقروءة
+    Rate limited to prevent excessive polling
     """
     # التحقق من تسجيل الدخول
     if not request.user.is_authenticated:
@@ -256,7 +258,7 @@ def get_notifications_count(request):
         # التحقق من وجود جدول الإشعارات باستخدام Django ORM
         from django.db import connection
         from django.db.utils import OperationalError, ProgrammingError
-        
+
         # محاولة الوصول للجدول - إذا لم يكن موجود سيرمي استثناء
         try:
             unread_count = Notification.objects.filter(
@@ -271,7 +273,7 @@ def get_notifications_count(request):
             # Notification model غير موجود
             logger.warning(f"Notification model غير موجود: {str(e)}")
             return JsonResponse({"success": True, "count": 0})
-            
+
     except Exception as e:
         # Return 0 count instead of error to prevent breaking the page
         logger.error(f"خطأ غير متوقع في جلب عدد الإشعارات: {str(e)}", exc_info=True)

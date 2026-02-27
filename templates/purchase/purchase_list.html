@@ -19,69 +19,14 @@
   <!-- Page Header المركزي -->
   {% include "shared/page_header.html" %}
   
-  <!-- الإحصائيات -->
-  <div class="section-container">
-    <h5 class="section-title"><i class="fas fa-chart-bar me-2"></i>{% trans "الإحصائيات العامة" %}</h5>
-    <div class="row">
-      <div class="col-md-6 col-lg-3 mb-4">
-        <div class="stats-card stats-card-primary">
-          <div class="stats-card-header"></div>
-          <div class="stats-card-body">
-            <div class="stats-card-icon">
-              <i class="fas fa-shopping-cart"></i>
-            </div>
-            <div class="stats-card-title">{% trans "إجمالي الفواتير" %}</div>
-            <div class="stats-card-value">{{ purchases|length|default:"0" }}</div>
-            <div class="stats-card-unit">{% trans "فاتورة شراء" %}</div>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-6 col-lg-3 mb-4">
-        <div class="stats-card stats-card-success">
-          <div class="stats-card-header"></div>
-          <div class="stats-card-body">
-            <div class="stats-card-icon">
-              <i class="fas fa-check-circle"></i>
-            </div>
-            <div class="stats-card-title">{% trans "فواتير مدفوعة" %}</div>
-            <div class="stats-card-value">{{ paid_purchases_count|default:"0" }}</div>
-            <div class="stats-card-unit">{% trans "فاتورة" %}</div>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-6 col-lg-3 mb-4">
-        <div class="stats-card stats-card-danger">
-          <div class="stats-card-header"></div>
-          <div class="stats-card-body">
-            <div class="stats-card-icon">
-              <i class="fas fa-credit-card"></i>
-            </div>
-            <div class="stats-card-title">{% trans "القيمة الإجمالية" %}</div>
-            <div class="stats-card-value">{{ total_amount|smart_float }}</div>
-            <small class="text-muted">{% currency_symbol %}</small>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-6 col-lg-3 mb-4">
-        <div class="stats-card stats-card-info">
-          <div class="stats-card-header"></div>
-          <div class="stats-card-body">
-            <div class="stats-card-icon">
-              <i class="fas fa-undo"></i>
-            </div>
-            <div class="stats-card-title">{% trans "المرتجعات" %}</div>
-            <div class="stats-card-value">{{ returned_purchases_count|default:"0" }}</div>
-            <div class="stats-card-unit">{% trans "فاتورة مرتجعة" %}</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-  
   <!-- تصفية وبحث -->
-  <div class="section-container">
-    <h5 class="section-title"><i class="fas fa-filter me-2"></i>{% trans "تصفية وبحث" %}</h5>
-    <div class="filter-section mb-4">
+  <div class="section-container mb-4">
+    <h5 class="section-title" data-bs-toggle="collapse" data-bs-target="#filterSection" aria-expanded="false">
+      <i class="fas fa-filter me-2"></i>{% trans "تصفية وبحث" %}
+      <i class="fas fa-chevron-down float-end"></i>
+    </h5>
+    <div class="collapse" id="filterSection">
+      <div class="filter-section mb-4">
       <form method="GET" action="" class="row g-3">
         <div class="col-md-3">
           <label for="supplier" class="form-label">{% trans "المورد" %}</label>
@@ -117,6 +62,7 @@
           </button>
         </div>
       </form>
+      </div>
     </div>
   </div>
   
@@ -142,7 +88,7 @@
             order: [[1, 'desc']], // ترتيب حسب التاريخ تنازلياً
             columnDefs: [
                 { targets: -1, orderable: false }, // عمود الإجراءات
-                { targets: [0, 1, 3, 4, 5, 6, 7, 8, 9], className: 'text-center' }
+                { targets: [0, 1, 3, 4, 5, 6, 7, 8], className: 'text-center' }
             ]
         });
     }

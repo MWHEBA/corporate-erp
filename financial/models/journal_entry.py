@@ -12,7 +12,10 @@ from .chart_of_accounts import ChartOfAccounts
 
 class AccountingPeriod(models.Model):
     """
-    الفترات المحاسبية
+    السنوات المالية (Fiscal Years)
+    
+    تمثل السنة المالية للشركة/المؤسسة. كل سنة مالية لها تاريخ بداية ونهاية
+    ويمكن أن تكون مفتوحة أو مغلقة.
     """
 
     STATUS_CHOICES = (
@@ -20,11 +23,43 @@ class AccountingPeriod(models.Model):
         ("closed", _("مغلقة")),
     )
 
-    name = models.CharField(_("اسم الفترة"), max_length=100)
-    start_date = models.DateField(_("تاريخ البداية"))
-    end_date = models.DateField(_("تاريخ النهاية"))
+    name = models.CharField(
+        _("اسم السنة المالية"), 
+        max_length=100,
+        help_text=_("مثال: السنة المالية 2024-2025")
+    )
+    fiscal_year = models.CharField(
+        _("السنة المالية"),
+        max_length=20,
+        unique=True,
+        help_text=_("مثال: 2024-2025 أو 2024")
+    )
+    start_date = models.DateField(
+        _("تاريخ البداية"),
+        help_text=_("تاريخ بداية السنة المالية")
+    )
+    end_date = models.DateField(
+        _("تاريخ النهاية"),
+        help_text=_("تاريخ نهاية السنة المالية")
+    )
     status = models.CharField(
-        _("الحالة"), max_length=10, choices=STATUS_CHOICES, default="open"
+        _("الحالة"), 
+        max_length=10, 
+        choices=STATUS_CHOICES, 
+        default="open"
+    )
+    
+    # معلومات إضافية
+    is_current = models.BooleanField(
+        _("السنة الحالية"),
+        default=False,
+        help_text=_("هل هذه هي السنة المالية الحالية؟")
+    )
+    description = models.TextField(
+        _("الوصف"),
+        blank=True,
+        null=True,
+        help_text=_("وصف أو ملاحظات عن السنة المالية")
     )
 
     # معلومات الإغلاق
@@ -35,58 +70,223 @@ class AccountingPeriod(models.Model):
         null=True,
         blank=True,
         verbose_name=_("أغلق بواسطة"),
-        related_name="periods_closed",
+        related_name="fiscal_years_closed",
     )
 
     # معلومات التتبع
     created_at = models.DateTimeField(_("تاريخ الإنشاء"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("تاريخ التحديث"), auto_now=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         verbose_name=_("أنشئ بواسطة"),
-        related_name="periods_created",
+        related_name="fiscal_years_created",
     )
 
     class Meta:
-        verbose_name = _("فترة محاسبية")
-        verbose_name_plural = _("الفترات المحاسبية")
+        verbose_name = _("سنة مالية")
+        verbose_name_plural = _("السنوات المالية")
         ordering = ["-start_date"]
         unique_together = ["start_date", "end_date"]
+        indexes = [
+            models.Index(fields=["fiscal_year"]),
+            models.Index(fields=["start_date", "end_date"]),
+            models.Index(fields=["status", "is_current"]),
+        ]
 
     def __str__(self):
-        return f"{self.name} ({self.start_date} - {self.end_date})"
+        return f"{self.fiscal_year} - {self.name}"
 
     def clean(self):
+        """التحقق من صحة البيانات"""
+        errors = {}
+        
         if self.start_date and self.end_date:
             if self.start_date >= self.end_date:
-                raise ValidationError(_("تاريخ البداية يجب أن يكون قبل تاريخ النهاية"))
+                errors['end_date'] = _("تاريخ النهاية يجب أن يكون بعد تاريخ البداية")
+        
+        # التحقق من عدم تداخل السنوات المالية
+        overlapping = AccountingPeriod.objects.filter(
+            models.Q(start_date__lte=self.end_date, end_date__gte=self.start_date)
+        ).exclude(pk=self.pk if self.pk else None)
+        
+        if overlapping.exists():
+            errors['start_date'] = _("هناك تداخل مع سنة مالية أخرى")
+        
+        if errors:
+            raise ValidationError(errors)
+    
+    def save(self, *args, **kwargs):
+        """حفظ السنة المالية مع التحقق من السنة الحالية"""
+        # إذا تم تعيين هذه السنة كسنة حالية، إلغاء تعيين السنوات الأخرى
+        if self.is_current:
+            AccountingPeriod.objects.filter(is_current=True).exclude(
+                pk=self.pk if self.pk else None
+            ).update(is_current=False)
+        
+        super().save(*args, **kwargs)
 
     def is_date_in_period(self, date):
-        """التحقق من وجود التاريخ ضمن الفترة"""
+        """التحقق من وجود التاريخ ضمن السنة المالية"""
         # تحويل التاريخ إلى date إذا كان datetime
         if hasattr(date, 'date'):
             date = date.date()
         return self.start_date <= date <= self.end_date
 
     def can_post_entries(self):
-        """التحقق من إمكانية إدراج قيود في الفترة"""
+        """التحقق من إمكانية إدراج قيود في السنة المالية"""
         return self.status == "open"
 
     @property
     def is_active(self):
-        """هل الفترة نشطة"""
+        """هل السنة المالية نشطة (مفتوحة)"""
         return self.status == "open"
 
     @property
     def is_closed(self):
-        """هل الفترة مغلقة"""
+        """هل السنة المالية مغلقة"""
         return self.status == "closed"
+    
+    @property
+    def duration_days(self):
+        """عدد أيام السنة المالية"""
+        if self.start_date and self.end_date:
+            return (self.end_date - self.start_date).days + 1
+        return 0
+    
+    @property
+    def remaining_days(self):
+        """عدد الأيام المتبقية في السنة المالية"""
+        if self.status == "closed":
+            return 0
+        
+        from datetime import date
+        today = date.today()
+        
+        if today > self.end_date:
+            return 0
+        elif today < self.start_date:
+            return self.duration_days
+        else:
+            return (self.end_date - today).days + 1
+    
+    @property
+    def progress_percentage(self):
+        """نسبة التقدم في السنة المالية"""
+        if self.duration_days == 0:
+            return 0
+        
+        from datetime import date
+        today = date.today()
+        
+        if today < self.start_date:
+            return 0
+        elif today > self.end_date:
+            return 100
+        else:
+            elapsed_days = (today - self.start_date).days + 1
+            return round((elapsed_days / self.duration_days) * 100, 2)
 
     @classmethod
     def get_period_for_date(cls, date):
-        """الحصول على الفترة المحاسبية لتاريخ معين"""
+        """الحصول على السنة المالية لتاريخ معين"""
+        # تحويل التاريخ إلى date إذا كان datetime
+        if hasattr(date, 'date'):
+            date = date.date()
         return cls.objects.filter(start_date__lte=date, end_date__gte=date).first()
+    
+    @classmethod
+    def get_current_period(cls):
+        """
+        الحصول على السنة المالية الحالية
+        
+        يتم تحديد السنة الحالية بناءً على التاريخ الحالي للنظام:
+        - يبحث عن السنة المالية المفتوحة التي تحتوي على تاريخ اليوم
+        - إذا لم توجد، يرجع None
+        
+        Returns:
+            AccountingPeriod: السنة المالية الحالية أو None
+        """
+        from datetime import date
+        today = date.today()
+        
+        # البحث عن السنة المفتوحة التي تحتوي على التاريخ الحالي
+        current = cls.objects.filter(
+            start_date__lte=today,
+            end_date__gte=today,
+            status="open"
+        ).first()
+        
+        return current
+    
+    @classmethod
+    def update_current_period_flag(cls):
+        """
+        تحديث علامة is_current تلقائياً لجميع السنوات المالية
+        
+        يتم تحديث العلامة بناءً على التاريخ الحالي:
+        - السنة التي تحتوي على تاريخ اليوم تصبح is_current=True
+        - باقي السنوات تصبح is_current=False
+        
+        Returns:
+            tuple: (عدد السنوات المحدثة، السنة الحالية)
+        """
+        from datetime import date
+        today = date.today()
+        
+        # إلغاء تعيين جميع السنوات كحالية
+        cls.objects.all().update(is_current=False)
+        
+        # تعيين السنة الحالية
+        current = cls.objects.filter(
+            start_date__lte=today,
+            end_date__gte=today,
+            status="open"
+        ).first()
+        
+        if current:
+            current.is_current = True
+            current.save(update_fields=['is_current'])
+            return (1, current)
+        
+        return (0, None)
+    
+    @classmethod
+    def create_fiscal_year(cls, start_date, end_date, user=None):
+        """
+        إنشاء سنة مالية جديدة تلقائياً
+        
+        Args:
+            start_date: تاريخ البداية
+            end_date: تاريخ النهاية
+            user: المستخدم الذي ينشئ السنة
+            
+        Returns:
+            AccountingPeriod: السنة المالية الجديدة
+        """
+        # استخراج السنة من التاريخ
+        start_year = start_date.year
+        end_year = end_date.year
+        
+        if start_year == end_year:
+            fiscal_year = str(start_year)
+            name = f"السنة المالية {start_year}"
+        else:
+            fiscal_year = f"{start_year}-{end_year}"
+            name = f"السنة المالية {start_year}/{end_year}"
+        
+        # إنشاء السنة المالية
+        period = cls.objects.create(
+            name=name,
+            fiscal_year=fiscal_year,
+            start_date=start_date,
+            end_date=end_date,
+            status="open",
+            created_by=user
+        )
+        
+        return period
 
 
 class JournalEntry(models.Model):

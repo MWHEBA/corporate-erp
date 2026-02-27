@@ -358,11 +358,11 @@
             <h1 class="welcome-title">مرحباً بك، {{ request.user.first_name|default:request.user.username }}</h1>
             <p class="welcome-subtitle">أهلاً بك في لوحة التحكم الخاصة بنظام Corporate ERP</p>
             <div class="welcome-actions">
-                <a href="{% url 'purchase:purchase_create' %}" class="btn btn-light me-2">
-                    <i class="fas fa-cart-plus me-1"></i> طلب شراء جديد
+                <a href="{% url 'sale:sale_create' %}" class="btn btn-light me-2">
+                    <i class="fas fa-file-invoice me-1"></i> فاتورة مبيعات
                 </a>
-                <a href="{% url 'supplier:supplier_list' %}" class="btn btn-outline-light">
-                    <i class="fas fa-truck me-1"></i> إدارة الموردين
+                <a href="{% url 'purchase:purchase_create' %}" class="btn btn-outline-light">
+                    <i class="fas fa-cart-plus me-1"></i> فاتورة شراء
                 </a>
             </div>
         </div>
@@ -372,7 +372,7 @@
         <!-- إحصائيات سريعة -->
         <div class="col-lg-12 mb-4">
             <div class="row">
-                <!-- إحصائيات المشتريات -->
+                <!-- إحصائيات المبيعات -->
                 <div class="col-md-6 col-lg-3 mb-4">
                     <div class="stats-card stats-card-primary">
                         <div class="stats-card-header"></div>
@@ -380,29 +380,14 @@
                             <div class="stats-card-icon">
                                 <i class="fas fa-shopping-cart"></i>
                             </div>
-                            <div class="stats-card-title">المشتريات</div>
-                            <div class="stats-card-value">{{ purchases_month.count|default:0 }}</div>
-                            <div class="stats-card-unit">هذا الشهر</div>
+                            <div class="stats-card-title">المبيعات</div>
+                            <div class="stats-card-value">{{ sales_month_count|default:0 }}</div>
+                            <div class="stats-card-unit">فاتورة هذا الشهر</div>
                         </div>
                     </div>
                 </div>
                 
-                <!-- إحصائيات الموظفين -->
-                <div class="col-md-6 col-lg-3 mb-4">
-                    <div class="stats-card stats-card-info">
-                        <div class="stats-card-header"></div>
-                        <div class="stats-card-body">
-                            <div class="stats-card-icon">
-                                <i class="fas fa-user-tie"></i>
-                            </div>
-                            <div class="stats-card-title">الموظفين</div>
-                            <div class="stats-card-value">{{ employees_count|default:0 }}</div>
-                            <div class="stats-card-unit">موظف نشط</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- إحصائيات الموردين -->
+                <!-- إحصائيات المشتريات -->
                 <div class="col-md-6 col-lg-3 mb-4">
                     <div class="stats-card stats-card-success">
                         <div class="stats-card-header"></div>
@@ -410,24 +395,39 @@
                             <div class="stats-card-icon">
                                 <i class="fas fa-truck"></i>
                             </div>
-                            <div class="stats-card-title">الموردين</div>
-                            <div class="stats-card-value">{{ suppliers_count|default:0 }}</div>
-                            <div class="stats-card-unit">مورد نشط</div>
+                            <div class="stats-card-title">المشتريات</div>
+                            <div class="stats-card-value">{{ purchases_month.count|default:0 }}</div>
+                            <div class="stats-card-unit">فاتورة هذا الشهر</div>
                         </div>
                     </div>
                 </div>
                 
-                <!-- إحصائيات المنتجات -->
+                <!-- إحصائيات المخزون -->
                 <div class="col-md-6 col-lg-3 mb-4">
                     <div class="stats-card stats-card-warning">
                         <div class="stats-card-header"></div>
                         <div class="stats-card-body">
                             <div class="stats-card-icon">
-                                <i class="fas fa-box"></i>
+                                <i class="fas fa-warehouse"></i>
                             </div>
-                            <div class="stats-card-title">المنتجات</div>
+                            <div class="stats-card-title">المخزون</div>
                             <div class="stats-card-value">{{ products_count|default:0 }}</div>
                             <div class="stats-card-unit">منتج نشط</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- إحصائيات المستحقات -->
+                <div class="col-md-6 col-lg-3 mb-4">
+                    <div class="stats-card stats-card-danger">
+                        <div class="stats-card-header"></div>
+                        <div class="stats-card-body">
+                            <div class="stats-card-icon">
+                                <i class="fas fa-file-invoice-dollar"></i>
+                            </div>
+                            <div class="stats-card-title">المستحقات</div>
+                            <div class="stats-card-value">{{ total_dues|default:0|smart_float }}</div>
+                            <div class="stats-card-unit">ج.م</div>
                         </div>
                     </div>
                 </div>
@@ -435,18 +435,97 @@
         </div>
     </div>
     
-
+    <div class="row">
+        <!-- المستحقات المالية -->
+        <div class="col-lg-12 mb-4">
+            <div class="dashboard-card">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="fas fa-money-bill-wave me-2 text-info"></i>
+                        المستحقات المالية
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <div class="financial-card">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <div class="text-muted">مستحقات العملاء</div>
+                                    <i class="fas fa-arrow-down text-success"></i>
+                                </div>
+                                <div class="h4 mb-0 text-success">{{ customer_dues|default:0|smart_float }}</div>
+                                <div class="text-muted small">ج.م</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="financial-card">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <div class="text-muted">مستحقات الموردين</div>
+                                    <i class="fas fa-arrow-up text-danger"></i>
+                                </div>
+                                <div class="h4 mb-0 text-danger">{{ supplier_dues|default:0|smart_float }}</div>
+                                <div class="text-muted small">ج.م</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="financial-card">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <div class="text-muted">إيرادات الشهر</div>
+                                    <i class="fas fa-chart-line text-primary"></i>
+                                </div>
+                                <div class="h4 mb-0 text-primary">{{ sales_month_total|default:0|smart_float }}</div>
+                                <div class="text-muted small">ج.م</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="financial-card">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <div class="text-muted">مصروفات الشهر</div>
+                                    <i class="fas fa-chart-line text-warning"></i>
+                                </div>
+                                <div class="h4 mb-0 text-warning">{{ purchases_month_total|default:0|smart_float }}</div>
+                                <div class="text-muted small">ج.م</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
     
     <div class="row">
-        <!-- قسم الفواتير المستحقة للموردين -->
+        <!-- فواتير المبيعات المستحقة -->
         <div class="col-lg-6 mb-4">
             <div class="dashboard-card h-100">
                 <div class="card-header">
                     <h5 class="card-title">
-                        <i class="fas fa-file-invoice-dollar me-2 text-warning"></i>
-                        الفواتير المستحقة للموردين
+                        <i class="fas fa-file-invoice me-2 text-primary"></i>
+                        فواتير المبيعات المستحقة
                     </h5>
-                    <a href="{% url 'purchase:purchase_list' %}" class="btn btn-sm btn-warning">كل الفواتير</a>
+                    <a href="{% url 'sale:sale_list' %}" class="btn btn-sm btn-primary">كل الفواتير</a>
+                </div>
+                <div class="card-body">
+                    {% if customer_invoices_data %}
+                    {% include "components/data_table.html" with table_id="customer-invoices-table" headers=customer_invoices_headers data=customer_invoices_data empty_message="لا توجد فواتير مستحقة" %}
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                        <p class="text-muted">لا توجد فواتير مستحقة من العملاء</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- فواتير المشتريات المستحقة -->
+        <div class="col-lg-6 mb-4">
+            <div class="dashboard-card h-100">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="fas fa-file-invoice-dollar me-2 text-success"></i>
+                        فواتير المشتريات المستحقة
+                    </h5>
+                    <a href="{% url 'purchase:purchase_list' %}" class="btn btn-sm btn-success">كل الفواتير</a>
                 </div>
                 <div class="card-body">
                     {% if supplier_invoices_data %}
@@ -460,8 +539,10 @@
                 </div>
             </div>
         </div>
-        
-        <!-- قسم المنتجات منخفضة المخزون -->
+    </div>
+    
+    <div class="row">
+        <!-- المنتجات منخفضة المخزون -->
         <div class="col-lg-6 mb-4">
             <div class="dashboard-card h-100">
                 <div class="card-header">
@@ -496,112 +577,44 @@
                 </div>
             </div>
         </div>
-    </div>
-    
-    <div class="row">
-        <!-- حضور الموظفين اليوم -->
-        <div class="col-lg-6 mb-4">
-            <div class="dashboard-card h-100">
-                <div class="card-header">
-                    <h5 class="card-title">
-                        <i class="fas fa-user-check me-2 text-success"></i>
-                        حضور الموظفين اليوم
-                    </h5>
-                    <span class="badge bg-info">{{ present_count }} / {{ total_employees }}</span>
-                </div>
-                <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <div class="text-center p-3 bg-light rounded">
-                                <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
-                                <h3 class="mb-1">{{ present_count }}</h3>
-                                <p class="text-muted small mb-0">حاضر</p>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="text-center p-3 bg-light rounded">
-                                <i class="fas fa-times-circle fa-2x text-danger mb-2"></i>
-                                <h3 class="mb-1">{{ absent_count }}</h3>
-                                <p class="text-muted small mb-0">غائب</p>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="text-center p-3 bg-light rounded">
-                                <i class="fas fa-plane fa-2x text-warning mb-2"></i>
-                                <h3 class="mb-1">{{ on_leave_today }}</h3>
-                                <p class="text-muted small mb-0">في إجازة</p>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="mt-3">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <span class="text-muted">نسبة الحضور</span>
-                            <span class="fw-bold text-success">{{ attendance_percentage }}%</span>
-                        </div>
-                        <div class="progress" style="height: 25px;">
-                            <div class="progress-bar bg-success" role="progressbar" style="width: {{ attendance_percentage }}%">
-                                {{ attendance_percentage }}%
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
         
-        <!-- طلبات الإجازة والأذونات -->
+        <!-- آخر العمليات -->
         <div class="col-lg-6 mb-4">
             <div class="dashboard-card h-100">
                 <div class="card-header">
                     <h5 class="card-title">
-                        <i class="fas fa-calendar-alt me-2 text-primary"></i>
-                        طلبات الإجازة والأذونات
+                        <i class="fas fa-history me-2 text-info"></i>
+                        آخر العمليات
                     </h5>
-                    <a href="#" class="btn btn-sm btn-primary">كل الطلبات</a>
                 </div>
                 <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <div class="financial-card">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <div class="text-muted">طلبات معلقة</div>
-                                    <i class="fas fa-clock text-warning"></i>
+                    {% if recent_activities %}
+                    <div class="list-group list-group-flush">
+                        {% for activity in recent_activities %}
+                        <div class="list-group-item px-0">
+                            <div class="d-flex align-items-center">
+                                <div class="flex-shrink-0">
+                                    <div class="inventory-alert-icon" style="width: 40px; height: 40px;">
+                                        <i class="fas {{ activity.icon }}"></i>
+                                    </div>
                                 </div>
-                                <div class="h4 mb-0 text-warning">{{ pending_leaves }}</div>
-                                <div class="text-muted small">تحتاج موافقة</div>
+                                <div class="flex-grow-1 ms-3">
+                                    <div class="fw-bold">{{ activity.title }}</div>
+                                    <div class="text-muted small">{{ activity.description }}</div>
+                                    <div class="text-muted small">
+                                        <i class="far fa-clock me-1"></i>{{ activity.time }}
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="financial-card">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <div class="text-muted">إجازات معتمدة</div>
-                                    <i class="fas fa-check text-success"></i>
-                                </div>
-                                <div class="h4 mb-0 text-success">{{ approved_leaves_month }}</div>
-                                <div class="text-muted small">هذا الشهر</div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="financial-card">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <div class="text-muted">في إجازة اليوم</div>
-                                    <i class="fas fa-user-clock text-info"></i>
-                                </div>
-                                <div class="h4 mb-0 text-info">{{ on_leave_today }}</div>
-                                <div class="text-muted small">موظف</div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="financial-card">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <div class="text-muted">إجمالي الموظفين</div>
-                                    <i class="fas fa-users text-primary"></i>
-                                </div>
-                                <div class="h4 mb-0 text-primary">{{ total_employees }}</div>
-                                <div class="text-muted small">موظف نشط</div>
-                            </div>
-                        </div>
+                        {% endfor %}
                     </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">لا توجد عمليات حديثة</p>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>

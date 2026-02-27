@@ -23,7 +23,8 @@ from .payment_sync import (
 )
 from .bank_reconciliation import BankReconciliation, BankReconciliationItem
 from .categories import FinancialCategory, CategoryBudget, FinancialSubcategory
-from .audit_trail import AuditTrail, PaymentAuditMixin
+# AuditTrail moved to governance app - use governance.models.AuditTrail instead
+# PaymentAuditMixin moved to financial.mixins
 from .invoice_audit_log import InvoiceAuditLog
 from .partner_transactions import PartnerTransaction, PartnerBalance
 from .partner_settings import PartnerSettings, PartnerPermission, PartnerAuditLog
@@ -75,8 +76,8 @@ __all__ = [
     "CategoryBudget",
     "FinancialSubcategory",
     # نماذج التدقيق
-    "AuditTrail",
-    "PaymentAuditMixin",
+    # "AuditTrail",  # Moved to governance.models.AuditTrail
+    # "PaymentAuditMixin",  # Moved to financial.mixins.PaymentAuditMixin
     "InvoiceAuditLog",
     # نماذج معاملات الشريك
     "PartnerTransaction",
