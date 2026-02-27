@@ -5,6 +5,9 @@ from . import views
 app_name = 'governance'
 
 urlpatterns = [
+    # Governance Settings Hub
+    path('settings/', views.GovernanceSettingsView.as_view(), name='governance_settings'),
+    
     # Audit Management
     path('audit/', views.AuditManagementView.as_view(), name='audit_management'),
     path('audit/delete-old/', views.delete_old_audit_logs, name='delete_old_audit_logs'),
@@ -45,9 +48,17 @@ urlpatterns = [
     # Reports Builder
     path('reports/', views.ReportsBuilderView.as_view(), name='reports_builder'),
     
-    # Notifications Center
-    path('notifications/', views.NotificationsCenterView.as_view(), name='notifications_center'),
+    # Reports API
+    path('api/reports/fields/', views.GetAvailableFieldsAPI.as_view(), name='api_get_fields'),
+    path('api/reports/generate/', views.GenerateReportAPI.as_view(), name='api_generate_report'),
+    path('api/reports/save/', views.SaveReportAPI.as_view(), name='api_save_report'),
+    path('api/reports/<int:report_id>/run/', views.RunSavedReportAPI.as_view(), name='api_run_report'),
+    path('api/reports/<int:report_id>/download/', views.DownloadReportAPI.as_view(), name='api_download_report'),
+    path('api/reports/<int:report_id>/delete/', views.DeleteReportAPI.as_view(), name='api_delete_report'),
+    path('api/reports/schedule/create/', views.CreateScheduleAPI.as_view(), name='api_create_schedule'),
+    path('api/reports/schedule/<int:schedule_id>/pause/', views.PauseScheduleAPI.as_view(), name='api_pause_schedule'),
+    path('api/reports/schedule/<int:schedule_id>/resume/', views.ResumeScheduleAPI.as_view(), name='api_resume_schedule'),
     
-    # Health Monitoring
-    path('monitoring/', views.HealthMonitoringView.as_view(), name='health_monitoring'),
+    # Health Monitoring - Redirect to System Health
+    path('monitoring/', RedirectView.as_view(url='/governance/health/', permanent=True), name='health_monitoring'),
 ]

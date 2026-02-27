@@ -664,3 +664,7 @@ class SecurityPolicyAdmin(admin.ModelAdmin):
         count = queryset.update(is_enabled=False, updated_by=request.user, updated_at=timezone.now())
         self.message_user(request, f'تم تعطيل {count} سياسة.')
     disable_policies.short_description = 'تعطيل السياسات المحددة'
+
+
+# Import Reports admin
+from .admin_reports import SavedReportAdmin, ReportScheduleAdmin, ReportExecutionAdmin

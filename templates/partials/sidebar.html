@@ -627,67 +627,14 @@
                                 <i class="fas fa-check-circle me-2"></i>{% trans "فحص سلامة البيانات" %}
                             </a>
                         </li>
-                    </ul>
-                </li>
-
-                <!-- الحوكمة والإدارة المتقدمة -->
-                <li class="sidebar-item">
-                    <a href="#governanceMenu" class="sidebar-link collapsed {% if active_menu == 'governance' %}active{% endif %}" data-bs-toggle="collapse" aria-expanded="false">
-                        <i class="fas fa-shield-alt sidebar-icon"></i>
-                        <span class="sidebar-text">الحوكمة والإدارة</span>
-                        <i class="fas fa-chevron-down sidebar-arrow"></i>
-                    </a>
-                    <ul class="collapse list-unstyled submenu {% if active_menu == 'governance' %}show{% endif %}" id="governanceMenu">
-                        <!-- الحوكمة والمراقبة -->
-                        <li class="submenu-title">الحوكمة والمراقبة</li>
-                        <li>
-                            <a href="{% url 'governance:audit_management' %}" class="submenu-link">
-                                <i class="fas fa-clipboard-list me-2"></i>إدارة التدقيق والسجلات
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{% url 'governance:system_health' %}" class="submenu-link">
-                                <i class="fas fa-heartbeat me-2"></i>صحة النظام والأداء
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{% url 'governance:security_center' %}" class="submenu-link">
-                                <i class="fas fa-shield-alt me-2"></i>مركز الأمان والحوادث
-                            </a>
-                        </li>
                         
                         <div class="nav-divider"></div>
                         
-                        <!-- الأمان -->
-                        <li class="submenu-title">الأمان</li>
+                        <!-- الحوكمة والإدارة -->
+                        <li class="submenu-title">الحوكمة والإدارة</li>
                         <li>
-                            <a href="{% url 'governance:security_policies' %}" class="submenu-link">
-                                <i class="fas fa-lock me-2"></i>السياسات الأمنية
-                            </a>
-                        </li>
-                        
-                        <div class="nav-divider"></div>
-                        
-                        <!-- الإدارة المتقدمة -->
-                        <li class="submenu-title">الإدارة المتقدمة</li>
-                        <li>
-                            <a href="{% url 'governance:signals_management' %}" class="submenu-link">
-                                <i class="fas fa-broadcast-tower me-2"></i>إدارة الإشارات والأذونات
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{% url 'governance:reports_builder' %}" class="submenu-link">
-                                <i class="fas fa-chart-line me-2"></i>مركز بناء التقارير
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{% url 'governance:notifications_center' %}" class="submenu-link">
-                                <i class="fas fa-bell me-2"></i>مركز الإشعارات المتقدم
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{% url 'governance:health_monitoring' %}" class="submenu-link">
-                                <i class="fas fa-stethoscope me-2"></i>مراقبة الصحة المتقدمة
+                            <a href="{% url 'governance:governance_settings' %}" class="submenu-link">
+                                <i class="fas fa-shield-alt me-2"></i>{% trans "إعدادات الحوكمة" %}
                             </a>
                         </li>
                     </ul>

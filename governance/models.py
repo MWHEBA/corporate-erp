@@ -1341,3 +1341,285 @@ class SignalPerformanceAlert(models.Model):
         except Exception as e:
             logger.error(f"Failed to create signal alert: {e}")
             return None
+
+
+# ==================== Reports Builder Models ====================
+
+class SavedReport(models.Model):
+    """
+    التقارير المحفوظة
+    Saved custom reports
+    """
+    
+    REPORT_TYPES = [
+        ('table', 'جدول'),
+        ('bar', 'رسم بياني عمودي'),
+        ('pie', 'رسم دائري'),
+        ('line', 'رسم خطي'),
+        ('summary', 'ملخص إحصائي'),
+    ]
+    
+    DATA_SOURCES = [
+        ('customers', 'العملاء'),
+        ('sales', 'فواتير المبيعات'),
+        ('purchases', 'فواتير المشتريات'),
+        ('payments', 'المدفوعات'),
+        ('employees', 'الموظفين'),
+        ('journal_entries', 'القيود اليومية'),
+        ('products', 'المنتجات'),
+        ('suppliers', 'الموردين'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('ACTIVE', 'نشط'),
+        ('INACTIVE', 'غير نشط'),
+        ('ARCHIVED', 'مؤرشف'),
+    ]
+    
+    name = models.CharField(max_length=200, verbose_name='اسم التقرير')
+    description = models.TextField(blank=True, verbose_name='الوصف')
+    report_type = models.CharField(max_length=20, choices=REPORT_TYPES, verbose_name='نوع التقرير')
+    data_source = models.CharField(max_length=50, choices=DATA_SOURCES, verbose_name='مصدر البيانات')
+    
+    # Report configuration
+    selected_fields = models.JSONField(default=list, verbose_name='الحقول المختارة')
+    filters = models.JSONField(default=dict, verbose_name='المرشحات')
+    group_by = models.CharField(max_length=50, blank=True, verbose_name='التجميع حسب')
+    sort_by = models.CharField(max_length=50, blank=True, verbose_name='الترتيب حسب')
+    sort_order = models.CharField(max_length=10, default='asc', choices=[('asc', 'تصاعدي'), ('desc', 'تنازلي')], verbose_name='اتجاه الترتيب')
+    
+    # Metadata
+    created_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='created_reports', verbose_name='تم الإنشاء بواسطة')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='تاريخ الإنشاء')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='تاريخ التحديث')
+    last_run_at = models.DateTimeField(null=True, blank=True, verbose_name='آخر تشغيل')
+    run_count = models.PositiveIntegerField(default=0, verbose_name='عدد مرات التشغيل')
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE', verbose_name='الحالة')
+    is_public = models.BooleanField(default=False, verbose_name='عام')
+    
+    class Meta:
+        verbose_name = 'تقرير محفوظ'
+        verbose_name_plural = 'التقارير المحفوظة'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['created_by', '-created_at']),
+            models.Index(fields=['data_source', 'status']),
+            models.Index(fields=['status', '-last_run_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.name} ({self.get_report_type_display()})"
+    
+    def increment_run_count(self):
+        """زيادة عداد التشغيل"""
+        self.run_count += 1
+        self.last_run_at = timezone.now()
+        self.save(update_fields=['run_count', 'last_run_at'])
+    
+    def can_user_access(self, user):
+        """التحقق من صلاحية الوصول"""
+        return self.is_public or self.created_by == user or user.is_superuser
+
+
+class ReportSchedule(models.Model):
+    """
+    جدولة التقارير
+    Report scheduling
+    """
+    
+    FREQUENCY_CHOICES = [
+        ('daily', 'يومياً'),
+        ('weekly', 'أسبوعياً'),
+        ('monthly', 'شهرياً'),
+        ('quarterly', 'ربع سنوي'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('ACTIVE', 'نشط'),
+        ('PAUSED', 'متوقف مؤقتاً'),
+        ('DISABLED', 'معطل'),
+    ]
+    
+    report = models.ForeignKey(SavedReport, on_delete=models.CASCADE, related_name='schedules', verbose_name='التقرير')
+    frequency = models.CharField(max_length=20, choices=FREQUENCY_CHOICES, verbose_name='التكرار')
+    schedule_time = models.TimeField(verbose_name='وقت التشغيل')
+    
+    # For weekly: 0=Monday, 6=Sunday
+    day_of_week = models.IntegerField(null=True, blank=True, verbose_name='يوم الأسبوع', 
+                                     help_text='0=الاثنين, 6=الأحد')
+    # For monthly: 1-31
+    day_of_month = models.IntegerField(null=True, blank=True, verbose_name='يوم الشهر',
+                                      help_text='1-31')
+    
+    # Email recipients
+    email_recipients = models.TextField(verbose_name='المستلمون', 
+                                       help_text='عناوين البريد الإلكتروني مفصولة بفواصل')
+    
+    # Status
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE', verbose_name='الحالة')
+    created_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='created_schedules', verbose_name='تم الإنشاء بواسطة')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='تاريخ الإنشاء')
+    
+    last_run_at = models.DateTimeField(null=True, blank=True, verbose_name='آخر تشغيل')
+    next_run_at = models.DateTimeField(null=True, blank=True, verbose_name='التشغيل التالي')
+    
+    class Meta:
+        verbose_name = 'جدولة تقرير'
+        verbose_name_plural = 'جدولة التقارير'
+        ordering = ['next_run_at']
+        indexes = [
+            models.Index(fields=['status', 'next_run_at']),
+            models.Index(fields=['report', '-created_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.report.name} - {self.get_frequency_display()}"
+    
+    def calculate_next_run(self):
+        """حساب موعد التشغيل التالي"""
+        from datetime import datetime, timedelta
+        
+        now = timezone.now()
+        today = now.date()
+        schedule_datetime = datetime.combine(today, self.schedule_time)
+        schedule_datetime = timezone.make_aware(schedule_datetime)
+        
+        if self.frequency == 'daily':
+            if schedule_datetime <= now:
+                schedule_datetime += timedelta(days=1)
+        
+        elif self.frequency == 'weekly':
+            days_ahead = self.day_of_week - today.weekday()
+            if days_ahead <= 0:
+                days_ahead += 7
+            schedule_datetime += timedelta(days=days_ahead)
+            if schedule_datetime <= now:
+                schedule_datetime += timedelta(weeks=1)
+        
+        elif self.frequency == 'monthly':
+            if self.day_of_month:
+                schedule_datetime = schedule_datetime.replace(day=min(self.day_of_month, 28))
+                if schedule_datetime <= now:
+                    # Move to next month
+                    if schedule_datetime.month == 12:
+                        schedule_datetime = schedule_datetime.replace(year=schedule_datetime.year + 1, month=1)
+                    else:
+                        schedule_datetime = schedule_datetime.replace(month=schedule_datetime.month + 1)
+        
+        elif self.frequency == 'quarterly':
+            # Every 3 months
+            if schedule_datetime <= now:
+                months_to_add = 3
+                new_month = schedule_datetime.month + months_to_add
+                new_year = schedule_datetime.year
+                while new_month > 12:
+                    new_month -= 12
+                    new_year += 1
+                schedule_datetime = schedule_datetime.replace(year=new_year, month=new_month)
+        
+        self.next_run_at = schedule_datetime
+        self.save(update_fields=['next_run_at'])
+        return schedule_datetime
+    
+    def mark_as_run(self):
+        """تسجيل التشغيل"""
+        self.last_run_at = timezone.now()
+        self.calculate_next_run()
+    
+    def pause(self):
+        """إيقاف مؤقت"""
+        self.status = 'PAUSED'
+        self.save(update_fields=['status'])
+    
+    def resume(self):
+        """استئناف"""
+        self.status = 'ACTIVE'
+        self.calculate_next_run()
+
+
+class ReportExecution(models.Model):
+    """
+    سجل تنفيذ التقارير
+    Report execution log
+    """
+    
+    STATUS_CHOICES = [
+        ('PENDING', 'قيد الانتظار'),
+        ('RUNNING', 'قيد التشغيل'),
+        ('SUCCESS', 'نجح'),
+        ('FAILED', 'فشل'),
+    ]
+    
+    report = models.ForeignKey(SavedReport, on_delete=models.CASCADE, related_name='executions', verbose_name='التقرير')
+    schedule = models.ForeignKey(ReportSchedule, on_delete=models.SET_NULL, null=True, blank=True, 
+                                related_name='executions', verbose_name='الجدولة')
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING', verbose_name='الحالة')
+    started_at = models.DateTimeField(auto_now_add=True, verbose_name='وقت البدء')
+    completed_at = models.DateTimeField(null=True, blank=True, verbose_name='وقت الانتهاء')
+    execution_time_ms = models.IntegerField(null=True, blank=True, verbose_name='وقت التنفيذ (ms)')
+    
+    triggered_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                    related_name='triggered_executions', verbose_name='تم التشغيل بواسطة')
+    
+    # Results
+    rows_count = models.IntegerField(null=True, blank=True, verbose_name='عدد الصفوف')
+    result_data = models.JSONField(null=True, blank=True, verbose_name='بيانات النتيجة')
+    
+    # Error handling
+    error_message = models.TextField(blank=True, verbose_name='رسالة الخطأ')
+    error_traceback = models.TextField(blank=True, verbose_name='تتبع الخطأ')
+    
+    class Meta:
+        verbose_name = 'تنفيذ تقرير'
+        verbose_name_plural = 'تنفيذات التقارير'
+        ordering = ['-started_at']
+        indexes = [
+            models.Index(fields=['report', '-started_at']),
+            models.Index(fields=['status', '-started_at']),
+            models.Index(fields=['-started_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.report.name} - {self.status} - {self.started_at}"
+    
+    def mark_as_success(self, rows_count, result_data=None):
+        """تسجيل النجاح"""
+        self.status = 'SUCCESS'
+        self.completed_at = timezone.now()
+        self.execution_time_ms = int((self.completed_at - self.started_at).total_seconds() * 1000)
+        self.rows_count = rows_count
+        self.result_data = result_data
+        self.save()
+    
+    def mark_as_failed(self, error_message, error_traceback=''):
+        """تسجيل الفشل"""
+        self.status = 'FAILED'
+        self.completed_at = timezone.now()
+        self.execution_time_ms = int((self.completed_at - self.started_at).total_seconds() * 1000)
+        self.error_message = error_message
+        self.error_traceback = error_traceback
+        self.save()
+    
+    @classmethod
+    def get_statistics(cls, days=7):
+        """إحصائيات التنفيذ"""
+        from datetime import timedelta
+        from django.db.models import Avg, Count
+        
+        start_date = timezone.now() - timedelta(days=days)
+        executions = cls.objects.filter(started_at__gte=start_date)
+        
+        total = executions.count()
+        successful = executions.filter(status='SUCCESS').count()
+        failed = executions.filter(status='FAILED').count()
+        
+        return {
+            'total': total,
+            'successful': successful,
+            'failed': failed,
+            'success_rate': round((successful / total * 100) if total > 0 else 100, 1),
+            'avg_time': executions.filter(status='SUCCESS').aggregate(
+                avg=Avg('execution_time_ms'))['avg'] or 0,
+        }

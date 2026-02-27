@@ -9,8 +9,6 @@ from .main_views import (
     SecurityPoliciesView,
     SignalsManagementView,
     ReportsBuilderView,
-    NotificationsCenterView,
-    HealthMonitoringView,
     delete_old_audit_logs,
     mark_exception_resolved,
     mark_exception_ignored,
@@ -25,6 +23,22 @@ from .main_views import (
     run_security_scan,
     rotate_all_keys,
     export_security_report
+)
+
+# Import settings view
+from .settings_view import GovernanceSettingsView
+
+# Import Reports API views
+from .reports_api import (
+    GetAvailableFieldsAPI,
+    GenerateReportAPI,
+    SaveReportAPI,
+    RunSavedReportAPI,
+    DeleteReportAPI,
+    DownloadReportAPI,
+    CreateScheduleAPI,
+    PauseScheduleAPI,
+    ResumeScheduleAPI,
 )
 
 # Import payroll signal dashboard views (commented out due to circular import)
@@ -49,8 +63,7 @@ __all__ = [
     'SecurityPoliciesView',
     'SignalsManagementView',
     'ReportsBuilderView',
-    'NotificationsCenterView',
-    'HealthMonitoringView',
+    'GovernanceSettingsView',
     'delete_old_audit_logs',
     'mark_exception_resolved',
     'mark_exception_ignored',
@@ -64,5 +77,15 @@ __all__ = [
     'create_encryption_key',
     'run_security_scan',
     'rotate_all_keys',
-    'export_security_report'
+    'export_security_report',
+    # Reports API
+    'GetAvailableFieldsAPI',
+    'GenerateReportAPI',
+    'SaveReportAPI',
+    'RunSavedReportAPI',
+    'DeleteReportAPI',
+    'DownloadReportAPI',
+    'CreateScheduleAPI',
+    'PauseScheduleAPI',
+    'ResumeScheduleAPI',
 ]

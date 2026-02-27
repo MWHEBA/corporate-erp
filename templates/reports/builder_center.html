@@ -60,9 +60,6 @@
     <!-- Page Header -->
     {% include "shared/page_header.html" with title=title subtitle=subtitle icon=icon %}
     
-    <!-- Breadcrumb -->
-    {% include "shared/breadcrumb.html" with items=breadcrumb_items %}
-    
     <!-- Reports Overview -->
     <div class="section-container">
         <h5 class="section-title"><i class="fas fa-chart-bar me-2"></i>نظرة عامة على التقارير</h5>
@@ -72,7 +69,7 @@
                     <div class="stats-card-body">
                         <div class="stats-card-icon"><i class="fas fa-file-alt"></i></div>
                         <div class="stats-card-title">التقارير المحفوظة</div>
-                        <div class="stats-card-value">24</div>
+                        <div class="stats-card-value">{{ stats.total_reports }}</div>
                         <div class="stats-card-unit">تقرير</div>
                     </div>
                 </div>
@@ -82,7 +79,7 @@
                     <div class="stats-card-body">
                         <div class="stats-card-icon"><i class="fas fa-clock"></i></div>
                         <div class="stats-card-title">التقارير المجدولة</div>
-                        <div class="stats-card-value">8</div>
+                        <div class="stats-card-value">{{ stats.scheduled_reports }}</div>
                         <div class="stats-card-unit">تقرير</div>
                     </div>
                 </div>
@@ -92,7 +89,7 @@
                     <div class="stats-card-body">
                         <div class="stats-card-icon"><i class="fas fa-download"></i></div>
                         <div class="stats-card-title">تم تصديرها اليوم</div>
-                        <div class="stats-card-value">156</div>
+                        <div class="stats-card-value">{{ stats.executions_today }}</div>
                         <div class="stats-card-unit">تقرير</div>
                     </div>
                 </div>
@@ -102,7 +99,7 @@
                     <div class="stats-card-body">
                         <div class="stats-card-icon"><i class="fas fa-users"></i></div>
                         <div class="stats-card-title">المستخدمين النشطين</div>
-                        <div class="stats-card-value">12</div>
+                        <div class="stats-card-value">{{ stats.active_users }}</div>
                         <div class="stats-card-unit">مستخدم</div>
                     </div>
                 </div>
@@ -112,12 +109,11 @@
     
     <!-- Report Builder -->
     <div class="section-container mb-4">
-        <h5 class="section-title" data-bs-toggle="collapse" data-bs-target="#reportBuilder" aria-expanded="true">
-            <i class="fas fa-tools me-2"></i>منشئ التقارير المخصصة<i class="fas fa-chevron-down float-end"></i>
+        <h5 class="section-title">
+            <i class="fas fa-tools me-2"></i>منشئ التقارير المخصصة
         </h5>
-        <div class="collapse show" id="reportBuilder">
-            <div class="card">
-                <div class="card-body report-builder">
+        <div class="card">
+            <div class="card-body report-builder">
                     <div class="row">
                         <!-- Data Source Selection -->
                         <div class="col-lg-3 mb-3">
@@ -125,11 +121,13 @@
                             <select class="form-select mb-3" id="dataSource" onchange="loadFields()">
                                 <option value="">اختر مصدر البيانات</option>
                                 <option value="customers">العملاء</option>
-                                <option value="invoices">الفواتير</option>
+                                <option value="sales">فواتير المبيعات</option>
+                                <option value="purchases">فواتير المشتريات</option>
                                 <option value="payments">المدفوعات</option>
-                                <option value="activities">الأنشطة</option>
-                                <option value="transportation">النقل</option>
-                                <option value="hr">الموارد البشرية</option>
+                                <option value="employees">الموظفين</option>
+                                <option value="journal_entries">القيود اليومية</option>
+                                <option value="products">المنتجات</option>
+                                <option value="suppliers">الموردين</option>
                             </select>
                             
                             <h6><i class="fas fa-list me-2"></i>الحقول المتاحة</h6>
@@ -164,7 +162,7 @@
                             <h6><i class="fas fa-chart-pie me-2"></i>نوع التقرير</h6>
                             <div class="row mb-3">
                                 <div class="col-6">
-                                    <select class="form-select" id="reportType" onchange="updatePreview()">
+                                    <select class="form-select" id="reportType" onchange="debouncedUpdatePreview()">
                                         <option value="table">جدول</option>
                                         <option value="bar">رسم بياني عمودي</option>
                                         <option value="pie">رسم دائري</option>
@@ -215,16 +213,14 @@
                 </div>
             </div>
         </div>
-    </div>
     
     <!-- Saved Reports -->
     <div class="section-container mb-4">
-        <h5 class="section-title" data-bs-toggle="collapse" data-bs-target="#savedReports" aria-expanded="false">
-            <i class="fas fa-folder me-2"></i>التقارير المحفوظة<i class="fas fa-chevron-down float-end"></i>
+        <h5 class="section-title">
+            <i class="fas fa-folder me-2"></i>التقارير المحفوظة
         </h5>
-        <div class="collapse" id="savedReports">
-            <div class="card">
-                <div class="card-body">
+        <div class="card">
+            <div class="card-body">
                     <div class="table-responsive">
                         <table class="table table-hover" id="reportsTable">
                             <thead>
@@ -239,78 +235,54 @@
                                 </tr>
                             </thead>
                             <tbody>
+                                {% for report in saved_reports %}
                                 <tr>
-                                    <td class="text-center"><strong>تقرير الرسوم الشهري</strong></td>
-                                    <td class="text-center"><span class="badge bg-info">جدول</span></td>
-                                    <td class="text-center">الرسوم</td>
-                                    <td class="text-center">2024-01-15</td>
-                                    <td class="text-center">منذ ساعتين</td>
-                                    <td class="text-center"><span class="badge bg-success">نشط</span></td>
+                                    <td class="text-center"><strong>{{ report.name }}</strong></td>
                                     <td class="text-center">
-                                        <button class="btn btn-outline-primary btn-sm" onclick="runReport('monthly_fees')">
+                                        <span class="badge bg-info">{{ report.get_report_type_display }}</span>
+                                    </td>
+                                    <td class="text-center">{{ report.get_data_source_display }}</td>
+                                    <td class="text-center">{{ report.created_at|date:"Y-m-d" }}</td>
+                                    <td class="text-center">
+                                        {% if report.last_run_at %}
+                                            {{ report.last_run_at|timesince }} مضت
+                                        {% else %}
+                                            لم يتم التشغيل
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-success">{{ report.get_status_display }}</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <button class="btn btn-outline-primary btn-sm" onclick="runReport({{ report.id }})">
                                             <i class="fas fa-play"></i>
                                         </button>
-                                        <button class="btn btn-outline-info btn-sm" onclick="editReport('monthly_fees')">
-                                            <i class="fas fa-edit"></i>
-                                        </button>
-                                        <button class="btn btn-outline-success btn-sm" onclick="downloadReport('monthly_fees')">
+                                        <button class="btn btn-outline-success btn-sm" onclick="downloadReport({{ report.id }})">
                                             <i class="fas fa-download"></i>
+                                        </button>
+                                        <button class="btn btn-outline-danger btn-sm" onclick="deleteReport({{ report.id }})">
+                                            <i class="fas fa-trash"></i>
                                         </button>
                                     </td>
                                 </tr>
+                                {% empty %}
                                 <tr>
-                                    <td class="text-center"><strong>إحصائيات العملاء</strong></td>
-                                    <td class="text-center"><span class="badge bg-primary">رسم بياني</span></td>
-                                    <td class="text-center">العملاء</td>
-                                    <td class="text-center">2024-01-10</td>
-                                    <td class="text-center">أمس</td>
-                                    <td class="text-center"><span class="badge bg-success">نشط</span></td>
-                                    <td class="text-center">
-                                        <button class="btn btn-outline-primary btn-sm" onclick="runReport('customer_stats')">
-                                            <i class="fas fa-play"></i>
-                                        </button>
-                                        <button class="btn btn-outline-info btn-sm" onclick="editReport('customer_stats')">
-                                            <i class="fas fa-edit"></i>
-                                        </button>
-                                        <button class="btn btn-outline-success btn-sm" onclick="downloadReport('customer_stats')">
-                                            <i class="fas fa-download"></i>
-                                        </button>
-                                    </td>
+                                    <td colspan="7" class="text-center text-muted">لا توجد تقارير محفوظة</td>
                                 </tr>
-                                <tr>
-                                    <td class="text-center"><strong>تقرير الأنشطة الأسبوعي</strong></td>
-                                    <td class="text-center"><span class="badge bg-warning">ملخص</span></td>
-                                    <td class="text-center">الأنشطة</td>
-                                    <td class="text-center">2024-01-08</td>
-                                    <td class="text-center">منذ 3 أيام</td>
-                                    <td class="text-center"><span class="badge bg-warning">مجدول</span></td>
-                                    <td class="text-center">
-                                        <button class="btn btn-outline-primary btn-sm" onclick="runReport('weekly_activities')">
-                                            <i class="fas fa-play"></i>
-                                        </button>
-                                        <button class="btn btn-outline-info btn-sm" onclick="editReport('weekly_activities')">
-                                            <i class="fas fa-edit"></i>
-                                        </button>
-                                        <button class="btn btn-outline-success btn-sm" onclick="downloadReport('weekly_activities')">
-                                            <i class="fas fa-download"></i>
-                                        </button>
-                                    </td>
-                                </tr>
+                                {% endfor %}
                             </tbody>
                         </table>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
     
     <!-- Scheduled Reports -->
     <div class="section-container mb-4">
-        <h5 class="section-title" data-bs-toggle="collapse" data-bs-target="#scheduledReports" aria-expanded="false">
-            <i class="fas fa-calendar-alt me-2"></i>التقارير المجدولة<i class="fas fa-chevron-down float-end"></i>
+        <h5 class="section-title">
+            <i class="fas fa-calendar-alt me-2"></i>التقارير المجدولة
         </h5>
-        <div class="collapse" id="scheduledReports">
-            <div class="row">
+        <div class="row">
                 <div class="col-lg-8 mb-3">
                     <div class="card">
                         <div class="card-header">
@@ -333,45 +305,51 @@
                                         </tr>
                                     </thead>
                                     <tbody>
+                                        {% for schedule in scheduled_reports %}
                                         <tr>
-                                            <td class="text-center">تقرير الرسوم الشهري</td>
-                                            <td class="text-center">شهرياً</td>
-                                            <td class="text-center">1 من كل شهر - 9:00 ص</td>
-                                            <td class="text-center">2024-02-01</td>
-                                            <td class="text-center">2024-03-01</td>
-                                            <td class="text-center"><span class="badge bg-success">نشط</span></td>
+                                            <td class="text-center">{{ schedule.report.name }}</td>
+                                            <td class="text-center">{{ schedule.get_frequency_display }}</td>
+                                            <td class="text-center">{{ schedule.schedule_time|time:"H:i" }}</td>
                                             <td class="text-center">
-                                                <button class="btn btn-outline-warning btn-sm" onclick="pauseSchedule('monthly_fees')">
-                                                    <i class="fas fa-pause"></i>
-                                                </button>
+                                                {% if schedule.last_run_at %}
+                                                    {{ schedule.last_run_at|date:"Y-m-d" }}
+                                                {% else %}
+                                                    لم يتم التشغيل
+                                                {% endif %}
+                                            </td>
+                                            <td class="text-center">
+                                                {% if schedule.next_run_at %}
+                                                    {{ schedule.next_run_at|date:"Y-m-d H:i" }}
+                                                {% else %}
+                                                    -
+                                                {% endif %}
+                                            </td>
+                                            <td class="text-center">
+                                                {% if schedule.status == 'ACTIVE' %}
+                                                    <span class="badge bg-success">نشط</span>
+                                                {% elif schedule.status == 'PAUSED' %}
+                                                    <span class="badge bg-warning">متوقف</span>
+                                                {% else %}
+                                                    <span class="badge bg-secondary">معطل</span>
+                                                {% endif %}
+                                            </td>
+                                            <td class="text-center">
+                                                {% if schedule.status == 'ACTIVE' %}
+                                                    <button class="btn btn-outline-warning btn-sm" onclick="pauseSchedule({{ schedule.id }})">
+                                                        <i class="fas fa-pause"></i>
+                                                    </button>
+                                                {% else %}
+                                                    <button class="btn btn-outline-success btn-sm" onclick="resumeSchedule({{ schedule.id }})">
+                                                        <i class="fas fa-play"></i>
+                                                    </button>
+                                                {% endif %}
                                             </td>
                                         </tr>
+                                        {% empty %}
                                         <tr>
-                                            <td class="text-center">تقرير الأنشطة الأسبوعي</td>
-                                            <td class="text-center">أسبوعياً</td>
-                                            <td class="text-center">الأحد - 8:00 ص</td>
-                                            <td class="text-center">2024-02-04</td>
-                                            <td class="text-center">2024-02-11</td>
-                                            <td class="text-center"><span class="badge bg-success">نشط</span></td>
-                                            <td class="text-center">
-                                                <button class="btn btn-outline-warning btn-sm" onclick="pauseSchedule('weekly_activities')">
-                                                    <i class="fas fa-pause"></i>
-                                                </button>
-                                            </td>
+                                            <td colspan="7" class="text-center text-muted">لا توجد تقارير مجدولة</td>
                                         </tr>
-                                        <tr>
-                                            <td class="text-center">تقرير الحضور اليومي</td>
-                                            <td class="text-center">يومياً</td>
-                                            <td class="text-center">كل يوم - 6:00 م</td>
-                                            <td class="text-center">أمس</td>
-                                            <td class="text-center">اليوم</td>
-                                            <td class="text-center"><span class="badge bg-warning">معطل</span></td>
-                                            <td class="text-center">
-                                                <button class="btn btn-outline-success btn-sm" onclick="resumeSchedule('daily_attendance')">
-                                                    <i class="fas fa-play"></i>
-                                                </button>
-                                            </td>
-                                        </tr>
+                                        {% endfor %}
                                     </tbody>
                                 </table>
                             </div>
@@ -392,9 +370,9 @@
                                     <label class="form-label">التقرير</label>
                                     <select class="form-select" id="reportToSchedule">
                                         <option value="">اختر تقرير محفوظ</option>
-                                        <option value="monthly_invoices">تقرير الفواتير الشهري</option>
-                                        <option value="customer_stats">إحصائيات العملاء</option>
-                                        <option value="weekly_sales">تقرير المبيعات الأسبوعي</option>
+                                        {% for report in saved_reports %}
+                                            <option value="{{ report.id }}">{{ report.name }}</option>
+                                        {% endfor %}
                                     </select>
                                 </div>
                                 <div class="mb-3">
@@ -413,6 +391,7 @@
                                 <div class="mb-3">
                                     <label class="form-label">إرسال إلى</label>
                                     <input type="email" class="form-control" id="emailRecipients" placeholder="email@example.com">
+                                    <small class="text-muted">يمكنك إدخال عدة عناوين مفصولة بفواصل</small>
                                 </div>
                                 <button type="button" class="btn btn-primary w-100" onclick="createSchedule()">
                                     <i class="fas fa-calendar-plus me-1"></i>إنشاء الجدولة
@@ -424,42 +403,41 @@
             </div>
         </div>
     </div>
-    
-    <!-- Quick Actions -->
-    <div class="section-container">
-        <h5 class="section-title"><i class="fas fa-bolt me-2"></i>إجراءات سريعة</h5>
-        <div class="row">
-            <div class="col-md-3 mb-2">
-                <button class="btn btn-outline-primary w-100" onclick="loadTemplate('financial')">
-                    <i class="fas fa-money-bill-wave me-2"></i>قالب مالي
-                </button>
-            </div>
-            <div class="col-md-3 mb-2">
-                <button class="btn btn-outline-success w-100" onclick="loadTemplate('academic')">
-                    <i class="fas fa-graduation-cap me-2"></i>قالب أكاديمي
-                </button>
-            </div>
-            <div class="col-md-3 mb-2">
-                <button class="btn btn-outline-info w-100" onclick="exportAllReports()">
-                    <i class="fas fa-download me-2"></i>تصدير جميع التقارير
-                </button>
-            </div>
-            <div class="col-md-3 mb-2">
-                <button class="btn btn-outline-warning w-100" onclick="runAllScheduled()">
-                    <i class="fas fa-play-circle me-2"></i>تشغيل المجدولة
-                </button>
-            </div>
-        </div>
-    </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script src="{% static 'js/global-table.js' %}"></script>
 <script>
+// Get CSRF token from meta tag or cookie
+function getCSRFToken() {
+    // Try meta tag first
+    const metaToken = document.querySelector('meta[name="csrf-token"]');
+    if (metaToken) {
+        return metaToken.getAttribute('content');
+    }
+    
+    // Try hidden input
+    const inputToken = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (inputToken) {
+        return inputToken.value;
+    }
+    
+    // Try cookie
+    const cookieValue = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('csrftoken='))
+        ?.split('=')[1];
+    
+    return cookieValue || '';
+}
+
 $(document).ready(function() {
-    // Initialize DataTable
-    if (typeof GlobalTableManager !== 'undefined') {
+    // Initialize DataTable only if there are rows
+    const reportsTable = $('#reportsTable tbody tr');
+    const hasData = reportsTable.length > 0 && !reportsTable.first().find('td[colspan]').length;
+    
+    if (typeof GlobalTableManager !== 'undefined' && hasData) {
         GlobalTableManager.initializeTable('reportsTable', {
             order: [[3, 'desc']], // Sort by creation date
             columnDefs: [
@@ -471,19 +449,19 @@ $(document).ready(function() {
             }
         });
     }
-    
-    // Initialize collapsible sections
-    $('.section-title[data-bs-toggle="collapse"]').on('click', function() {
-        const icon = $(this).find('.fa-chevron-down');
-        const isExpanded = $(this).attr('aria-expanded') === 'true';
-        
-        if (isExpanded) {
-            icon.removeClass('fa-chevron-down').addClass('fa-chevron-up');
-        } else {
-            icon.removeClass('fa-chevron-up').addClass('fa-chevron-down');
-        }
-    });
 });
+
+// Debounce timer for preview updates
+let previewTimeout = null;
+
+function debouncedUpdatePreview() {
+    if (previewTimeout) {
+        clearTimeout(previewTimeout);
+    }
+    previewTimeout = setTimeout(() => {
+        updatePreview();
+    }, 800); // Wait 800ms after last change
+}
 
 // Report Builder Functions
 function loadFields() {
@@ -495,41 +473,29 @@ function loadFields() {
         return;
     }
     
-    const fields = getFieldsForDataSource(dataSource);
-    let html = '';
+    // Show loading
+    fieldsContainer.innerHTML = '<div class="text-center py-3"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
     
-    fields.forEach(field => {
-        html += `<div class="field-item" onclick="selectField('${field.name}', '${field.label}')">${field.label}</div>`;
-    });
-    
-    fieldsContainer.innerHTML = html;
-}
-
-function getFieldsForDataSource(dataSource) {
-    const fieldMaps = {
-        'customers': [
-            {name: 'name', label: 'اسم العميل'},
-            {name: 'code', label: 'كود العميل'},
-            {name: 'contact_person', label: 'جهة الاتصال'},
-            {name: 'phone', label: 'الهاتف'},
-            {name: 'registration_date', label: 'تاريخ التسجيل'}
-        ],
-        'invoices': [
-            {name: 'customer_name', label: 'اسم العميل'},
-            {name: 'invoice_type', label: 'نوع الفاتورة'},
-            {name: 'total_amount', label: 'المبلغ الإجمالي'},
-            {name: 'paid_amount', label: 'المبلغ المدفوع'},
-            {name: 'status', label: 'الحالة'}
-        ],
-        'payments': [
-            {name: 'customer_name', label: 'اسم العميل'},
-            {name: 'amount', label: 'المبلغ'},
-            {name: 'payment_date', label: 'تاريخ الدفع'},
-            {name: 'payment_method', label: 'طريقة الدفع'}
-        ]
-    };
-    
-    return fieldMaps[dataSource] || [];
+    // Fetch fields from API
+    fetch(`/governance/api/reports/fields/?data_source=${dataSource}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                let html = '';
+                data.fields.forEach(field => {
+                    html += `<div class="field-item" onclick="selectField('${field.name}', '${field.label}')">${field.label}</div>`;
+                });
+                fieldsContainer.innerHTML = html;
+            } else {
+                fieldsContainer.innerHTML = '<div class="text-danger text-center py-3">خطأ في تحميل الحقول</div>';
+                toastr.error(data.error || 'فشل تحميل الحقول');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading fields:', error);
+            fieldsContainer.innerHTML = '<div class="text-danger text-center py-3">خطأ في الاتصال</div>';
+            toastr.error('حدث خطأ أثناء تحميل الحقول');
+        });
 }
 
 function selectField(fieldName, fieldLabel) {
@@ -555,7 +521,7 @@ function selectField(fieldName, fieldLabel) {
     fieldElement.innerHTML = `${fieldLabel} <i class="fas fa-times ms-1" onclick="removeField('${fieldName}')"></i>`;
     
     selectedContainer.appendChild(fieldElement);
-    updatePreview();
+    debouncedUpdatePreview();
 }
 
 function removeField(fieldName) {
@@ -569,41 +535,142 @@ function removeField(fieldName) {
             selectedContainer.innerHTML = '<div class="text-muted text-center py-4"><i class="fas fa-mouse-pointer me-2"></i>اسحب الحقول هنا أو انقر عليها</div>';
         }
         
-        updatePreview();
+        debouncedUpdatePreview();
     }
 }
 
 function updatePreview() {
-    const selectedFields = document.querySelectorAll('.selected-field');
+    const selectedFieldsElements = document.querySelectorAll('.selected-field');
+    const dataSource = document.getElementById('dataSource').value;
     const reportType = document.getElementById('reportType').value;
     const previewContainer = document.getElementById('chartPreview');
     
-    if (selectedFields.length === 0) {
-        previewContainer.innerHTML = '<div class="text-muted"><i class="fas fa-chart-bar fa-3x mb-2"></i><br>اختر الحقول ونوع التقرير لرؤية المعاينة</div>';
+    if (selectedFieldsElements.length === 0 || !dataSource) {
+        previewContainer.innerHTML = '<div class="text-muted"><i class="fas fa-chart-bar fa-3x mb-2"></i><br>اختر مصدر البيانات والحقول لرؤية المعاينة</div>';
         return;
     }
     
-    let previewHtml = '';
+    // Show loading
+    previewContainer.innerHTML = '<div class="text-muted"><i class="fas fa-spinner fa-spin fa-2x mb-2"></i><br>جاري تحميل المعاينة...</div>';
     
-    switch (reportType) {
-        case 'table':
-            previewHtml = '<i class="fas fa-table fa-3x text-primary"></i><br><strong>جدول</strong><br>عرض البيانات في جدول';
-            break;
-        case 'bar':
-            previewHtml = '<i class="fas fa-chart-bar fa-3x text-success"></i><br><strong>رسم بياني عمودي</strong><br>مقارنة القيم';
-            break;
-        case 'pie':
-            previewHtml = '<i class="fas fa-chart-pie fa-3x text-warning"></i><br><strong>رسم دائري</strong><br>توزيع النسب';
-            break;
-        case 'line':
-            previewHtml = '<i class="fas fa-chart-line fa-3x text-info"></i><br><strong>رسم خطي</strong><br>الاتجاهات عبر الزمن';
-            break;
-        case 'summary':
-            previewHtml = '<i class="fas fa-list-alt fa-3x text-secondary"></i><br><strong>ملخص إحصائي</strong><br>إحصائيات موجزة';
-            break;
+    // Collect selected fields
+    const selectedFields = Array.from(selectedFieldsElements).map(el => el.dataset.field);
+    
+    // Collect filters
+    const filters = [];
+    document.querySelectorAll('.filter-item').forEach(filterEl => {
+        const field = filterEl.querySelector('select:nth-child(1)')?.value;
+        const operator = filterEl.querySelector('select:nth-child(2)')?.value;
+        const value = filterEl.querySelector('input')?.value;
+        if (field && operator && value) {
+            filters.push({field, operator, value});
+        }
+    });
+    
+    // Prepare request data
+    const requestData = {
+        data_source: dataSource,
+        selected_fields: selectedFields,
+        report_type: reportType,
+        group_by: document.getElementById('groupBy').value,
+        filters: filters
+    };
+    
+    // Call API
+    fetch('/governance/api/reports/generate/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken()
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.data && data.data.length > 0) {
+            displayPreviewData(data.data, reportType);
+        } else {
+            previewContainer.innerHTML = '<div class="text-muted"><i class="fas fa-inbox fa-2x mb-2"></i><br>لا توجد بيانات للعرض</div>';
+        }
+    })
+    .catch(error => {
+        console.error('Error loading preview:', error);
+        previewContainer.innerHTML = '<div class="text-danger"><i class="fas fa-exclamation-triangle fa-2x mb-2"></i><br>خطأ في تحميل المعاينة</div>';
+    });
+}
+
+function displayPreviewData(data, reportType) {
+    const previewContainer = document.getElementById('chartPreview');
+    
+    if (reportType === 'table') {
+        // Display as table (first 5 rows)
+        const headers = Object.keys(data[0]);
+        const previewData = data.slice(0, 5);
+        
+        let tableHtml = `
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>${headers.map(h => `<th class="text-center small">${h}</th>`).join('')}</tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        previewData.forEach(row => {
+            tableHtml += '<tr>';
+            headers.forEach(header => {
+                let value = row[header];
+                if (value === null || value === undefined) value = '-';
+                else if (typeof value === 'boolean') value = value ? '✓' : '✗';
+                else if (typeof value === 'number') value = value.toLocaleString('en-US');
+                tableHtml += `<td class="text-center small">${value}</td>`;
+            });
+            tableHtml += '</tr>';
+        });
+        
+        tableHtml += '</tbody></table></div>';
+        if (data.length > 5) {
+            tableHtml += `<div class="text-muted text-center mt-2"><small>عرض أول 5 صفوف من ${data.length}</small></div>`;
+        }
+        
+        previewContainer.innerHTML = tableHtml;
+    } else {
+        // For charts, show icon and data count
+        let iconClass = 'fa-chart-bar';
+        let iconColor = 'text-primary';
+        let chartName = 'رسم بياني';
+        
+        switch (reportType) {
+            case 'bar':
+                iconClass = 'fa-chart-bar';
+                iconColor = 'text-success';
+                chartName = 'رسم بياني عمودي';
+                break;
+            case 'pie':
+                iconClass = 'fa-chart-pie';
+                iconColor = 'text-warning';
+                chartName = 'رسم دائري';
+                break;
+            case 'line':
+                iconClass = 'fa-chart-line';
+                iconColor = 'text-info';
+                chartName = 'رسم خطي';
+                break;
+            case 'summary':
+                iconClass = 'fa-list-alt';
+                iconColor = 'text-secondary';
+                chartName = 'ملخص إحصائي';
+                break;
+        }
+        
+        previewContainer.innerHTML = `
+            <div class="text-center">
+                <i class="fas ${iconClass} fa-3x ${iconColor} mb-2"></i>
+                <br><strong>${chartName}</strong>
+                <br><span class="text-muted">${data.length} صف</span>
+            </div>
+        `;
     }
-    
-    previewContainer.innerHTML = `<div class="text-center">${previewHtml}</div>`;
 }
 
 function addFilter() {
@@ -644,96 +711,473 @@ function addFilter() {
 }
 
 function generateReport() {
-    const selectedFields = document.querySelectorAll('.selected-field');
+    const selectedFieldsElements = document.querySelectorAll('.selected-field');
     const dataSource = document.getElementById('dataSource').value;
     const reportType = document.getElementById('reportType').value;
+    const groupBy = document.getElementById('groupBy').value;
     
-    if (!dataSource || selectedFields.length === 0) {
-        alert('يرجى اختيار مصدر البيانات والحقول المطلوبة');
+    if (!dataSource || selectedFieldsElements.length === 0) {
+        toastr.warning('يرجى اختيار مصدر البيانات والحقول المطلوبة');
         return;
     }
     
-    alert('جاري إنشاء التقرير...');
-    // Here you would generate the actual report
+    // Collect selected fields
+    const selectedFields = Array.from(selectedFieldsElements).map(el => el.dataset.field);
+    
+    // Collect filters
+    const filters = [];
+    document.querySelectorAll('.filter-item').forEach(filterEl => {
+        const field = filterEl.querySelector('select:nth-child(1)')?.value;
+        const operator = filterEl.querySelector('select:nth-child(2)')?.value;
+        const value = filterEl.querySelector('input')?.value;
+        if (field && operator && value) {
+            filters.push({field, operator, value});
+        }
+    });
+    
+    // Prepare request data
+    const requestData = {
+        data_source: dataSource,
+        selected_fields: selectedFields,
+        report_type: reportType,
+        group_by: groupBy,
+        filters: filters
+    };
+    
+    // Show loading
+    toastr.info('جاري إنشاء التقرير...');
+    
+    // Call API
+    fetch('/governance/api/reports/generate/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken()
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            toastr.success(`تم إنشاء التقرير بنجاح! (${data.rows_count} صف)`);
+            displayReportResults(data.data, reportType);
+        } else {
+            toastr.error(data.error || 'فشل إنشاء التقرير');
+        }
+    })
+    .catch(error => {
+        console.error('Error generating report:', error);
+        toastr.error('حدث خطأ أثناء إنشاء التقرير');
+    });
+}
+
+function displayReportResults(data, reportType) {
+    if (!data || data.length === 0) {
+        Swal.fire({
+            title: 'نتائج التقرير',
+            html: '<div class="text-center text-muted"><i class="fas fa-inbox fa-3x mb-3"></i><br>لا توجد بيانات</div>',
+            icon: 'info',
+            confirmButtonText: 'حسناً'
+        });
+        return;
+    }
+    
+    // Build table HTML
+    const headers = Object.keys(data[0]);
+    let tableHtml = `
+        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+            <table class="table table-sm table-hover">
+                <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
+                    <tr>
+                        ${headers.map(h => `<th class="text-center">${h}</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    // Add rows (limit to first 100 for performance)
+    const displayData = data.slice(0, 100);
+    displayData.forEach(row => {
+        tableHtml += '<tr>';
+        headers.forEach(header => {
+            let value = row[header];
+            // Format value
+            if (value === null || value === undefined) {
+                value = '-';
+            } else if (typeof value === 'boolean') {
+                value = value ? '<span class="badge bg-success">نعم</span>' : '<span class="badge bg-secondary">لا</span>';
+            } else if (typeof value === 'number') {
+                value = value.toLocaleString('en-US');
+            }
+            tableHtml += `<td class="text-center">${value}</td>`;
+        });
+        tableHtml += '</tr>';
+    });
+    
+    tableHtml += '</tbody></table></div>';
+    
+    if (data.length > 100) {
+        tableHtml += `<div class="text-muted text-center mt-2"><small>عرض أول 100 صف من ${data.length} صف</small></div>`;
+    }
+    
+    // Display in modal
+    Swal.fire({
+        title: `نتائج التقرير (${data.length} صف)`,
+        html: tableHtml,
+        width: '80%',
+        showCloseButton: true,
+        confirmButtonText: 'إغلاق',
+        customClass: {
+            popup: 'text-end'
+        }
+    });
 }
 
 function saveReport() {
-    const reportName = prompt('أدخل اسم التقرير:');
-    if (reportName) {
-        alert(`تم حفظ التقرير: ${reportName}`);
+    const selectedFieldsElements = document.querySelectorAll('.selected-field');
+    const dataSource = document.getElementById('dataSource').value;
+    const reportType = document.getElementById('reportType').value;
+    const groupBy = document.getElementById('groupBy').value;
+    
+    if (!dataSource || selectedFieldsElements.length === 0) {
+        toastr.warning('يرجى اختيار مصدر البيانات والحقول المطلوبة');
+        return;
     }
+    
+    // Ask for report name
+    Swal.fire({
+        title: 'حفظ التقرير',
+        html: `
+            <input type="text" id="reportName" class="swal2-input" placeholder="اسم التقرير">
+            <textarea id="reportDesc" class="swal2-textarea" placeholder="الوصف (اختياري)"></textarea>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'حفظ',
+        cancelButtonText: 'إلغاء',
+        preConfirm: () => {
+            const name = document.getElementById('reportName').value;
+            if (!name) {
+                Swal.showValidationMessage('يرجى إدخال اسم التقرير');
+                return false;
+            }
+            return {
+                name: name,
+                description: document.getElementById('reportDesc').value
+            };
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            const selectedFields = Array.from(selectedFieldsElements).map(el => el.dataset.field);
+            
+            // Collect filters
+            const filters = [];
+            document.querySelectorAll('.filter-item').forEach(filterEl => {
+                const field = filterEl.querySelector('select:nth-child(1)')?.value;
+                const operator = filterEl.querySelector('select:nth-child(2)')?.value;
+                const value = filterEl.querySelector('input')?.value;
+                if (field && operator && value) {
+                    filters.push({field, operator, value});
+                }
+            });
+            
+            const requestData = {
+                name: result.value.name,
+                description: result.value.description,
+                data_source: dataSource,
+                selected_fields: selectedFields,
+                report_type: reportType,
+                group_by: groupBy,
+                filters: filters
+            };
+            
+            // Call API
+            fetch('/governance/api/reports/save/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken()
+                },
+                body: JSON.stringify(requestData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    toastr.success('تم حفظ التقرير بنجاح');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    toastr.error(data.error || 'فشل حفظ التقرير');
+                }
+            })
+            .catch(error => {
+                console.error('Error saving report:', error);
+                toastr.error('حدث خطأ أثناء حفظ التقرير');
+            });
+        }
+    });
 }
 
 function scheduleReport() {
-    alert('فتح نافذة جدولة التقرير');
+    toastr.info('استخدم قسم "جدولة تقرير جديد" في الأسفل');
 }
 
 function clearBuilder() {
-    if (confirm('هل أنت متأكد من مسح جميع الإعدادات؟')) {
-        document.getElementById('dataSource').value = '';
-        document.getElementById('selectedFields').innerHTML = '<div class="text-muted text-center py-4"><i class="fas fa-mouse-pointer me-2"></i>اسحب الحقول هنا أو انقر عليها</div>';
-        document.getElementById('availableFields').innerHTML = '<div class="text-muted text-center py-3"><i class="fas fa-arrow-up me-2"></i>اختر مصدر البيانات أولاً</div>';
-        document.getElementById('filtersContainer').innerHTML = '<button class="btn btn-outline-primary btn-sm" onclick="addFilter()"><i class="fas fa-plus me-1"></i>إضافة مرشح</button>';
-        updatePreview();
-    }
+    Swal.fire({
+        title: 'هل أنت متأكد؟',
+        text: 'سيتم مسح جميع الإعدادات',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'نعم، امسح',
+        cancelButtonText: 'إلغاء'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            document.getElementById('dataSource').value = '';
+            document.getElementById('selectedFields').innerHTML = '<div class="text-muted text-center py-4"><i class="fas fa-mouse-pointer me-2"></i>اسحب الحقول هنا أو انقر عليها</div>';
+            document.getElementById('availableFields').innerHTML = '<div class="text-muted text-center py-3"><i class="fas fa-arrow-up me-2"></i>اختر مصدر البيانات أولاً</div>';
+            document.getElementById('filtersContainer').innerHTML = '<button class="btn btn-outline-primary btn-sm" onclick="addFilter()"><i class="fas fa-plus me-1"></i>إضافة مرشح</button>';
+            debouncedUpdatePreview();
+            toastr.success('تم مسح الإعدادات');
+        }
+    });
 }
 
 // Report Management Functions
 function runReport(reportId) {
-    alert(`تشغيل التقرير: ${reportId}`);
-}
-
-function editReport(reportId) {
-    alert(`تعديل التقرير: ${reportId}`);
+    toastr.info('جاري تشغيل التقرير...');
+    
+    fetch(`/governance/api/reports/${reportId}/run/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCSRFToken()
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            toastr.success(`تم تشغيل التقرير بنجاح! (${data.rows_count} صف)`);
+            displayReportResults(data.data, 'table');
+        } else {
+            toastr.error(data.error || 'فشل تشغيل التقرير');
+        }
+    })
+    .catch(error => {
+        console.error('Error running report:', error);
+        toastr.error('حدث خطأ أثناء تشغيل التقرير');
+    });
 }
 
 function downloadReport(reportId) {
-    alert(`تحميل التقرير: ${reportId}`);
+    Swal.fire({
+        title: 'تحميل التقرير',
+        html: `
+            <div class="mb-3">
+                <label class="form-label">اختر صيغة التحميل</label>
+                <select id="downloadFormat" class="form-select">
+                    <option value="excel">Excel (.xlsx)</option>
+                    <option value="csv">CSV (.csv)</option>
+                    <option value="pdf">PDF (.pdf)</option>
+                </select>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'تحميل',
+        cancelButtonText: 'إلغاء',
+        preConfirm: () => {
+            return document.getElementById('downloadFormat').value;
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            const format = result.value;
+            toastr.info('جاري تحضير التقرير للتحميل...');
+            
+            // Create download link
+            const downloadUrl = `/governance/api/reports/${reportId}/download/?format=${format}`;
+            
+            // Trigger download
+            fetch(downloadUrl, {
+                method: 'GET',
+                headers: {
+                    'X-CSRFToken': getCSRFToken()
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('فشل تحميل التقرير');
+                }
+                return response.blob();
+            })
+            .then(blob => {
+                // Create download link
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `report_${reportId}.${format === 'excel' ? 'xlsx' : format}`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                
+                toastr.success('تم تحميل التقرير بنجاح');
+            })
+            .catch(error => {
+                console.error('Error downloading report:', error);
+                toastr.error('حدث خطأ أثناء تحميل التقرير');
+            });
+        }
+    });
 }
 
-function pauseSchedule(reportId) {
-    if (confirm('هل تريد إيقاف جدولة هذا التقرير مؤقتاً؟')) {
-        alert(`تم إيقاف جدولة التقرير: ${reportId}`);
-    }
+function deleteReport(reportId) {
+    Swal.fire({
+        title: 'هل أنت متأكد؟',
+        text: 'سيتم حذف التقرير نهائياً',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'نعم، احذف',
+        cancelButtonText: 'إلغاء'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            fetch(`/governance/api/reports/${reportId}/delete/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCSRFToken()
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    toastr.success('تم حذف التقرير بنجاح');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    toastr.error(data.error || 'فشل حذف التقرير');
+                }
+            })
+            .catch(error => {
+                console.error('Error deleting report:', error);
+                toastr.error('حدث خطأ أثناء حذف التقرير');
+            });
+        }
+    });
 }
 
-function resumeSchedule(reportId) {
-    if (confirm('هل تريد استئناف جدولة هذا التقرير؟')) {
-        alert(`تم استئناف جدولة التقرير: ${reportId}`);
-    }
+function pauseSchedule(scheduleId) {
+    Swal.fire({
+        title: 'إيقاف الجدولة؟',
+        text: 'سيتم إيقاف تشغيل التقرير تلقائياً',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'نعم، أوقف',
+        cancelButtonText: 'إلغاء'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            fetch(`/governance/api/reports/schedule/${scheduleId}/pause/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCSRFToken()
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    toastr.success('تم إيقاف الجدولة');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    toastr.error(data.error || 'فشل إيقاف الجدولة');
+                }
+            })
+            .catch(error => {
+                console.error('Error pausing schedule:', error);
+                toastr.error('حدث خطأ أثناء إيقاف الجدولة');
+            });
+        }
+    });
+}
+
+function resumeSchedule(scheduleId) {
+    Swal.fire({
+        title: 'استئناف الجدولة؟',
+        text: 'سيتم تشغيل التقرير تلقائياً حسب الجدول',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'نعم، استأنف',
+        cancelButtonText: 'إلغاء'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            fetch(`/governance/api/reports/schedule/${scheduleId}/resume/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCSRFToken()
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    toastr.success('تم استئناف الجدولة');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    toastr.error(data.error || 'فشل استئناف الجدولة');
+                }
+            })
+            .catch(error => {
+                console.error('Error resuming schedule:', error);
+                toastr.error('حدث خطأ أثناء استئناف الجدولة');
+            });
+        }
+    });
 }
 
 function createSchedule() {
     const reportToSchedule = document.getElementById('reportToSchedule').value;
     const frequency = document.getElementById('frequency').value;
     const scheduleTime = document.getElementById('scheduleTime').value;
+    const emailRecipients = document.getElementById('emailRecipients').value;
     
     if (!reportToSchedule || !frequency || !scheduleTime) {
-        alert('يرجى ملء جميع الحقول المطلوبة');
+        toastr.warning('يرجى ملء جميع الحقول المطلوبة');
         return;
     }
     
-    if (confirm('إنشاء جدولة جديدة للتقرير؟')) {
-        alert('تم إنشاء الجدولة بنجاح');
-        document.getElementById('scheduleForm').reset();
-    }
-}
-
-// Quick Actions
-function loadTemplate(type) {
-    alert(`تحميل قالب ${type}`);
-}
-
-function exportAllReports() {
-    if (confirm('هل تريد تصدير جميع التقارير؟')) {
-        alert('جاري تصدير جميع التقارير...');
-    }
-}
-
-function runAllScheduled() {
-    if (confirm('هل تريد تشغيل جميع التقارير المجدولة الآن؟')) {
-        alert('جاري تشغيل جميع التقارير المجدولة...');
-    }
+    Swal.fire({
+        title: 'إنشاء جدولة؟',
+        text: 'سيتم تشغيل التقرير تلقائياً حسب الجدول المحدد',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'نعم، أنشئ',
+        cancelButtonText: 'إلغاء'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            const requestData = {
+                report_id: reportToSchedule,
+                frequency: frequency,
+                schedule_time: scheduleTime,
+                email_recipients: emailRecipients
+            };
+            
+            fetch('/governance/api/reports/schedule/create/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken()
+                },
+                body: JSON.stringify(requestData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    toastr.success('تم إنشاء الجدولة بنجاح');
+                    document.getElementById('scheduleForm').reset();
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    toastr.error(data.error || 'فشل إنشاء الجدولة');
+                }
+            })
+            .catch(error => {
+                console.error('Error creating schedule:', error);
+                toastr.error('حدث خطأ أثناء إنشاء الجدولة');
+            });
+        }
+    });
 }
 </script>
 {% endblock %}

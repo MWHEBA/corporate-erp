@@ -629,6 +629,9 @@ class ReportsBuilderView(GovernanceBaseView):
     template_name = 'reports/builder_center.html'
     
     def get_context_data(self, **kwargs):
+        from governance.services.reports_builder_service import ReportsBuilderService
+        from governance.models import SavedReport, ReportSchedule
+        
         context = super().get_context_data(**kwargs)
         
         context['breadcrumb_items'].append({
@@ -641,45 +644,20 @@ class ReportsBuilderView(GovernanceBaseView):
             'icon': 'fas fa-chart-line'
         })
         
-        return context
-
-class NotificationsCenterView(GovernanceBaseView):
-    """Advanced Notifications Management Center"""
-    template_name = 'notifications/management_center.html'
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
+        # Get statistics
+        stats = ReportsBuilderService.get_report_statistics()
+        context['stats'] = stats
         
-        context['breadcrumb_items'].append({
-            'title': _('مركز إدارة الإشعارات'), 'active': True
-        })
+        # Get saved reports
+        saved_reports = ReportsBuilderService.get_saved_reports(user=self.request.user)
+        context['saved_reports'] = saved_reports
         
-        context.update({
-            'title': _('مركز إدارة الإشعارات والقوالب'),
-            'subtitle': _('إدارة شاملة للإشعارات والقوالب والجدولة'),
-            'icon': 'fas fa-bell'
-        })
+        # Get scheduled reports
+        scheduled_reports = ReportsBuilderService.get_scheduled_reports(user=self.request.user)
+        context['scheduled_reports'] = scheduled_reports
         
         return context
 
-class HealthMonitoringView(GovernanceBaseView):
-    """Advanced Health Check and Monitoring Center"""
-    template_name = 'health/monitoring_center.html'
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        
-        context['breadcrumb_items'].append({
-            'title': _('مركز مراقبة الصحة'), 'active': True
-        })
-        
-        context.update({
-            'title': _('مركز مراقبة صحة النظام والفحوصات المخصصة'),
-            'subtitle': _('مراقبة استباقية للنظام وفحوصات مخصصة'),
-            'icon': 'fas fa-stethoscope'
-        })
-        
-        return context
 
 
 @login_required
