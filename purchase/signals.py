@@ -7,69 +7,19 @@ from .models import PurchaseItem, PurchasePayment, Purchase, PurchaseReturn
 
 @governed_signal_handler(
     signal_name="create_stock_movement_for_purchase_item",
-    critical=True,
-    description="إنشاء حركة مخزون لبند المشتريات"
+    critical=False,  # Changed to False - Service handles this now
+    description="إنشاء حركة مخزون لبند المشتريات (DISABLED - Service handles this)"
 )
 @receiver(post_save, sender=PurchaseItem)
 def create_stock_movement_for_purchase_item(sender, instance, created, **kwargs):
     """
     إنشاء حركة مخزون تلقائياً عند إنشاء بند فاتورة مشتريات
     
-    ✅ محدث: يستخدم MovementService للتوحيد والحوكمة الكاملة
+    ⚠️ DISABLED: PurchaseService now handles stock movements
+    This signal is kept for backward compatibility but does nothing
     """
-    if created and instance.purchase.status == "confirmed":
-        # ✨ تخطي الخدمات - لا تحتاج حركات مخزون
-        if instance.product.is_service:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.info(
-                f"⏭️ تخطي حركة المخزون للخدمة '{instance.product.name}' - "
-                f"فاتورة {instance.purchase.number}"
-            )
-            return
-        
-        # ✨ تخطي الفواتير بدون مخزن (فواتير خدمية)
-        if not instance.purchase.warehouse:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.info(
-                f"⏭️ تخطي حركة المخزون - لا يوجد مخزن محدد - "
-                f"فاتورة {instance.purchase.number}"
-            )
-            return
-        
-        # ✅ استخدام MovementService للتوحيد
-        from governance.services import MovementService
-        from decimal import Decimal
-        import logging
-        
-        logger = logging.getLogger(__name__)
-        
-        try:
-            movement_service = MovementService()
-            movement = movement_service.process_movement(
-                product_id=instance.product.id,
-                quantity_change=Decimal(str(instance.quantity)),
-                movement_type='in',
-                source_reference=f"PUR-{instance.purchase.number}",
-                idempotency_key=f"purchase_item_{instance.id}_create",
-                user=instance.purchase.created_by,
-                unit_cost=instance.unit_price,
-                document_number=instance.purchase.number,
-                notes=f"مشتريات - فاتورة رقم {instance.purchase.number}"
-            )
-            
-            logger.info(
-                f"✅ تم إنشاء حركة مخزون عبر MovementService: {movement.id} - "
-                f"فاتورة {instance.purchase.number}"
-            )
-            
-        except Exception as e:
-            logger.error(
-                f"❌ خطأ في إنشاء حركة المخزون عبر MovementService: {str(e)} - "
-                f"فاتورة {instance.purchase.number}"
-            )
-            raise
+    # Signal disabled - PurchaseService handles stock movements
+    return
 
 
 @governed_signal_handler(
@@ -281,50 +231,19 @@ def update_supplier_balance_on_purchase(sender, instance, created, **kwargs):
 
 @governed_signal_handler(
     signal_name="create_financial_transaction_for_purchase",
-    critical=True,
-    description="إنشاء معاملة مالية للمشتريات"
+    critical=False,  # Changed to False - Service handles this now
+    description="إنشاء معاملة مالية للمشتريات (DISABLED - Service handles this)"
 )
 @receiver(post_save, sender=Purchase)
 def create_financial_transaction_for_purchase(sender, instance, created, **kwargs):
     """
     إنشاء قيد محاسبي تلقائي عند إنشاء فاتورة مشتريات جديدة
 
-    يتم إنشاء قيد محاسبي مباشرة عند تأكيد الفاتورة يشمل:
-    - مدين: المخزون
-    - دائن: الصندوق (نقدي) أو الموردين (آجل)
+    ⚠️ DISABLED: PurchaseService now handles journal entries
+    This signal is kept for backward compatibility but does nothing
     """
-    if created and instance.status == "confirmed":
-        try:
-            from financial.services.accounting_integration_service import (
-                AccountingIntegrationService,
-            )
-            import logging
-
-            logger = logging.getLogger(__name__)
-
-            # إنشاء القيد المحاسبي
-            journal_entry = AccountingIntegrationService.create_purchase_journal_entry(
-                purchase=instance, 
-                user=instance.created_by,
-                financial_category=instance.financial_category
-            )
-
-            if journal_entry:
-                logger.info(
-                    f"✅ تم إنشاء قيد محاسبي للمشتريات: {journal_entry.number} - فاتورة {instance.number}"
-                )
-            else:
-                logger.warning(
-                    f"⚠️ فشل في إنشاء قيد محاسبي للمشتريات - فاتورة {instance.number}"
-                )
-
-        except Exception as e:
-            import logging
-
-            logger = logging.getLogger(__name__)
-            logger.error(
-                f"❌ خطأ في إنشاء قيد محاسبي للمشتريات: {str(e)} - فاتورة {instance.number}"
-            )
+    # Signal disabled - PurchaseService handles journal entries
+    return
 
 
 @governed_signal_handler(

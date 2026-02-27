@@ -45,6 +45,21 @@ class SaleService:
             Exception: في حالة فشل أي عملية
         """
         try:
+            # Validation: التحقق من صحة البيانات
+            items_data = data.get('items', [])
+            if not items_data:
+                raise ValueError("يجب إضافة بند واحد على الأقل للفاتورة")
+            
+            for item_data in items_data:
+                unit_price = Decimal(str(item_data.get('unit_price', 0)))
+                quantity = Decimal(str(item_data.get('quantity', 0)))
+                
+                if unit_price <= 0:
+                    raise ValueError(f"سعر المنتج يجب أن يكون أكبر من صفر (السعر المدخل: {unit_price})")
+                
+                if quantity <= 0:
+                    raise ValueError(f"الكمية يجب أن تكون أكبر من صفر (الكمية المدخلة: {quantity})")
+            
             # 1. إنشاء الفاتورة
             sale = Sale.objects.create(
                 date=data.get('date', timezone.now().date()),

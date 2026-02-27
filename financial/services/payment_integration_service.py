@@ -212,34 +212,58 @@ class PaymentIntegrationService:
         if payment_type == "sale":
             # دفعة مبيعات: مدين الخزينة/البنك، دائن حساب العميل المحدد
 
-            # استخدام الحساب المالي لالعميل المحدد بدلاً من الحساب العام
-            parent = payment.sale.parent
-            if parent.financial_account:
-                parent_account = parent.financial_account
+            # استخدام الحساب المالي للعميل المحدد بدلاً من الحساب العام
+            customer = payment.sale.customer
+            if customer.financial_account:
+                customer_account = customer.financial_account
                 logger.info(
-                    f"استخدام حساب العميل المحدد: {parent_account.code} - {parent_account.name}"
+                    f"استخدام حساب العميل المحدد: {customer_account.code} - {customer_account.name}"
                 )
             else:
-                # إذا لم يكن لالعميل حساب محدد، رفض العملية
-                error_msg = f"❌ العميل {parent.name} ليس له حساب محاسبي. يجب إنشاء حساب محاسبي لالعميل أولاً."
+                # إذا لم يكن للعميل حساب محدد، رفض العملية
+                error_msg = f"❌ العميل {customer.name} ليس له حساب محاسبي. يجب إنشاء حساب محاسبي للعميل أولاً."
                 logger.error(error_msg)
                 raise PaymentIntegrationError(error_msg)
 
             # التحقق من أن الحساب يمكن إدراج قيود عليه
-            if not parent_account.can_post_entries():
+            if not customer_account.can_post_entries():
                 raise PaymentIntegrationError(
-                    f"لا يمكن إدراج قيود على حساب العميل {parent_account.code} - {parent_account.name}"
+                    f"لا يمكن إدراج قيود على حساب العميل {customer_account.code} - {customer_account.name}"
                 )
 
-            # إنشاء القيد
-            journal_entry = JournalEntryService.create_simple_entry(
-                debit_account=cash_account_code,
-                credit_account=parent_account.code,
-                amount=payment.amount,
-                description=f"دفعة من العميل {payment.sale.parent.name} - فاتورة {payment.sale.number}",
-                date=payment.payment_date,
-                reference=f"SALE-PAY-{payment.id}",
+            # إنشاء القيد عبر AccountingGateway مباشرة مع source_info صحيح
+            from governance.services.accounting_gateway import AccountingGateway, JournalEntryLineData
+            
+            gateway = AccountingGateway()
+            
+            # تحضير بنود القيد
+            lines = [
+                JournalEntryLineData(
+                    account_code=cash_account_code,
+                    debit=payment.amount,
+                    credit=Decimal('0.00'),
+                    description=f"دفعة من العميل {payment.sale.customer.name}"
+                ),
+                JournalEntryLineData(
+                    account_code=customer_account.code,
+                    debit=Decimal('0.00'),
+                    credit=payment.amount,
+                    description=f"دفعة من العميل {payment.sale.customer.name}"
+                )
+            ]
+            
+            # إنشاء القيد مع source_info صحيح
+            journal_entry = gateway.create_journal_entry(
+                source_module='sale',
+                source_model='SalePayment',
+                source_id=payment.id,
+                lines=lines,
+                idempotency_key=f"JE:sale:SalePayment:{payment.id}:create",
                 user=user or payment.created_by,
+                entry_type='payment',
+                description=f"دفعة من العميل {payment.sale.customer.name} - فاتورة {payment.sale.number}",
+                reference=f"SALE-PAY-{payment.id}",
+                date=payment.payment_date,
                 financial_category=payment.sale.financial_category if hasattr(payment.sale, 'financial_category') else None,
             )
 
@@ -265,15 +289,39 @@ class PaymentIntegrationService:
                     f"لا يمكن إدراج قيود على حساب المورد {supplier_account.code} - {supplier_account.name}"
                 )
 
-            # إنشاء القيد
-            journal_entry = JournalEntryService.create_simple_entry(
-                debit_account=supplier_account.code,
-                credit_account=cash_account_code,
-                amount=payment.amount,
-                description=f"دفعة للمورد {payment.purchase.supplier.name} - فاتورة {payment.purchase.number}",
-                date=payment.payment_date,
-                reference=f"PURCH-PAY-{payment.id}",
+            # إنشاء القيد عبر AccountingGateway مباشرة مع source_info صحيح
+            from governance.services.accounting_gateway import AccountingGateway, JournalEntryLineData
+            
+            gateway = AccountingGateway()
+            
+            # تحضير بنود القيد
+            lines = [
+                JournalEntryLineData(
+                    account_code=supplier_account.code,
+                    debit=payment.amount,
+                    credit=Decimal('0.00'),
+                    description=f"دفعة للمورد {payment.purchase.supplier.name}"
+                ),
+                JournalEntryLineData(
+                    account_code=cash_account_code,
+                    debit=Decimal('0.00'),
+                    credit=payment.amount,
+                    description=f"دفعة للمورد {payment.purchase.supplier.name}"
+                )
+            ]
+            
+            # إنشاء القيد مع source_info صحيح
+            journal_entry = gateway.create_journal_entry(
+                source_module='purchase',
+                source_model='PurchasePayment',
+                source_id=payment.id,
+                lines=lines,
+                idempotency_key=f"JE:purchase:PurchasePayment:{payment.id}:create",
                 user=user or payment.created_by,
+                entry_type='payment',
+                description=f"دفعة للمورد {payment.purchase.supplier.name} - فاتورة {payment.purchase.number}",
+                reference=f"PURCH-PAY-{payment.id}",
+                date=payment.payment_date,
                 financial_category=payment.purchase.financial_category if hasattr(payment.purchase, 'financial_category') else None,
             )
 

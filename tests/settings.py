@@ -4,19 +4,44 @@
 from corporate_erp.settings import *
 import os
 
-# قاعدة بيانات للاختبارات - استخدام in-memory لسرعة أكبر
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': ':memory:',  # استخدام memory للسرعة
-        'OPTIONS': {
-            'timeout': 20,
-        },
-        'TEST': {
-            'NAME': ':memory:',
+# قاعدة بيانات للاختبارات - استخدام نفس MySQL
+# لكن مع اسم قاعدة بيانات مختلفة للاختبارات
+if env("DB_ENGINE", default="sqlite") == "mysql":
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': env("DB_NAME", default="test_corporate_erp"),
+            'USER': env("DB_USER"),
+            'PASSWORD': env("DB_PASSWORD"),
+            'HOST': env("DB_HOST"),
+            'PORT': env("DB_PORT"),
+            'ATOMIC_REQUESTS': True,
+            'OPTIONS': {
+                'charset': 'utf8mb4',
+                'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+            },
+            'TEST': {
+                'NAME': 'test_corporate_erp',
+                'CHARSET': 'utf8mb4',
+                'COLLATION': 'utf8mb4_unicode_ci',
+            }
         }
     }
-}
+else:
+    # Fallback to SQLite for local testing
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': 'test_db.sqlite3',
+            'ATOMIC_REQUESTS': True,
+            'OPTIONS': {
+                'timeout': 20,
+            },
+            'TEST': {
+                'NAME': 'test_db.sqlite3',
+            }
+        }
+    }
 
 # إعدادات الاختبار
 DEBUG = False
@@ -51,7 +76,7 @@ TIME_ZONE = 'Africa/Cairo'  # استخدام قيمة ثابتة للاختبا�
 DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 
 # تبسيط migrations للاختبارات
-MIGRATION_MODULES = {}
+# MIGRATION_MODULES = {}  # تعطيل هذا لإنشاء الجداول
 
 # إعدادات الملفات المؤقتة
 MEDIA_ROOT = os.path.join(BASE_DIR, 'test_media')
