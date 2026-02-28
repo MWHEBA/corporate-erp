@@ -4,6 +4,7 @@ from .models import (
     SystemSetting, DashboardStat, Notification, NotificationPreference,
     BackupRecord, BackupFile, DataRetentionPolicy, DataRetentionExecution,
     EncryptionKey, DataProtectionAudit, DataClassification,
+    SystemModule,
     # ✅ PHASE 7: Simplified monitoring models
     UnifiedLog, AlertRule, Alert
 )
@@ -442,3 +443,50 @@ class AlertAdmin(admin.ModelAdmin):
         self.message_user(request, f'{updated} تنبيه تم حله بنجاح.')
     resolve_alerts.short_description = _('حل التنبيهات المحددة')
 
+
+
+# ============================================================
+# SYSTEM MODULES MANAGEMENT
+# ============================================================
+
+@admin.register(SystemModule)
+class SystemModuleAdmin(admin.ModelAdmin):
+    """
+    إدارة تطبيقات النظام
+    """
+    list_display = ('name_ar', 'code', 'module_type', 'is_enabled', 'order')
+    list_filter = ('module_type', 'is_enabled')
+    search_fields = ('name_ar', 'name_en', 'code', 'description')
+    list_editable = ('is_enabled', 'order')
+    readonly_fields = ('created_at', 'updated_at')
+    filter_horizontal = ('required_modules',)
+    
+    fieldsets = (
+        (_('المعلومات الأساسية'), {
+            'fields': ('code', 'name_ar', 'name_en', 'description', 'icon')
+        }),
+        (_('الإعدادات'), {
+            'fields': ('module_type', 'is_enabled', 'order')
+        }),
+        (_('التبعيات'), {
+            'fields': ('required_modules',)
+        }),
+        (_('معلومات إضافية'), {
+            'fields': ('url_namespace', 'menu_id')
+        }),
+        (_('معلومات التحديث'), {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+    
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        # مسح الكاش عند التعديل
+        from django.core.cache import cache
+        cache.delete('enabled_modules_dict')
+        cache.delete('enabled_modules_set')
+        try:
+            cache.delete_pattern('module_enabled_*')
+        except AttributeError:
+            pass

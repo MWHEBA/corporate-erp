@@ -1,16 +1,14 @@
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
-from django.db.models import Sum, Count, Q
+from django.db.models import Sum, Count, Q, F
 from django.utils import timezone
 from django.urls import reverse
 from datetime import datetime, timedelta
 
 from supplier.models import Supplier
 from purchase.models import Purchase
-from hr.models import Employee, Attendance, Leave
 
 
-@login_required
 @login_required
 def dashboard(request):
     """
@@ -21,9 +19,6 @@ def dashboard(request):
     current_month = now.month
     today = now.date()
 
-    # إحصائيات الموظفين
-    employees_count = Employee.objects.filter(status='active').count()
-    
     # إحصائيات المشتريات الشهر الحالي
     purchases_month = Purchase.objects.filter(
         date__month=current_month,
@@ -32,7 +27,9 @@ def dashboard(request):
         total=Sum('total'),
         count=Count('id')
     )
-    
+    purchases_month_total = purchases_month.get('total') or 0
+    purchases_month_count = purchases_month.get('count') or 0
+
     # إحصائيات الموردين والمنتجات
     suppliers_count = Supplier.objects.filter(is_active=True).count()
     
@@ -48,43 +45,102 @@ def dashboard(request):
     except Exception:
         products_count = 0
         low_stock_products = []
-    
-    # الفواتير المستحقة للموردين (أكثر 10 فواتير متأخرة)
-    overdue_supplier_invoices = Purchase.objects.filter(
-        payment_status__in=['pending', 'partial']
-    ).select_related('supplier').order_by('date')[:10]
 
-    # حضور الموظفين اليوم
-    total_employees = Employee.objects.filter(status='active').count()
-    attendance_today = Attendance.objects.filter(date=today)
-    
-    present_count = attendance_today.filter(
-        check_in__isnull=False
-    ).values('employee').distinct().count()
-    
-    absent_count = total_employees - present_count
-    attendance_percentage = (present_count / total_employees * 100) if total_employees > 0 else 0
-    
-    # طلبات الإجازة والأذونات
-    pending_leaves = Leave.objects.filter(status='pending').count()
-    
-    approved_leaves_month = Leave.objects.filter(
-        status='approved',
-        start_date__month=current_month,
-        start_date__year=current_year
-    ).count()
-    
-    on_leave_today = Leave.objects.filter(
-        status='approved',
-        start_date__lte=today,
-        end_date__gte=today
-    ).count()
-    
+    # ديون الموردين = مجموع الفواتير المستحقة
+    try:
+        supplier_dues_total = Purchase.objects.filter(
+            payment_status__in=['unpaid', 'partially_paid']
+        ).aggregate(total=Sum('total'))['total'] or 0
+        
+        supplier_paid_total = Purchase.objects.filter(
+            payment_status__in=['unpaid', 'partially_paid']
+        ).aggregate(paid=Sum('payments__amount', filter=Q(payments__status='posted')))['paid'] or 0
+        
+        supplier_dues = supplier_dues_total - supplier_paid_total
+    except Exception:
+        supplier_dues = 0
+
+    # محاولة جلب بيانات المبيعات والعملاء
+    try:
+        from sale.models import Sale
+        from client.models import Customer
+        
+        # إحصائيات المبيعات الشهر الحالي
+        sales_month = Sale.objects.filter(
+            date__month=current_month,
+            date__year=current_year
+        ).aggregate(
+            total=Sum('total'),
+            count=Count('id')
+        )
+        sales_month_total = sales_month.get('total') or 0
+        sales_month_count = sales_month.get('count') or 0
+        
+        # ديون العملاء = مجموع الفواتير المستحقة
+        customer_dues_total = Sale.objects.filter(
+            payment_status__in=['unpaid', 'partially_paid']
+        ).aggregate(total=Sum('total'))['total'] or 0
+        
+        customer_paid_total = Sale.objects.filter(
+            payment_status__in=['unpaid', 'partially_paid']
+        ).aggregate(paid=Sum('payments__amount', filter=Q(payments__status='posted')))['paid'] or 0
+        
+        customer_dues = customer_dues_total - customer_paid_total
+        
+        # الفواتير المستحقة للعملاء فقط
+        overdue_customer_invoices = Sale.objects.filter(
+            payment_status__in=['unpaid', 'partially_paid']
+        ).select_related('customer').order_by('date')[:5]
+        
+        # تحضير بيانات جدول فواتير العملاء
+        customer_invoices_headers = [
+            {'key': 'number', 'label': 'رقم الفاتورة', 'width': '20%', 'format': 'html'},
+            {'key': 'customer', 'label': 'العميل', 'width': '25%'},
+            {'key': 'date', 'label': 'التاريخ', 'width': '15%', 'class': 'text-center'},
+            {'key': 'days_overdue', 'label': 'أيام التأخير', 'width': '15%', 'class': 'text-center', 'format': 'html'},
+            {'key': 'amount', 'label': 'المبلغ المستحق', 'width': '25%', 'class': 'text-end fw-bold'}
+        ]
+        
+        customer_invoices_data = []
+        for invoice in overdue_customer_invoices:
+            days_overdue = (today - invoice.date).days
+            
+            # تحديد لون البادج حسب عدد الأيام
+            if days_overdue > 60:
+                badge_class = 'bg-danger'
+            elif days_overdue > 30:
+                badge_class = 'bg-warning'
+            else:
+                badge_class = 'bg-info'
+            
+            # حساب المبلغ المستحق
+            remaining = invoice.amount_due
+            
+            customer_invoices_data.append({
+                'number': f'<a href="/sales/{invoice.id}/" class="text-primary">{invoice.number}</a>',
+                'customer': invoice.customer.name if invoice.customer else '-',
+                'date': invoice.date.strftime('%d-%m-%Y'),
+                'days_overdue': f'<span class="badge {badge_class}">{days_overdue} يوم</span>',
+                'amount': f'{remaining:,.2f} ج.م'
+            })
+    except Exception:
+        # في حالة عدم وجود موديول المبيعات
+        sales_month_total = 0
+        sales_month_count = 0
+        customer_dues = 0
+        customer_invoices_headers = []
+        customer_invoices_data = []
+
+    # الفواتير المستحقة للموردين فقط
+    overdue_supplier_invoices = Purchase.objects.filter(
+        payment_status__in=['unpaid', 'partially_paid']
+    ).select_related('supplier').order_by('date')[:5]
+
     # تحضير بيانات جدول الفواتير المستحقة للموردين
     supplier_invoices_headers = [
         {'key': 'number', 'label': 'رقم الفاتورة', 'width': '20%', 'format': 'html'},
         {'key': 'supplier', 'label': 'المورد', 'width': '25%'},
-        {'key': 'date', 'label': 'تاريخ الفاتورة', 'width': '15%', 'class': 'text-center'},
+        {'key': 'date', 'label': 'التاريخ', 'width': '15%', 'class': 'text-center'},
         {'key': 'days_overdue', 'label': 'أيام التأخير', 'width': '15%', 'class': 'text-center', 'format': 'html'},
         {'key': 'amount', 'label': 'المبلغ المستحق', 'width': '25%', 'class': 'text-end fw-bold'}
     ]
@@ -92,6 +148,7 @@ def dashboard(request):
     supplier_invoices_data = []
     for invoice in overdue_supplier_invoices:
         days_overdue = (today - invoice.date).days
+        
         # تحديد لون البادج حسب عدد الأيام
         if days_overdue > 60:
             badge_class = 'bg-danger'
@@ -100,9 +157,8 @@ def dashboard(request):
         else:
             badge_class = 'bg-info'
         
-        # حساب المبلغ المستحق (الإجمالي - المدفوع)
-        paid_amount = invoice.paid or 0
-        remaining = invoice.total - paid_amount
+        # حساب المبلغ المستحق
+        remaining = invoice.amount_due
         
         supplier_invoices_data.append({
             'number': f'<a href="/purchase/{invoice.id}/" class="text-primary">{invoice.number}</a>',
@@ -112,28 +168,64 @@ def dashboard(request):
             'amount': f'{remaining:,.2f} ج.م'
         })
 
+    # إجمالي المستحقات
+    total_dues = customer_dues + supplier_dues
+
+    # آخر العمليات (آخر 5 فواتير مبيعات ومشتريات)
+    recent_activities = []
+    
+    try:
+        from sale.models import Sale
+        recent_sales = Sale.objects.select_related('customer').order_by('-created_at')[:3]
+        for sale in recent_sales:
+            recent_activities.append({
+                'icon': 'fa-shopping-cart',
+                'title': f'فاتورة مبيعات {sale.number}',
+                'description': f'العميل: {sale.customer.name if sale.customer else "-"} - المبلغ: {sale.total:,.2f} ج.م',
+                'time': sale.created_at.strftime('%d-%m-%Y %I:%M %p')
+            })
+    except:
+        pass
+    
+    recent_purchases = Purchase.objects.select_related('supplier').order_by('-created_at')[:3]
+    for purchase in recent_purchases:
+        recent_activities.append({
+            'icon': 'fa-truck',
+            'title': f'فاتورة مشتريات {purchase.number}',
+            'description': f'المورد: {purchase.supplier.name if purchase.supplier else "-"} - المبلغ: {purchase.total:,.2f} ج.م',
+            'time': purchase.created_at.strftime('%d-%m-%Y %I:%M %p')
+        })
+    
+    # ترتيب حسب الوقت
+    recent_activities = sorted(recent_activities, key=lambda x: x['time'], reverse=True)[:5]
+
     context = {
         # إحصائيات أساسية
-        "employees_count": employees_count,
-        "purchases_month": purchases_month,
         "suppliers_count": suppliers_count,
         "products_count": products_count,
         "low_stock_products": low_stock_products,
         
-        # حضور الموظفين
-        "total_employees": total_employees,
-        "present_count": present_count,
-        "absent_count": absent_count,
-        "attendance_percentage": round(attendance_percentage, 1),
-        "on_leave_today": on_leave_today,
+        # إحصائيات المشتريات
+        "purchases_month": purchases_month,
+        "purchases_month_total": purchases_month_total,
         
-        # طلبات الإجازة
-        "pending_leaves": pending_leaves,
-        "approved_leaves_month": approved_leaves_month,
+        # إحصائيات المبيعات
+        "sales_month_total": sales_month_total,
+        "sales_month_count": sales_month_count,
+        
+        # المستحقات
+        "supplier_dues": supplier_dues,
+        "customer_dues": customer_dues,
+        "total_dues": total_dues,
         
         # بيانات الجداول
+        "customer_invoices_headers": customer_invoices_headers,
+        "customer_invoices_data": customer_invoices_data,
         "supplier_invoices_headers": supplier_invoices_headers,
         "supplier_invoices_data": supplier_invoices_data,
+        
+        # آخر العمليات
+        "recent_activities": recent_activities,
     }
 
     return render(request, "core/dashboard.html", context)

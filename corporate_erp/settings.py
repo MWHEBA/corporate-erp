@@ -173,6 +173,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",  # ✅ CSRF عادي بدلاً من المحسن
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "core.middleware.current_user.CurrentUserMiddleware",  # تخزين المستخدم الحالي للـ Signals
+    "core.middleware.module_control.ModuleAccessMiddleware",  # ✅ التحكم في الوصول للتطبيقات المعطلة
     "governance.middleware.GovernanceContextMiddleware",  # ✅ Governance context management - مفعل
     "governance.middleware.GovernanceAuditMiddleware",  # ✅ Comprehensive audit trail logging - مفعل
     "core.middleware.permission_checker.RealTimePermissionMiddleware",  # ✅ التحقق من الصلاحيات Real-Time - مفعل
@@ -209,6 +210,7 @@ TEMPLATES = [
                 "core.context_processors.user_permissions",
                 "core.context_processors.notifications",
                 "core.context_processors.payment_accounts",
+                "core.context_processors.enabled_modules",
                 "utils.context_processors.common_variables",
                 "utils.context_processors.user_permissions",
                 "utils.context_processors.breadcrumb_context",

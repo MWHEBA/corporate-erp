@@ -157,3 +157,30 @@ def payment_accounts(request):
             'default_payment_account': None
         }
 
+
+def enabled_modules(request):
+    """
+    إضافة التطبيقات المفعلة للقوالب
+    """
+    try:
+        from core.models import SystemModule
+        from django.core.cache import cache
+        
+        # محاولة الحصول من الكاش
+        cache_key = 'enabled_modules_dict'
+        enabled_modules_dict = cache.get(cache_key)
+        
+        if enabled_modules_dict is None:
+            modules = SystemModule.objects.filter(is_enabled=True).values(
+                'code', 'name_ar', 'icon', 'menu_id', 'url_namespace'
+            )
+            enabled_modules_dict = {m['code']: m for m in modules}
+            cache.set(cache_key, enabled_modules_dict, 300)  # 5 دقائق
+        
+        return {
+            'enabled_modules': enabled_modules_dict,
+            'is_module_enabled': lambda code: code in enabled_modules_dict
+        }
+    except Exception:
+        return {'enabled_modules': {}, 'is_module_enabled': lambda code: True}
+

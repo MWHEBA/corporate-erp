@@ -1107,3 +1107,66 @@ class Alert(models.Model):
     
     def __str__(self):
         return f"[{self.rule.severity.upper()}] {self.rule.name} - {self.status}"
+
+
+# ============================================================
+# SYSTEM MODULES MANAGEMENT
+# ============================================================
+
+class SystemModule(models.Model):
+    """
+    نموذج لإدارة تطبيقات النظام القابلة للتفعيل/التعطيل
+    """
+    MODULE_TYPES = [
+        ('core', 'تطبيق أساسي'),
+        ('optional', 'تطبيق اختياري'),
+    ]
+    
+    code = models.CharField(max_length=50, unique=True, verbose_name='كود التطبيق')
+    name_ar = models.CharField(max_length=100, verbose_name='الاسم بالعربية')
+    name_en = models.CharField(max_length=100, verbose_name='الاسم بالإنجليزية')
+    description = models.TextField(blank=True, verbose_name='الوصف')
+    icon = models.CharField(max_length=50, default='fas fa-cube', verbose_name='الأيقونة')
+    
+    module_type = models.CharField(max_length=20, choices=MODULE_TYPES, default='optional', verbose_name='نوع التطبيق')
+    is_enabled = models.BooleanField(default=True, verbose_name='مفعّل')
+    
+    # التطبيقات المطلوبة (dependencies)
+    required_modules = models.ManyToManyField(
+        'self', 
+        symmetrical=False, 
+        blank=True, 
+        related_name='dependent_modules',
+        verbose_name='التطبيقات المطلوبة'
+    )
+    
+    # معلومات إضافية
+    url_namespace = models.CharField(max_length=50, blank=True, verbose_name='URL Namespace')
+    menu_id = models.CharField(max_length=50, blank=True, verbose_name='معرف القائمة')
+    
+    order = models.IntegerField(default=0, verbose_name='الترتيب')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='تاريخ الإنشاء')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='تاريخ التحديث')
+    
+    class Meta:
+        verbose_name = 'تطبيق النظام'
+        verbose_name_plural = 'تطبيقات النظام'
+        ordering = ['order', 'name_ar']
+    
+    def __str__(self):
+        return f"{self.name_ar} ({self.code})"
+    
+    def can_disable(self):
+        """التحقق من إمكانية تعطيل التطبيق"""
+        if self.module_type == 'core':
+            return False
+        # التحقق من عدم وجود تطبيقات أخرى مفعلة تعتمد عليه
+        return not self.dependent_modules.filter(is_enabled=True).exists()
+    
+    def get_dependencies_status(self):
+        """الحصول على حالة التطبيقات المطلوبة"""
+        deps = self.required_modules.all()
+        return {
+            'all_enabled': all(dep.is_enabled for dep in deps),
+            'missing': [dep for dep in deps if not dep.is_enabled]
+        }

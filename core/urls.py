@@ -12,6 +12,7 @@ from .views import (
     list_backups, delete_backup, get_backup_settings, update_backup_settings,
     cleanup_old_backups
 )
+from .views.module_management import module_management
 
 app_name = "core"
 
@@ -28,6 +29,7 @@ urlpatterns = [
     # مسارات الإعدادات
     path("settings/company/", company_settings, name="company_settings"),
     path("settings/system/", system_settings, name="system_settings"),
+    path("settings/modules/", module_management, name="module_management"),
     
     # Unified Backup Management
     path('settings/backup/', backup_management, name='backup_management'),

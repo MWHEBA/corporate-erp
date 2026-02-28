@@ -3,6 +3,7 @@
 {% load static %}
 {% load utils_extras %}
 {% load custom_filters %}
+{% load module_tags %}
 
 {% block title %}لوحة التحكم | Corporate ERP{% endblock %}
 
@@ -358,12 +359,20 @@
             <h1 class="welcome-title">مرحباً بك، {{ request.user.first_name|default:request.user.username }}</h1>
             <p class="welcome-subtitle">أهلاً بك في لوحة التحكم الخاصة بنظام Corporate ERP</p>
             <div class="welcome-actions">
+                {% is_module_enabled 'customers_sales' as customers_sales_enabled %}
+                {% is_module_enabled 'suppliers_purchases' as suppliers_purchases_enabled %}
+                
+                {% if customers_sales_enabled %}
                 <a href="{% url 'sale:sale_create' %}" class="btn btn-light me-2">
                     <i class="fas fa-file-invoice me-1"></i> فاتورة مبيعات
                 </a>
+                {% endif %}
+                
+                {% if suppliers_purchases_enabled %}
                 <a href="{% url 'purchase:purchase_create' %}" class="btn btn-outline-light">
                     <i class="fas fa-cart-plus me-1"></i> فاتورة شراء
                 </a>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -372,7 +381,12 @@
         <!-- إحصائيات سريعة -->
         <div class="col-lg-12 mb-4">
             <div class="row">
+                {% is_module_enabled 'customers_sales' as customers_sales_enabled %}
+                {% is_module_enabled 'suppliers_purchases' as suppliers_purchases_enabled %}
+                {% is_module_enabled 'warehouses' as warehouses_enabled %}
+                
                 <!-- إحصائيات المبيعات -->
+                {% if customers_sales_enabled %}
                 <div class="col-md-6 col-lg-3 mb-4">
                     <div class="stats-card stats-card-primary">
                         <div class="stats-card-header"></div>
@@ -386,8 +400,10 @@
                         </div>
                     </div>
                 </div>
+                {% endif %}
                 
                 <!-- إحصائيات المشتريات -->
+                {% if suppliers_purchases_enabled %}
                 <div class="col-md-6 col-lg-3 mb-4">
                     <div class="stats-card stats-card-success">
                         <div class="stats-card-header"></div>
@@ -401,8 +417,10 @@
                         </div>
                     </div>
                 </div>
+                {% endif %}
                 
                 <!-- إحصائيات المخزون -->
+                {% if warehouses_enabled %}
                 <div class="col-md-6 col-lg-3 mb-4">
                     <div class="stats-card stats-card-warning">
                         <div class="stats-card-header"></div>
@@ -416,25 +434,29 @@
                         </div>
                     </div>
                 </div>
+                {% endif %}
                 
-                <!-- إحصائيات المستحقات -->
+                <!-- إحصائيات الموردين -->
+                {% if suppliers_purchases_enabled %}
                 <div class="col-md-6 col-lg-3 mb-4">
-                    <div class="stats-card stats-card-danger">
+                    <div class="stats-card stats-card-info">
                         <div class="stats-card-header"></div>
                         <div class="stats-card-body">
                             <div class="stats-card-icon">
-                                <i class="fas fa-file-invoice-dollar"></i>
+                                <i class="fas fa-users"></i>
                             </div>
-                            <div class="stats-card-title">المستحقات</div>
-                            <div class="stats-card-value">{{ total_dues|default:0|smart_float }}</div>
-                            <div class="stats-card-unit">ج.م</div>
+                            <div class="stats-card-title">الموردين</div>
+                            <div class="stats-card-value">{{ suppliers_count|default:0 }}</div>
+                            <div class="stats-card-unit">مورد نشط</div>
                         </div>
                     </div>
                 </div>
+                {% endif %}
             </div>
         </div>
     </div>
     
+    {% if customers_sales_enabled or suppliers_purchases_enabled %}
     <div class="row">
         <!-- المستحقات المالية -->
         <div class="col-lg-12 mb-4">
@@ -447,6 +469,7 @@
                 </div>
                 <div class="card-body">
                     <div class="row g-3">
+                        {% if customers_sales_enabled %}
                         <div class="col-md-3">
                             <div class="financial-card">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
@@ -460,20 +483,23 @@
                         <div class="col-md-3">
                             <div class="financial-card">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <div class="text-muted">مستحقات الموردين</div>
-                                    <i class="fas fa-arrow-up text-danger"></i>
-                                </div>
-                                <div class="h4 mb-0 text-danger">{{ supplier_dues|default:0|smart_float }}</div>
-                                <div class="text-muted small">ج.م</div>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="financial-card">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
                                     <div class="text-muted">إيرادات الشهر</div>
                                     <i class="fas fa-chart-line text-primary"></i>
                                 </div>
                                 <div class="h4 mb-0 text-primary">{{ sales_month_total|default:0|smart_float }}</div>
+                                <div class="text-muted small">ج.م</div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if suppliers_purchases_enabled %}
+                        <div class="col-md-3">
+                            <div class="financial-card">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <div class="text-muted">مستحقات الموردين</div>
+                                    <i class="fas fa-arrow-up text-danger"></i>
+                                </div>
+                                <div class="h4 mb-0 text-danger">{{ supplier_dues|default:0|smart_float }}</div>
                                 <div class="text-muted small">ج.م</div>
                             </div>
                         </div>
@@ -487,14 +513,17 @@
                                 <div class="text-muted small">ج.م</div>
                             </div>
                         </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
         </div>
     </div>
+    {% endif %}
     
     <div class="row">
         <!-- فواتير المبيعات المستحقة -->
+        {% if customers_sales_enabled %}
         <div class="col-lg-6 mb-4">
             <div class="dashboard-card h-100">
                 <div class="card-header">
@@ -506,7 +535,7 @@
                 </div>
                 <div class="card-body">
                     {% if customer_invoices_data %}
-                    {% include "components/data_table.html" with table_id="customer-invoices-table" headers=customer_invoices_headers data=customer_invoices_data empty_message="لا توجد فواتير مستحقة" %}
+                    {% include "components/data_table.html" with table_id="customer-invoices-table" headers=customer_invoices_headers data=customer_invoices_data primary_key="id" empty_message="لا توجد فواتير مستحقة" %}
                     {% else %}
                     <div class="text-center py-4">
                         <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
@@ -516,8 +545,10 @@
                 </div>
             </div>
         </div>
+        {% endif %}
         
         <!-- فواتير المشتريات المستحقة -->
+        {% if suppliers_purchases_enabled %}
         <div class="col-lg-6 mb-4">
             <div class="dashboard-card h-100">
                 <div class="card-header">
@@ -529,7 +560,7 @@
                 </div>
                 <div class="card-body">
                     {% if supplier_invoices_data %}
-                    {% include "components/data_table.html" with table_id="supplier-invoices-table" headers=supplier_invoices_headers data=supplier_invoices_data empty_message="لا توجد فواتير مستحقة" %}
+                    {% include "components/data_table.html" with table_id="supplier-invoices-table" headers=supplier_invoices_headers data=supplier_invoices_data primary_key="id" empty_message="لا توجد فواتير مستحقة" %}
                     {% else %}
                     <div class="text-center py-4">
                         <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
@@ -539,10 +570,12 @@
                 </div>
             </div>
         </div>
+        {% endif %}
     </div>
     
     <div class="row">
         <!-- المنتجات منخفضة المخزون -->
+        {% if warehouses_enabled %}
         <div class="col-lg-6 mb-4">
             <div class="dashboard-card h-100">
                 <div class="card-header">
@@ -577,9 +610,10 @@
                 </div>
             </div>
         </div>
+        {% endif %}
         
         <!-- آخر العمليات -->
-        <div class="col-lg-6 mb-4">
+        <div class="{% if warehouses_enabled %}col-lg-6{% else %}col-lg-12{% endif %} mb-4">
             <div class="dashboard-card h-100">
                 <div class="card-header">
                     <h5 class="card-title">

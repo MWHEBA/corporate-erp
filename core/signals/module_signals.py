@@ -1,37 +1,16 @@
 """
-Core Signals - Notification System
-
-ملاحظة: تم تعطيل جميع الإشعارات التلقائية للأحداث التالية:
-- إضافة طالب/مورد/منتج/مستخدم جديد
-- إنشاء فواتير المشتريات
-- استلام/سداد الدفعات
-- مرتجعات المشتريات
-
-الإشعارات المتبقية النشطة:
-- تنبيهات المخزون المنخفض (في product/signals.py)
-- إشعارات العقود (في hr/signals.py)
-- إشعارات التسويات المالية (في students/services/)
-
-يمكن إعادة تفعيل أي إشعار عند الحاجة من خلال إلغاء التعليق على الكود المناسب.
+Signals لإدارة التطبيقات
 """
-
-# Placeholder file - all notification signals have been disabled
-# Keep this file to maintain app structure and avoid import errors
-
-
-# ============================================================
-# MODULE MANAGEMENT SIGNALS
-# ============================================================
-
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.core.cache import cache
+from core.models import SystemModule
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-@receiver(post_save, sender='core.SystemModule')
+@receiver(post_save, sender=SystemModule)
 def clear_module_cache_on_save(sender, instance, **kwargs):
     """
     مسح الكاش عند حفظ أو تعديل تطبيق
@@ -56,7 +35,7 @@ def clear_module_cache_on_save(sender, instance, **kwargs):
         logger.error(f"Error clearing cache for module {instance.code}: {str(e)}")
 
 
-@receiver(post_delete, sender='core.SystemModule')
+@receiver(post_delete, sender=SystemModule)
 def clear_module_cache_on_delete(sender, instance, **kwargs):
     """
     مسح الكاش عند حذف تطبيق
