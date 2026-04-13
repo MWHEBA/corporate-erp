@@ -279,27 +279,24 @@ class SupplierService:
                     nature='credit'
                 )
             
-            # الحصول على الحساب الرئيسي للموردين (21010)
-            parent_account = ChartOfAccounts.objects.filter(code='21010').first()
+            # الحصول على الحساب الرئيسي للموردين (20100)
+            parent_account = ChartOfAccounts.objects.filter(code='20100').first()
             if not parent_account:
                 parent_account = ChartOfAccounts.objects.create(
-                    code='21010',
-                    name='الموردين',
+                    code='20100',
+                    name='الموردون',
                     account_type=liability_type,
                     is_active=True
                 )
             
-            # توليد كود فرعي للمورد
-            # البحث عن آخر حساب مورد
-            # النمط: 2101XXXX (8 أرقام: 2101 + 4 أرقام تسلسلية)
+            # توليد كود فرعي للمورد - النمط: 2010XXXX
             last_supplier_account = ChartOfAccounts.objects.filter(
-                code__startswith='2101',
+                code__startswith='2010',
                 parent=parent_account
-            ).exclude(code='21010').order_by('-code').first()
+            ).exclude(code='20100').order_by('-code').first()
             
             if last_supplier_account:
                 try:
-                    # استخراج الرقم من آخر 4 أرقام
                     last_number = int(last_supplier_account.code[-4:])
                     new_number = last_number + 1
                 except (ValueError, AttributeError, IndexError):
@@ -307,13 +304,13 @@ class SupplierService:
             else:
                 new_number = 1
             
-            # توليد الكود الجديد: 2101 + 4 digits = 8 characters max
-            account_code = f"2101{new_number:04d}"
+            # توليد الكود الجديد: 2010 + 4 digits
+            account_code = f"2010{new_number:04d}"
             
             # التأكد من عدم تكرار الكود
             while ChartOfAccounts.objects.filter(code=account_code).exists():
                 new_number += 1
-                account_code = f"2101{new_number:04d}"
+                account_code = f"2010{new_number:04d}"
             
             # إنشاء الحساب المحاسبي
             financial_account = ChartOfAccounts.objects.create(
@@ -629,3 +626,97 @@ class SupplierService:
         except Exception as e:
             logger.error(f"❌ خطأ في الحصول على الموردين المفضلين: {str(e)}")
             return Supplier.objects.none()
+
+    # ================================================================
+    # Methods جديدة — خدمات الموردين (المرحلة الأولى)
+    # ================================================================
+
+    @staticmethod
+    def get_suppliers_by_service_type(service_type_code):
+        """
+        جلب الموردين الذين يقدمون خدمة من نوع معين.
+
+        Args:
+            service_type_code: كود نوع الخدمة (مثل 'paper', 'offset_printing')
+
+        Returns:
+            QuerySet: الموردين النشطين الذين لديهم خدمة من هذا النوع
+        """
+        from supplier.models import SupplierService as SupplierServiceModel
+        try:
+            return Supplier.objects.filter(
+                is_active=True,
+                services__service_type__code=service_type_code,
+                services__is_active=True,
+            ).select_related('primary_type').distinct().order_by('name')
+        except Exception as e:
+            logger.error(f"❌ خطأ في get_suppliers_by_service_type({service_type_code}): {e}")
+            return Supplier.objects.none()
+
+    @staticmethod
+    def get_supplier_services(supplier_id, service_type_code=None):
+        """
+        جلب الخدمات المتاحة عند مورد معين، مع إمكانية الفلترة بنوع الخدمة.
+
+        Args:
+            supplier_id: معرف المورد
+            service_type_code: كود نوع الخدمة (اختياري)
+
+        Returns:
+            QuerySet: خدمات المورد النشطة
+        """
+        from supplier.models import SupplierService as SupplierServiceModel
+        try:
+            qs = SupplierServiceModel.objects.filter(
+                supplier_id=supplier_id,
+                is_active=True,
+                supplier__is_active=True,
+            ).select_related('service_type', 'supplier')
+
+            if service_type_code:
+                qs = qs.filter(service_type__code=service_type_code)
+
+            return qs.order_by('service_type__order', 'name')
+        except Exception as e:
+            logger.error(f"❌ خطأ في get_supplier_services(supplier={supplier_id}): {e}")
+            from supplier.models import SupplierService as SupplierServiceModel
+            return SupplierServiceModel.objects.none()
+
+    @staticmethod
+    def get_service_price(service_id, quantity=1):
+        """
+        جلب سعر خدمة معينة للكمية المطلوبة.
+        يبحث في الشرائح السعرية أولاً، ثم يرجع base_price كـ fallback.
+
+        Args:
+            service_id: معرف الخدمة
+            quantity: الكمية المطلوبة (للبحث في الشرائح)
+
+        Returns:
+            dict: {price, setup_cost, service_name, supplier_name, is_fallback}
+            أو None إذا لم توجد الخدمة
+        """
+        from supplier.models import SupplierService as SupplierServiceModel
+        try:
+            service = SupplierServiceModel.objects.select_related(
+                'supplier', 'service_type'
+            ).get(id=service_id, is_active=True)
+
+            price = service.get_price_for_quantity(quantity)
+
+            return {
+                'price':         price,
+                'setup_cost':    service.setup_cost,
+                'service_name':  service.name,
+                'supplier_name': service.supplier.name,
+                'supplier_id':   service.supplier_id,
+                'service_type':  service.service_type.code,
+                'attributes':    service.attributes,
+                'is_fallback':   False,
+            }
+        except SupplierServiceModel.DoesNotExist:
+            logger.warning(f"⚠️ SupplierService id={service_id} غير موجود")
+            return None
+        except Exception as e:
+            logger.error(f"❌ خطأ في get_service_price(service={service_id}): {e}")
+            return None

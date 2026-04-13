@@ -49,13 +49,13 @@ class FinancialTransactionSignalHandler:
         
         Args:
             sender: الكلاس الذي أرسل الإشارة
-            entity: الكيان المالي (طالب، مورد، موظف، إلخ)
+            entity: الكيان المالي
             transaction_date: تاريخ المعاملة
             entity_type: نوع الكيان (اختياري)
             transaction_type: نوع المعاملة (اختياري)
             transaction_amount: مبلغ المعاملة (اختياري)
             user: المستخدم الذي يحاول المعاملة (اختياري)
-            module: الوحدة (students, financial, etc.)
+            module: الوحدة (client, financial, etc.)
             is_system_generated: هل المعاملة مولدة من النظام (افتراضي False)
             **kwargs: معاملات إضافية
             
@@ -68,11 +68,6 @@ class FinancialTransactionSignalHandler:
         from financial.services.validation_service import FinancialValidationService
         
         # تسجيل محاولة التحقق
-        logger.info(
-            f"بدء التحقق من معاملة مالية: "
-            f"entity={entity}, type={entity_type}, "
-            f"system_generated={is_system_generated}"
-        )
         
         # التحقق من المعاملة
         result = FinancialValidationService.validate_transaction(
@@ -89,10 +84,6 @@ class FinancialTransactionSignalHandler:
         
         # معالجة خاصة للمعاملات المولدة من النظام
         if is_system_generated:
-            logger.info(
-                f"معاملة مولدة من النظام - تم التحقق بنجاح: "
-                f"entity={entity}, module={module}"
-            )
             
             # تسجيل إضافي للمعاملات المولدة من النظام
             if result['is_valid']:
@@ -125,28 +116,28 @@ class FinancialTransactionSignalHandler:
         يربط signal pre_save بنموذج معين للتحقق التلقائي من المعاملات المالية.
         
         Args:
-            model_class: كلاس النموذج (مثل: FeePayment, JournalEntry)
+            model_class: كلاس النموذج (مثل: JournalEntry, Sale)
             field_mapping: قاموس يحدد حقول النموذج المقابلة
                 {
-                    'entity_field': 'student',  # حقل الكيان
-                    'date_field': 'payment_date',  # حقل التاريخ
-                    'amount_field': 'amount',  # حقل المبلغ (اختياري)
-                    'entity_type': 'student',  # نوع الكيان
-                    'module': 'client',  # الوحدة
-                    'transaction_type': 'payment'  # نوع المعاملة
+                    'entity_field': 'customer',  # حقل الكيان
+                    'date_field': 'date',         # حقل التاريخ
+                    'amount_field': 'amount',     # حقل المبلغ (اختياري)
+                    'entity_type': 'customer',    # نوع الكيان
+                    'module': 'client',           # الوحدة
+                    'transaction_type': 'payment' # نوع المعاملة
                 }
-        
+
         Example:
-            >>> from client.models import CustomerPayment
+            >>> from sale.models import Sale
             >>> FinancialTransactionSignalHandler.connect_to_model(
-            ...     CustomerPayment,
+            ...     Sale,
             ...     {
             ...         'entity_field': 'customer',
-            ...         'date_field': 'payment_date',
-            ...         'amount_field': 'amount',
+            ...         'date_field': 'date',
+            ...         'amount_field': 'total',
             ...         'entity_type': 'customer',
             ...         'module': 'client',
-            ...         'transaction_type': 'payment'
+            ...         'transaction_type': 'sale'
             ...     }
             ... )
         """
@@ -202,9 +193,6 @@ class FinancialTransactionSignalHandler:
                 )
                 raise
         
-        logger.info(
-            f"تم ربط signal التحقق بالنموذج: {model_class.__name__}"
-        )
 
 
 # ربط معالج التحقق بـ signal
@@ -248,14 +236,14 @@ def trigger_validation(
         
     Example:
         >>> from datetime import date
-        >>> student = Student.objects.get(id=1)
+        >>> customer = Customer.objects.get(id=1)
         >>> trigger_validation(
-        ...     entity=student,
+        ...     entity=customer,
         ...     transaction_date=date.today(),
-        ...     entity_type='student',
+        ...     entity_type='customer',
         ...     transaction_type='payment',
         ...     transaction_amount=1000,
-        ...     module='students'
+        ...     module='client'
         ... )
     """
     return pre_financial_transaction.send(
@@ -280,18 +268,18 @@ def connect_model_validation(model_class, field_mapping):
     Args:
         model_class: كلاس النموذج
         field_mapping: قاموس تعيين الحقول
-        
+
     Example:
-        >>> from client.models import CustomerPayment
+        >>> from sale.models import Sale
         >>> connect_model_validation(
-        ...     CustomerPayment,
+        ...     Sale,
         ...     {
         ...         'entity_field': 'customer',
-        ...         'date_field': 'payment_date',
-        ...         'amount_field': 'amount',
+        ...         'date_field': 'date',
+        ...         'amount_field': 'total',
         ...         'entity_type': 'customer',
         ...         'module': 'client',
-        ...         'transaction_type': 'payment'
+        ...         'transaction_type': 'sale'
         ...     }
         ... )
     """

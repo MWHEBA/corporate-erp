@@ -1,4 +1,4 @@
-/**
+﻿/**
  * محمل نظام المدفوعات - Payment System Loader
  * يحمل جميع ملفات JavaScript المطلوبة لنظام المدفوعات بالترتيب الصحيح
  */
@@ -14,7 +14,6 @@
         'js/payment-error-recovery.js',
         'js/payment-processing.js',
         'js/payment_management.js',
-        'js/student-payment-handler.js'
     ];
 
     // قائمة ملفات CSS المطلوبة
@@ -148,24 +147,7 @@
             }
         }
 
-        // تهيئة معالج مدفوعات الطلاب
-        if (typeof StudentPaymentHandler !== 'undefined' && !window.studentPaymentHandler) {
-            try {
-                const studentId = getStudentId();
-                if (studentId) {
-                    window.studentPaymentHandler = new StudentPaymentHandler(studentId);
-                }
-            } catch (error) {
-                console.error('❌ خطأ في تهيئة معالج مدفوعات الطلاب:', error);
-            }
-        }
-    }
-
-    // الحصول على معرف الطالب
-    function getStudentId() {
-        return window.studentId || 
-               document.querySelector('[data-student-id]')?.dataset.studentId ||
-               window.location.pathname.match(/\/students\/(\d+)\//)?.[1];
+        // تهيئة معالج المدفوعات
     }
 
     // تحميل ملفات CSS أولاً
@@ -228,7 +210,6 @@ document.addEventListener('paymentSystemLoaded', function(event) {
         { name: 'معالج الأخطاء', obj: window.paymentErrorHandler },
         { name: 'مراقب الاتصال', obj: window.connectionMonitor },
         { name: 'معالج المدفوعات', obj: window.paymentProcessor },
-        { name: 'معالج مدفوعات الطلاب', obj: window.studentPaymentHandler }
     ];
 
     components.forEach(component => {

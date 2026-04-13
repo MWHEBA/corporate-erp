@@ -20,11 +20,11 @@
   <div class="section-container">
     <h5 class="section-title"><i class="fas fa-filter me-2"></i>تصفية وبحث</h5>
     <form method="get" class="row g-3">
-        <div class="col-md-3">
+        <div class="col-md-2">
             <label for="search" class="form-label">بحث</label>
-            <input type="text" name="search" id="search" class="form-control" placeholder="اسم الموظف أو الرقم..." value="{{ request.GET.search }}">
+            <input type="text" name="search" id="search" class="form-control" placeholder="الاسم أو الرقم..." value="{{ request.GET.search }}">
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <label for="department" class="form-label">القسم</label>
             <select name="department" id="department" class="form-select">
                 <option value="">جميع الأقسام</option>
@@ -36,16 +36,6 @@
             </select>
         </div>
         <div class="col-md-2">
-            <label for="status" class="form-label">الحالة</label>
-            <select name="status" id="status" class="form-select">
-                <option value="">جميع الحالات</option>
-                <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>نشط</option>
-                <option value="on_leave" {% if request.GET.status == 'on_leave' %}selected{% endif %}>في إجازة</option>
-                <option value="suspended" {% if request.GET.status == 'suspended' %}selected{% endif %}>موقوف</option>
-                <option value="terminated" {% if request.GET.status == 'terminated' %}selected{% endif %}>منتهي الخدمة</option>
-            </select>
-        </div>
-        <div class="col-md-2">
             <label for="job_title" class="form-label">المسمى الوظيفي</label>
             <select name="job_title" id="job_title" class="form-select">
                 <option value="">الكل</option>
@@ -54,6 +44,22 @@
                     {{ job.title_ar }}
                 </option>
                 {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label for="insurance_status" class="form-label">التأمينات</label>
+            <select name="insurance_status" id="insurance_status" class="form-select">
+                <option value="">الكل</option>
+                <option value="insured" {% if request.GET.insurance_status == 'insured' %}selected{% endif %}>مؤمن</option>
+                <option value="uninsured" {% if request.GET.insurance_status == 'uninsured' %}selected{% endif %}>غير مؤمن</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label for="status" class="form-label">الحالة</label>
+            <select name="status" id="status" class="form-select">
+                <option value="">الكل (نشط)</option>
+                <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>نشط</option>
+                <option value="terminated" {% if request.GET.status == 'terminated' %}selected{% endif %}>منتهي الخدمة</option>
             </select>
         </div>
         <div class="col-md-2 d-flex align-items-end">
@@ -76,7 +82,7 @@
         </div>
       </div>
       <div class="card-body">
-        {% include "components/data_table.html" with table_id="employees-table" headers=table_headers data=employees action_buttons=table_actions clickable_rows=True row_click_url="/hr/employees/0/" primary_key="pk" empty_message="لا توجد موظفين متاحين" %}
+        {% include "components/data_table.html" with table_id="employees-table" headers=table_headers data=employees clickable_rows=True row_click_url="/hr/employees/0/" primary_key="pk" empty_message="لا توجد موظفين متاحين" %}
       </div>
       <div class="card-footer bg-light">
         <div class="d-flex justify-content-between align-items-center">
@@ -170,7 +176,33 @@ $(document).ready(function() {
             ]
         });
     }
-    
+    // إعادة الموظف للخدمة
+    window.reinstateEmployee = function(pk, name) {
+        Swal.fire({
+            title: 'إعادة للخدمة',
+            text: `هل تريد إعادة "${name}" للخدمة؟`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#198754',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'نعم، إعادة للخدمة',
+            cancelButtonText: 'إلغاء'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = `/hr/employees/${pk}/reinstate/`;
+                const csrf = document.createElement('input');
+                csrf.type = 'hidden';
+                csrf.name = 'csrfmiddlewaretoken';
+                csrf.value = '{{ csrf_token }}';
+                form.appendChild(csrf);
+                document.body.appendChild(form);
+                form.submit();
+            }
+        });
+    };
+
     // معالجة نموذج الاستيراد
     $('#importForm').on('submit', function(e) {
         const fileInput = $('#import_file')[0];

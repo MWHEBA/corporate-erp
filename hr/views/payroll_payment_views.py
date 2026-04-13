@@ -36,8 +36,11 @@ def payroll_pay(request, pk):
         payment_reference = request.POST.get('payment_reference', '')
         
         try:
-            # الحصول على حساب الدفع
-            payment_account = ChartOfAccounts.objects.get(id=payment_account_id)
+            # الحصول على حساب الدفع - يدعم البحث بالـ id أو الـ code
+            try:
+                payment_account = ChartOfAccounts.objects.get(id=payment_account_id)
+            except (ChartOfAccounts.DoesNotExist, ValueError):
+                payment_account = ChartOfAccounts.objects.get(code=payment_account_id)
             
             # دفع الراتب
             PayrollService.pay_payroll(
@@ -82,9 +85,10 @@ def payroll_pay(request, pk):
             messages.error(request, error_message)
     
     # Note: payment_accounts متاح تلقائياً من context processor
-    
     context = {
         'payroll': payroll,
+        'correct_net_salary': payroll.correct_net_salary,
+        'correct_gross_salary': payroll.correct_gross_salary,
         'page_title': f'دفع راتب {payroll.employee.get_full_name_ar()}',
         'page_subtitle': f'شهر {payroll.month.strftime("%Y-%m")}',
         'page_icon': 'fas fa-money-bill-wave',
@@ -130,8 +134,11 @@ def payroll_run_pay_all(request, month):
         create_journal = request.POST.get('create_journal') == 'on'
         
         try:
-            # الحصول على حساب الدفع
-            payment_account = ChartOfAccounts.objects.get(id=payment_account_id)
+            # الحصول على حساب الدفع - يدعم البحث بالـ id أو الـ code
+            try:
+                payment_account = ChartOfAccounts.objects.get(id=payment_account_id)
+            except (ChartOfAccounts.DoesNotExist, ValueError):
+                payment_account = ChartOfAccounts.objects.get(code=payment_account_id)
             
             # دفع جميع الرواتب
             paid_count = 0
@@ -224,16 +231,23 @@ def payroll_run_pay_all(request, month):
     # الحصول على حسابات الصناديق والبنوك
     # Note: payment_accounts متاح تلقائياً من context processor
     
-    # حساب الإجماليات
+    # حساب الإجماليات — استخدام property من الـ model
     from decimal import Decimal
-    total_gross = sum(p.gross_salary or Decimal('0') for p in approved_payrolls)
-    total_net = sum(p.net_salary or Decimal('0') for p in approved_payrolls)
+    total_gross = sum(p.correct_gross_salary for p in approved_payrolls)
+    total_net = sum(p.correct_net_salary for p in approved_payrolls)
     total_deductions = sum(p.total_deductions or Decimal('0') for p in approved_payrolls)
-    
+
+    # إضافة correct_net و correct_gross لكل payroll
+    payrolls_with_correct = []
+    for p in approved_payrolls:
+        p._correct_net = p.correct_net_salary
+        p._correct_gross = p.correct_gross_salary
+        payrolls_with_correct.append(p)
+
     context = {
         'month': month,
         'month_date': month_date,
-        'approved_payrolls': approved_payrolls,
+        'approved_payrolls': payrolls_with_correct,
         'total_gross': total_gross,
         'total_net': total_net,
         'total_deductions': total_deductions,
@@ -272,8 +286,11 @@ def payroll_print(request, pk):
             return redirect('hr:payroll_list')
     
     # جلب بنود القسيمة
-    payroll_lines_earnings = payroll.lines.filter(component_type='earning').order_by('order')
+    payroll_lines_earnings = payroll.lines.filter(
+        component_type='earning'
+    ).exclude(code='INSURABLE_SALARY').order_by('order')
     payroll_lines_deductions = payroll.lines.filter(component_type='deduction').order_by('order')
+    insurable_salary_line = payroll.lines.filter(code='INSURABLE_SALARY').first()
     
     # جلب ملخص الحضور
     attendance_summary = AttendanceSummary.objects.filter(
@@ -285,9 +302,12 @@ def payroll_print(request, pk):
         'payroll': payroll,
         'payroll_lines_earnings': payroll_lines_earnings,
         'payroll_lines_deductions': payroll_lines_deductions,
+        'insurable_salary_line': insurable_salary_line,
         'attendance_summary': attendance_summary,
-        'company_name': 'اسم الشركة',  # يمكن جلبها من الإعدادات
-        'company_logo': None,  # يمكن جلبها من الإعدادات
+        'company_name': 'Corporate ERP',
+        'company_logo': None,
+        'correct_net_salary': payroll.correct_net_salary,
+        'correct_gross_salary': payroll.correct_gross_salary,
     }
     
     return render(request, 'hr/payroll/print.html', context)

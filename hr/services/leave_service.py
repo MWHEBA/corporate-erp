@@ -50,6 +50,11 @@ class LeaveService:
     @staticmethod
     def _check_leave_balance(employee, leave_type, days_count, start_date):
         """التحقق من رصيد الإجازات المستحق"""
+
+        # الإجازات الاستثنائية والمرضية وغير المدفوعة لا تحتاج رصيداً مسبقاً
+        if not leave_type.requires_balance:
+            return True
+
         leave_year = start_date.year
         
         try:
@@ -90,6 +95,9 @@ class LeaveService:
         # خصم من الرصيد
         LeaveService._deduct_from_balance(leave)
         
+        # تحديث سجلات الحضور الموجودة من absent → on_leave
+        LeaveService._mark_attendance_as_on_leave(leave)
+        
         return leave
     
     @staticmethod
@@ -107,6 +115,71 @@ class LeaveService:
             balance.update_balance()
         except LeaveBalance.DoesNotExist:
             pass
+
+    @staticmethod
+    def _mark_attendance_as_on_leave(leave):
+        """
+        تحديث سجلات الحضور الموجودة من absent → on_leave
+        يُستدعى عند اعتماد الإجازة
+        """
+        from ..models import Attendance, AttendanceSummary
+        from hr.services.attendance_summary_service import AttendanceSummaryService
+        from datetime import date
+
+        updated = Attendance.objects.filter(
+            employee=leave.employee,
+            date__gte=leave.start_date,
+            date__lte=leave.end_date,
+            status='absent'
+        ).update(status='on_leave', notes='تم التحديث تلقائياً عند اعتماد الإجازة')
+
+        # إعادة حساب ملخصات الحضور المتأثرة (الأشهر التي تقع فيها الإجازة)
+        if updated:
+            today = date.today()
+            affected_months = set()
+            cur = leave.start_date.replace(day=1)
+            end_month = leave.end_date.replace(day=1)
+            while cur <= end_month:
+                affected_months.add(cur)
+                # الانتقال للشهر التالي
+                if cur.month == 12:
+                    cur = cur.replace(year=cur.year + 1, month=1)
+                else:
+                    cur = cur.replace(month=cur.month + 1)
+
+            for month in affected_months:
+                try:
+                    summary = AttendanceSummary.objects.filter(
+                        employee=leave.employee,
+                        month=month
+                    ).first()
+                    if summary:
+                        AttendanceSummaryService.recalculate_summary(summary)
+                except ValueError:
+                    # الراتب محسوب بالفعل - تجاهل
+                    pass
+                except Exception as e:
+                    import logging
+                    logging.getLogger(__name__).warning(
+                        f'فشل إعادة حساب ملخص الحضور عند اعتماد الإجازة: {e}'
+                    )
+
+    @staticmethod
+    def _restore_attendance_from_on_leave(leave):
+        """
+        إرجاع سجلات الحضور من on_leave → absent
+        يُستدعى عند إلغاء الإجازة
+        """
+        from ..models import Attendance
+        from datetime import date
+        today = date.today()
+        # فقط الأيام اللي لسه ما جاتش (المستقبل) - الماضي يفضل كما هو
+        Attendance.objects.filter(
+            employee=leave.employee,
+            date__gte=today,
+            date__lte=leave.end_date,
+            status='on_leave'
+        ).update(status='absent', notes='تم التحديث تلقائياً عند إلغاء الإجازة')
     
     @staticmethod
     @transaction.atomic
@@ -129,6 +202,80 @@ class LeaveService:
         leave.save()
         
         return leave
+    
+    @staticmethod
+    @transaction.atomic
+    def cancel_leave(leave, cancelled_by, cancellation_reason=None):
+        """
+        إلغاء الإجازة مع استرداد الرصيد
+        
+        القواعد:
+        - يمكن الإلغاء فقط قبل بداية الإجازة
+        - يمكن الإلغاء للإجازات المعتمدة أو المعلقة
+        - يتم استرداد الرصيد تلقائياً للإجازات المعتمدة
+        
+        Args:
+            leave: الإجازة المراد إلغاؤها
+            cancelled_by: المستخدم الذي ألغى الإجازة
+            cancellation_reason: سبب الإلغاء (اختياري)
+        
+        Returns:
+            Leave: الإجازة الملغاة
+        
+        Raises:
+            ValueError: إذا لم يمكن الإلغاء
+        """
+        from django.utils import timezone
+        
+        # التحقق من الحالة
+        if leave.status not in ['pending', 'approved']:
+            raise ValueError(
+                f'لا يمكن إلغاء إجازة في حالة "{leave.get_status_display()}"'
+            )
+        
+        # التحقق من عدم استهلاك الإجازة (لم تبدأ بعد)
+        today = date.today()
+        if leave.start_date <= today:
+            raise ValueError(
+                'لا يمكن إلغاء إجازة بدأت بالفعل أو في الماضي. '
+                f'تاريخ البداية: {leave.start_date}'
+            )
+        
+        # استرداد الرصيد إذا كانت معتمدة
+        if leave.status == 'approved':
+            LeaveService._restore_balance(leave)
+            # إرجاع سجلات الحضور المستقبلية من on_leave → absent
+            LeaveService._restore_attendance_from_on_leave(leave)
+        
+        # تحديث حالة الإجازة
+        leave.status = 'cancelled'
+        leave.reviewed_by = cancelled_by
+        leave.reviewed_at = timezone.now()
+        if cancellation_reason:
+            leave.review_notes = f"[ملغاة] {cancellation_reason}"
+        leave.save()
+        
+        return leave
+    
+    @staticmethod
+    def _restore_balance(leave):
+        """استرداد الرصيد عند إلغاء إجازة معتمدة"""
+        # فقط للإجازات التي تحتاج رصيد
+        if not leave.leave_type.requires_balance:
+            return
+        
+        leave_year = leave.start_date.year
+        
+        try:
+            balance = LeaveBalance.objects.get(
+                employee=leave.employee,
+                leave_type=leave.leave_type,
+                year=leave_year
+            )
+            balance.used_days -= leave.days_count
+            balance.update_balance()
+        except LeaveBalance.DoesNotExist:
+            pass
     
     @staticmethod
     def calculate_leave_balance(employee, leave_type):

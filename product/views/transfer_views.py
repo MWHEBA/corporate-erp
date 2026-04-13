@@ -268,7 +268,7 @@ class TransferVoucherDetailView(LoginRequiredMixin, PermissionRequiredMixin, Det
         
         if not voucher.is_approved and self.request.user.has_perm('product.change_inventorymovement'):
             header_buttons.insert(0, {
-                'onclick': 'document.getElementById("approve-form").submit()',
+                'onclick': 'confirmApprove()',
                 'icon': 'fa-check', 
                 'text': 'اعتماد', 
                 'class': 'btn-success'

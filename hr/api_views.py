@@ -113,9 +113,6 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         
         try:
             EmployeeService.terminate_employee(employee, termination_data, request.user)
-            logger.info(
-                f"Employee {employee.employee_number} terminated by {request.user.username}"
-            )
             return Response({
                 'status': 'success', 
                 'message': 'تم إنهاء خدمة الموظف'
@@ -213,9 +210,6 @@ class AttendanceViewSet(viewsets.ModelViewSet):
             attendance = AttendanceService.record_check_in(employee)
             serializer = self.get_serializer(attendance)
             
-            logger.info(
-                f"Check-in recorded for employee {employee.employee_number} at {attendance.check_in}"
-            )
             
             return Response({
                 'status': 'success',
@@ -276,9 +270,6 @@ class AttendanceViewSet(viewsets.ModelViewSet):
             attendance = AttendanceService.record_check_out(employee)
             serializer = self.get_serializer(attendance)
             
-            logger.info(
-                f"Check-out recorded for employee {employee.employee_number} at {attendance.check_out}"
-            )
             
             return Response({
                 'status': 'success',
@@ -389,9 +380,6 @@ class LeaveViewSet(viewsets.ModelViewSet):
         
         try:
             LeaveService.approve_leave(leave, request.user)
-            logger.info(
-                f"Leave {leave.id} approved by {request.user.username}"
-            )
             return Response({
                 'status': 'success', 
                 'message': 'تم اعتماد الإجازة'
@@ -432,9 +420,6 @@ class LeaveViewSet(viewsets.ModelViewSet):
         
         try:
             LeaveService.reject_leave(leave, request.user, notes)
-            logger.info(
-                f"Leave {leave.id} rejected by {request.user.username}"
-            )
             return Response({
                 'status': 'success', 
                 'message': 'تم رفض الإجازة'
@@ -504,10 +489,6 @@ class PayrollViewSet(viewsets.ModelViewSet):
             
             results = PayrollService.process_monthly_payroll(month_date, request.user)
             
-            logger.info(
-                f"Monthly payroll processed for {month_str} by {request.user.username}. "
-                f"Total: {len(results)}"
-            )
             
             return Response({
                 'status': 'success',
@@ -542,9 +523,6 @@ class PayrollViewSet(viewsets.ModelViewSet):
         
         try:
             PayrollService.approve_payroll(payroll, request.user)
-            logger.info(
-                f"Payroll {payroll.id} approved by {request.user.username}"
-            )
             return Response({
                 'status': 'success', 
                 'message': 'تم اعتماد قسيمة الراتب'
@@ -633,7 +611,7 @@ class AdvanceViewSet(viewsets.ModelViewSet):
             if amount > contract.basic_salary:
                 return Response(
                     {
-                        'error': f'مبلغ السلفة ({amount}) يتجاوز الراتب الأساسي ({contract.basic_salary})'
+                        'error': f'مبلغ السلفة ({amount}) يتجاوز الأجر الأساسي ({contract.basic_salary})'
                     },
                     status=status.HTTP_400_BAD_REQUEST
                 )
@@ -689,9 +667,6 @@ class AdvanceViewSet(viewsets.ModelViewSet):
             advance.approved_by = request.user
             advance.save()
             
-            logger.info(
-                f"Advance {advance.id} approved by {request.user.username}"
-            )
             
             return Response({
                 'status': 'success', 

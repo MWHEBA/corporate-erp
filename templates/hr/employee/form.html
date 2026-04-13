@@ -15,7 +15,7 @@
 {% block content %}
 <div class="container-fluid">
   <!-- Page Header المركزي -->
-  {% include "shared/page_header.html" %}
+  {% include "shared/page_header.html" with title=page_title subtitle=page_subtitle icon=page_icon breadcrumb_items=breadcrumb_items header_buttons=header_buttons %}
 
   <!-- نموذج الموظف -->
   <div class="section-container">
@@ -70,6 +70,13 @@
                        value="{% if employee %}{{ employee.national_id }}{% endif %}" required>
                 <div class="invalid-feedback"></div>
             </div>
+            <div class="col-md-4">
+                <label class="form-label">الصورة الشخصية</label>
+                <input type="file" name="photo" class="form-control" accept="image/*">
+                {% if employee and employee.photo %}
+                <small class="text-muted">الصورة الحالية: <a href="{{ employee.photo.url }}" target="_blank">عرض</a></small>
+                {% endif %}
+            </div>
         </div>
 
         <div class="row mb-3">
@@ -109,14 +116,14 @@
                 <label class="form-label">البريد الإلكتروني الوظيفي</label>
                 <input type="email" name="work_email" id="id_work_email" class="form-control" 
                        placeholder="البريد الوظيفي (اختياري)"
-                       value="{% if employee %}{{ employee.work_email }}{% endif %}">
+                       value="{% if employee %}{{ employee.work_email|default:'' }}{% endif %}">
                 <div class="invalid-feedback"></div>
             </div>
             <div class="col-md-6">
                 <label class="form-label">البريد الإلكتروني الشخصي</label>
                 <input type="email" name="personal_email" id="id_personal_email" class="form-control" 
                        placeholder="البريد الشخصي (اختياري)"
-                       value="{% if employee %}{{ employee.personal_email }}{% endif %}">
+                       value="{% if employee %}{{ employee.personal_email|default:'' }}{% endif %}">
                 <div class="invalid-feedback"></div>
             </div>
         </div>
@@ -125,7 +132,7 @@
             <div class="col-md-6">
                 <label class="form-label">الهاتف المحمول *</label>
                 <input type="tel" name="mobile_phone" id="id_mobile_phone" class="form-control" 
-                       value="{% if employee %}{{ employee.mobile_phone }}{% endif %}" required>
+                       value="{% if employee %}{{ employee.mobile_phone|default:'' }}{% endif %}" required>
                 <small class="text-muted">مثال: 01012345678 أو +201012345678 أو 201012345678</small>
                 <div class="invalid-feedback"></div>
             </div>
@@ -133,7 +140,7 @@
                 <label class="form-label">هاتف المنزل</label>
                 <input type="tel" name="home_phone" class="form-control" 
                        placeholder="هاتف المنزل (اختياري)"
-                       value="{% if employee %}{{ employee.home_phone }}{% endif %}">
+                       value="{% if employee %}{{ employee.home_phone|default:'' }}{% endif %}">
             </div>
         </div>
 
@@ -141,13 +148,13 @@
             <div class="col-md-6">
                 <label class="form-label">العنوان</label>
                 <textarea name="address" class="form-control" rows="2" 
-                          placeholder="العنوان (اختياري)">{% if employee %}{{ employee.address }}{% endif %}</textarea>
+                          placeholder="العنوان (اختياري)">{% if employee %}{{ employee.address|default:'' }}{% endif %}</textarea>
             </div>
             <div class="col-md-6">
                 <label class="form-label">المدينة</label>
                 <input type="text" name="city" class="form-control" 
                        placeholder="المدينة (اختياري)"
-                       value="{% if employee %}{{ employee.city }}{% endif %}">
+                       value="{% if employee %}{{ employee.city|default:'' }}{% endif %}">
             </div>
         </div>
 
@@ -213,11 +220,10 @@
         <div class="row mb-3">
             <div class="col-md-4">
                 <label class="form-label">الوردية</label>
-                <select name="shift" id="id_shift" class="form-select">
-                    <option value="">بدون وردية (افتراضي 9-5)</option>
+                <select name="shift" id="id_shift" class="form-select" required>
                     {% for shift in shifts %}
-                    <option value="{{ shift.id }}" {% if employee and employee.shift and employee.shift.id == shift.id %}selected{% endif %}>
-                        {{ shift.name }} ({{ shift.start_time|date:"g:i A" }} - {{ shift.end_time|date:"g:i A" }})
+                    <option value="{{ shift.id }}" {% if employee and employee.shift and employee.shift.id == shift.id %}selected{% elif not employee and forloop.first %}selected{% endif %}>
+                        {{ shift.name }} ({{ shift.start_time|arabic_time }} - {{ shift.end_time|arabic_time }})
                     </option>
                     {% endfor %}
                 </select>
@@ -240,12 +246,48 @@
                     <option value="terminated" {% if employee and employee.status == 'terminated' %}selected{% endif %}>منتهي الخدمة</option>
                 </select>
             </div>
-            <div class="col-md-4">
-                <label class="form-label">الصورة الشخصية</label>
-                <input type="file" name="photo" class="form-control" accept="image/*">
-                {% if employee and employee.photo %}
-                <small class="text-muted">الصورة الحالية: <a href="{{ employee.photo.url }}" target="_blank">عرض</a></small>
-                {% endif %}
+        </div>
+
+        <hr class="my-4">
+
+        <!-- إعدادات الحضور -->
+        <h5 class="mb-3">إعدادات الحضور</h5>
+        <div class="row mb-3">
+            <div class="col-md-6 d-flex align-items-center">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" name="attendance_exempt"
+                           id="id_attendance_exempt" role="switch"
+                           {% if employee and employee.attendance_exempt %}checked{% endif %}>
+                    <label class="form-check-label fw-semibold" for="id_attendance_exempt">
+                        معفى من البصمة
+                    </label>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <small class="text-muted">
+                    <i class="fas fa-info-circle me-1"></i>
+                    للمديرين والإداريين غير المسجلين في البصمة — يتطلب اعتماد ملخص الحضور يدوياً قبل معالجة الراتب.
+                    لربط الموظف بجهاز البصمة، استخدم <a href="{% url 'hr:biometric_mapping_list' %}">إدارة ربط البصمة</a>.
+                </small>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6 d-flex align-items-center">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" name="is_insurance_only"
+                           id="id_is_insurance_only" role="switch"
+                           {% if employee and employee.is_insurance_only %}checked{% endif %}>
+                    <label class="form-check-label fw-semibold" for="id_is_insurance_only">
+                        موظف تأمين فقط
+                    </label>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <small class="text-muted">
+                    <i class="fas fa-shield-alt me-1"></i>
+                    موظف مسجل تأمينات على الشركة لكن غير مدرج في كشف الرواتب — يدفع تأمينه مباشرة.
+                </small>
             </div>
         </div>
 
@@ -376,7 +418,7 @@ $(document).ready(function() {
     $('#id_work_email').on('input', function() {
         const email = $(this).val();
         const field = $(this);
-        const currentEmail = '{% if employee %}{{ employee.work_email }}{% endif %}';
+        const currentEmail = '{% if employee %}{{ employee.work_email|default:'' }}{% endif %}';
         
         clearTimeout(emailCheckTimeout);
         
@@ -416,7 +458,7 @@ $(document).ready(function() {
     $('#id_personal_email').on('input', function() {
         const email = $(this).val();
         const field = $(this);
-        const currentEmail = '{% if employee %}{{ employee.personal_email }}{% endif %}';
+        const currentEmail = '{% if employee %}{{ employee.personal_email|default:'' }}{% endif %}';
         
         clearTimeout(personalEmailCheckTimeout);
         
@@ -443,7 +485,7 @@ $(document).ready(function() {
     $('#id_mobile_phone').on('input', function() {
         let value = $(this).val().trim();
         const field = $(this);
-        const currentMobile = '{% if employee %}{{ employee.mobile_phone }}{% endif %}';
+        const currentMobile = '{% if employee %}{{ employee.mobile_phone|default:'' }}{% endif %}';
         
         // إزالة المسافات والشرطات
         value = value.replace(/[\s-]/g, '');
@@ -586,15 +628,20 @@ $(document).ready(function() {
         
         if (!isValid) {
             e.preventDefault();
-            
-            // عرض رسالة واضحة بالحقول المفقودة
-            let errorMessage = 'يرجى ملء الحقول التالية:\n\n';
-            missingFields.forEach(function(field, index) {
-                errorMessage += (index + 1) + '. ' + field + '\n';
+
+            let errorHtml = '<ul class="mb-0 text-start">';
+            missingFields.forEach(function(field) {
+                errorHtml += `<li>${field}</li>`;
             });
-            
-            alert(errorMessage);
-            
+            errorHtml += '</ul>';
+
+            Swal.fire({
+                title: 'يرجى ملء الحقول المطلوبة',
+                html: errorHtml,
+                icon: 'warning',
+                confirmButtonText: 'حسناً'
+            });
+
             // التمرير للحقل الأول المفقود
             const firstInvalid = $('.is-invalid').first();
             if (firstInvalid.length) {

@@ -35,13 +35,6 @@
     color: var(--danger-color);
   }
 
-  .section-container .card {
-    border: 1px solid var(--border-color);
-    border-radius: var(--border-radius);
-    box-shadow: var(--box-shadow-sm);
-    background: var(--bg-card);
-  }
-
   .card-header {
     background-color: var(--gray-50);
     border-bottom: 1px solid var(--border-color);
@@ -1198,10 +1191,10 @@
         invoiceBtn.style.display = 'inline-block';
       }
       
-      // زر عرض العميل أو المورد
+      // زر عرض ولي الأمر أو المورد
       if (data.source.parent_url) {
         clientBtn.href = data.source.parent_url;
-        clientBtnText.textContent = 'عرض العميل';
+        clientBtnText.textContent = 'عرض ولي الأمر';
         clientBtn.style.display = 'inline-block';
       } else if (data.source.supplier_url) {
         clientBtn.href = data.source.supplier_url;

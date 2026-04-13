@@ -46,9 +46,6 @@ def bulk_approve_leaves(request):
         try:
             LeaveService.approve_leave(leave, request.user)
             approved_count += 1
-            logger.info(
-                f"Leave {leave.id} bulk approved by {request.user.username}"
-            )
         except Exception as e:
             failed_count += 1
             failed_reasons.append(f'{leave.employee.get_full_name_ar()}: {str(e)}')
@@ -107,9 +104,6 @@ def bulk_reject_leaves(request):
         try:
             LeaveService.reject_leave(leave, request.user, rejection_notes)
             rejected_count += 1
-            logger.info(
-                f"Leave {leave.id} bulk rejected by {request.user.username}"
-            )
         except Exception as e:
             failed_count += 1
             logger.error(f'فشل رفض الإجازة {leave.id}: {e}')

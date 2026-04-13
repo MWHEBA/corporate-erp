@@ -46,12 +46,12 @@ def governed_signal_handler(
     
     Usage:
         @governed_signal_handler(
-            signal_name="student_fee_creation",
+            signal_name="customer_payment_creation",
             critical=True,
-            description="Create automatic fees for new student"
+            description="Create automatic payment record for new customer"
         )
-        @receiver(post_save, sender=Student)
-        def create_fees_for_student(sender, instance, created, **kwargs):
+        @receiver(post_save, sender=Customer)
+        def create_payment_for_customer(sender, instance, created, **kwargs):
             if not created:
                 return
             # Signal logic here

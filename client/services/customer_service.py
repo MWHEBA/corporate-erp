@@ -162,7 +162,7 @@ class CustomerService:
         """
         Create financial account for customer using proper account structure.
         
-        This method creates a sub-account under the main Customers account (11030)
+        This method creates a sub-account under the main Customers account (10300)
         following the proper chart of accounts hierarchy.
         
         Uses idempotency to prevent duplicate account creation.
@@ -213,56 +213,47 @@ class CustomerService:
         try:
             from financial.models import AccountType
             
-            # Get or create the main customers account (11030)
-            customers_parent = ChartOfAccounts.objects.filter(code='11030').first()
+            # Get or create the main customers account (10300)
+            customers_parent = ChartOfAccounts.objects.filter(code='10300').first()
             
             if not customers_parent:
                 # Create main customers account if not exists
-                asset_type = AccountType.objects.filter(code='ASSET').first()
+                asset_type = AccountType.objects.filter(code='RECEIVABLES').first()
                 if not asset_type:
-                    asset_type = AccountType.objects.create(
-                        code='ASSET',
-                        name='أصول',
-                        name_en='Assets',
-                        nature='debit'
-                    )
+                    asset_type = AccountType.objects.filter(code='ASSET').first()
                 
                 customers_parent = ChartOfAccounts.objects.create(
-                    code='11030',
-                    name='العملاء',
-                    name_en='Customers',
+                    code='10300',
+                    name='مدينو العملاء',
+                    name_en='Customers Receivables',
                     account_type=asset_type,
                     is_active=True,
                     is_leaf=False
                 )
                 logger.info(f"Created main customers account: {customers_parent.code}")
             
-            # Generate account code
-            # Find the next available code under customers account
-            # Use format: 1103XXXX (where XXXX is sequential number)
+            # Generate account code under 10300
             last_customer_account = ChartOfAccounts.objects.filter(
-                code__startswith='1103',
+                code__startswith='1030',
                 parent=customers_parent
-            ).exclude(code='11030').order_by('-code').first()
+            ).exclude(code='10300').order_by('-code').first()
             
             if last_customer_account:
                 try:
-                    # Extract number from last code (remove '1103' prefix)
                     last_number = int(last_customer_account.code[4:])
                     new_number = last_number + 1
                 except (ValueError, AttributeError, IndexError):
                     new_number = 1
             else:
-                # First customer account
                 new_number = 1
             
-            # Generate new code (1103 + 4 digits = 8 characters max)
-            next_code = f"1103{new_number:04d}"
+            # Generate new code (1030 + 4 digits)
+            next_code = f"1030{new_number:04d}"
             
             # Ensure code uniqueness
             while ChartOfAccounts.objects.filter(code=next_code).exists():
                 new_number += 1
-                next_code = f"1103{new_number:04d}"
+                next_code = f"1030{new_number:04d}"
             
             # Create the account
             account = ChartOfAccounts.objects.create(

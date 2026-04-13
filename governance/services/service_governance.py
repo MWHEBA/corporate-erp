@@ -49,8 +49,8 @@ def governed_service(
         retry_count: Number of retries for transient failures
     
     Usage:
-        @governed_service(critical=True, description="Create student fees")
-        def create_student_fees(self, student, fee_data):
+        @governed_service(critical=True, description="Create customer payments")
+        def create_customer_payments(self, customer, payment_data):
             # Service logic here
             return result
     """

@@ -73,10 +73,6 @@ class HRPayrollGatewayService:
                 workflow_type='monthly_payroll'
             )
             
-            logger.info(
-                f"✅ Payroll created via gateway: {employee.get_full_name_ar()} "
-                f"for {month.strftime('%Y-%m')} - Net: {payroll.net_salary}"
-            )
             
             return payroll
             
@@ -135,13 +131,33 @@ class HRPayrollGatewayService:
             )
             
             if is_duplicate:
-                logger.info(f"Duplicate integrated payroll detected: {idempotency_key}")
                 payroll_id = existing_data.get('payroll_id')
                 if payroll_id:
-                    return self._get_payroll_by_id(payroll_id)
-                else:
-                    # Fallback to month-based lookup
-                    return self._get_existing_payroll(employee, month)
+                    # Try to get the payroll by ID; if deleted, fall through to recreate
+                    try:
+                        return self._get_payroll_by_id(payroll_id)
+                    except Exception:
+                        logger.warning(
+                            f"Idempotency record references payroll {payroll_id} "
+                            f"but it no longer exists. Recreating for {employee.get_full_name_ar()}."
+                        )
+                
+                # Check if payroll actually exists in DB (previous attempt may have failed mid-way)
+                from hr.models import Payroll
+                existing_payroll = Payroll.objects.filter(employee=employee, month=month).first()
+                if existing_payroll:
+                    return existing_payroll
+                
+                # Idempotency record exists but payroll was never created (previous attempt failed).
+                # Reset the idempotency record so we can retry.
+                logger.warning(
+                    f"Stale idempotency record found for {employee.get_full_name_ar()} "
+                    f"month={month}. Resetting and retrying payroll creation."
+                )
+                existing_record.result_data = {}
+                existing_record.expires_at = timezone.now() + timezone.timedelta(hours=24)
+                existing_record.save()
+                # Fall through to create the payroll below
             
             # Create payroll using IntegratedPayrollService
             payroll = IntegratedPayrollService.calculate_integrated_payroll(
@@ -156,8 +172,8 @@ class HRPayrollGatewayService:
                 'employee_id': payroll.employee.id,
                 'employee_name': payroll.employee.get_full_name_ar(),
                 'month': payroll.month.isoformat(),
-                'gross_salary': str(payroll.gross_salary),
-                'net_salary': str(payroll.net_salary),
+                'gross_salary': str(payroll.correct_gross_salary),
+                'net_salary': str(payroll.correct_net_salary),
                 'status': payroll.status,
                 'created_at': payroll.created_at.isoformat()
             }
@@ -179,10 +195,6 @@ class HRPayrollGatewayService:
                 }
             )
             
-            logger.info(
-                f"✅ Integrated payroll created: {employee.get_full_name_ar()} "
-                f"for {month.strftime('%Y-%m')} - Net: {payroll.net_salary}"
-            )
             
             return payroll
             
@@ -239,7 +251,6 @@ class HRPayrollGatewayService:
         from hr.models import Payroll
         return Payroll.objects.get(id=payroll_id)
     
-    @transaction.atomic
     def process_monthly_payrolls(self, month, department=None, processed_by=None, use_integrated=True):
         """
         Process payrolls for all employees in a month with Query Optimization.
@@ -284,7 +295,7 @@ class HRPayrollGatewayService:
                 ).select_related('employee'),
                 to_attr='active_contracts'
             )
-        ).filter(status='active')
+        ).filter(status='active', is_insurance_only=False)
         
         if department:
             employees = employees.filter(department=department)
@@ -295,7 +306,6 @@ class HRPayrollGatewayService:
             'skipped': []
         }
         
-        logger.info(f"Starting monthly payroll processing for {month.strftime('%Y-%m')} - {employees.count()} employees")
         
         for employee in employees:
             try:
@@ -324,12 +334,6 @@ class HRPayrollGatewayService:
                     'error': str(e)
                 })
         
-        logger.info(
-            f"Monthly payroll processing complete for {month.strftime('%Y-%m')}: "
-            f"{len(results['success'])} success, "
-            f"{len(results['failed'])} failed, "
-            f"{len(results['skipped'])} skipped"
-        )
         
         return results
 

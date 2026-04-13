@@ -302,7 +302,6 @@ class BalanceService:
             # مسح جميع أرصدة الحسابات
             cache.clear()
 
-        logger.info(f"تم مسح cache الأرصدة للحساب {account_id or 'جميع الحسابات'}")
 
 
 class BalanceValidationService:

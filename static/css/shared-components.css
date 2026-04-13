@@ -249,6 +249,8 @@
     gap: 1rem;
     flex: 1;
     min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
 }
 
 /* أيقونة الهيدر */
@@ -273,6 +275,7 @@
 .header-text {
     flex: 1;
     min-width: 0;
+    overflow: hidden;
 }
 
 .header-title {
@@ -282,6 +285,9 @@
     color: var(--bs-dark, #212529);
     line-height: 1.2;
     word-wrap: break-word;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .header-subtitle {
@@ -289,6 +295,10 @@
     color: var(--bs-secondary, #6c757d);
     margin: 0.25rem 0 0 0;
     line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
 }
 
 .header-description {
@@ -387,17 +397,14 @@
     }
     
     .page-header-title {
-        flex-direction: column;
+        flex-direction: row;
+        align-items: center;
         gap: 0.75rem;
-    }
-    
-    .header-icon {
-        align-self: flex-start;
     }
     
     .page-header-actions {
         justify-content: flex-start;
-        margin-top: 1rem;
+        margin-top: unset;
     }
     
     .header-buttons-group {
@@ -428,7 +435,7 @@
     
     .header-buttons-group .btn {
         font-size: 0.875rem;
-        padding: 0.375rem 0.75rem;
+        padding: 0.375rem 0.5rem;
     }
     
     .header-icon {

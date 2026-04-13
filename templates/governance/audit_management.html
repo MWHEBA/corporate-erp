@@ -108,10 +108,8 @@
                                     {% endif %}
                                 </td>
                                 <td class="text-center">
-                                    {% if audit.model_name == 'Student' %}طالب
-                                    {% elif audit.model_name == 'Teacher' %}معلم
-                                    {% elif audit.model_name == 'Parent' %}ولي أمر
-                                    {% elif audit.model_name == 'Customer' %}عميل
+                                    {% if audit.model_name == 'Customer' %}عميل
+                                    {% elif audit.model_name == 'CustomerPayment' %}دفعة عميل
                                     {% elif audit.model_name == 'Invoice' %}فاتورة
                                     {% elif audit.model_name == 'Payment' %}دفعة
                                     {% elif audit.model_name == 'Fee' %}رسوم
@@ -120,11 +118,6 @@
                                     {% elif audit.model_name == 'System' %}النظام
                                     {% elif audit.model_name == 'JournalEntry' %}قيد محاسبي
                                     {% elif audit.model_name == 'ChartOfAccounts' %}دليل الحسابات
-                                    {% elif audit.model_name == 'AcademicYear' %}سنة دراسية
-                                    {% elif audit.model_name == 'Class' %}فصل
-                                    {% elif audit.model_name == 'Subject' %}مادة
-                                    {% elif audit.model_name == 'Grade' %}درجة
-                                    {% elif audit.model_name == 'Attendance' %}حضور
                                     {% elif audit.model_name == 'Salary' %}راتب
                                     {% elif audit.model_name == 'Product' %}منتج
                                     {% elif audit.model_name == 'Stock' %}مخزون

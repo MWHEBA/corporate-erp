@@ -58,7 +58,10 @@
                 </h2>
                 <div id="collapse{{ forloop.counter }}" class="accordion-collapse collapse" data-bs-parent="#employeeBalancesAccordion">
                     <div class="accordion-body">
-                        <div class="table-responsive">
+
+                        {% if item.quota_balances %}
+                        <p class="text-muted small mb-1 fw-semibold">إجازات برصيد</p>
+                        <div class="table-responsive mb-3">
                             <table class="table table-sm table-bordered">
                                 <thead class="table-light">
                                     <tr>
@@ -71,9 +74,16 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {% for balance in item.balances %}
+                                    {% for balance in item.quota_balances %}
                                     <tr>
-                                        <td class="text-center"><span class="badge bg-info">{{ balance.leave_type.name_ar }}</span></td>
+                                        <td class="text-center">
+                                            {% with cat=balance.leave_type.category %}
+                                            <span class="badge {% if cat == 'annual' %}bg-primary{% elif cat == 'emergency' %}bg-warning text-dark{% elif cat == 'sick' %}bg-danger{% elif cat == 'exceptional' %}bg-info{% else %}bg-secondary{% endif %}">{{ balance.leave_type.name_ar }}</span>
+                                            {% endwith %}
+                                            {% if balance.is_manually_adjusted %}
+                                                <span class="badge bg-warning ms-1" title="معدل يدوياً — محمي من التحديث التلقائي"><i class="fas fa-lock me-1"></i>يدوي</span>
+                                            {% endif %}
+                                        </td>
                                         <td class="text-center"><strong>{{ balance.total_days }}</strong> يوم</td>
                                         <td class="text-center"><strong class="text-success">{{ balance.accrued_days }}</strong> يوم</td>
                                         <td class="text-center">{{ balance.used_days }} يوم</td>
@@ -93,6 +103,31 @@
                                 </tbody>
                             </table>
                         </div>
+                        {% endif %}
+
+                        {% if item.no_quota_balances %}
+                        <p class="text-muted small mb-1 fw-semibold">إجازات بدون رصيد (استهلاك فقط)</p>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="text-center">نوع الإجازة</th>
+                                        <th class="text-center">الأيام المستخدمة</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for balance in item.no_quota_balances %}
+                                    <tr>
+                                        <td class="text-center"><span class="badge bg-secondary">{{ balance.leave_type.name_ar }}</span></td>
+                                        <td class="text-center">{{ balance.used_days }} يوم</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% endif %}
+
+                        
                         <div class="text-end mt-2">
                             <a href="{% url 'hr:leave_balance_employee' item.employee.pk %}" class="btn btn-sm btn-primary">
                                 <i class="fas fa-eye me-1"></i>عرض التفاصيل
@@ -121,7 +156,8 @@ function updateAllBalances() {
     Swal.fire({
         title: 'تحديث أرصدة الإجازات',
         html: 'هل أنت متأكد من تحديث أرصدة جميع الموظفين؟<br><br>' +
-              '<small class="text-muted">سيتم إنشاء أرصدة جديدة للموظفين الذين ليس لديهم أرصدة، وتحديث الأرصدة الموجودة حسب الحد الأقصى المحدد لكل نوع إجازة.</small>',
+              '<small class="text-muted">سيتم إنشاء أرصدة جديدة للموظفين الذين ليس لديهم أرصدة، وتحديث الأرصدة الموجودة حسب الحد الأقصى المحدد لكل نوع إجازة.</small><br>' +
+              '<small class="text-warning"><i class="fas fa-lock me-1"></i>الأرصدة المعدلة يدوياً (علامة يدوي) لن تتأثر بالتحديث.</small>',
         icon: 'question',
         showCancelButton: true,
         confirmButtonColor: '#198754',

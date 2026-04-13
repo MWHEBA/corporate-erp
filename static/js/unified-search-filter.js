@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ========================================
  * Unified Search and Filter JavaScript
  * مكونات JavaScript للبحث والفلترة الموحدة
@@ -304,10 +304,10 @@
 
         generateMockSuggestions(query) {
             const mockSuggestions = [
-                { text: 'الطلاب', type: 'category', icon: 'fa-users' },
-                { text: 'المعلمين', type: 'category', icon: 'fa-chalkboard-teacher' },
-                { text: 'الرسوم المدرسية', type: 'category', icon: 'fa-money-bill' },
-                { text: 'الصفوف الدراسية', type: 'category', icon: 'fa-school' },
+                { text: 'العملاء', type: 'category', icon: 'fa-users' },
+                { text: 'الموظفين', type: 'category', icon: 'fa-user-tie' },
+                { text: 'الرسوم والمدفوعات', type: 'category', icon: 'fa-money-bill' },
+                { text: 'الأقسام والوحدات', type: 'category', icon: 'fa-building' },
                 { text: 'التقارير المالية', type: 'category', icon: 'fa-chart-bar' }
             ];
 

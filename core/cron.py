@@ -1,6 +1,5 @@
-"""
-وظائف Cron لفحص التنبيهات دورياً ونظام السنوات الدراسية
-يمكن استخدامها مع django-crontab أو Celery Beat
+﻿"""
+وظائف Cron لفحص التنبيهات دورياً يمكن استخدامها مع django-crontab أو Celery Beat
 """
 from django.utils import timezone
 from .services.notification_service import NotificationService
@@ -79,7 +78,7 @@ def cleanup_old_notifications(days=30):
         return 0
 
 
-# ==================== مهام نظام السنوات الدراسية ====================
+# ==================== مهام نظام السنوات المالية ====================
 
 
 def update_current_fiscal_year():
@@ -115,4 +114,4 @@ def update_current_fiscal_year():
         return None
 
 
-# ==================== مهام نظام السنوات الدراسية ====================
+# ==================== مهام نظام السنوات المالية ====================

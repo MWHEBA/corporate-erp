@@ -28,6 +28,7 @@ class SystemSetting(models.Model):
         ("purchases", _("مشتريات")),
         ("hr", _("موارد بشرية")),
         ("system", _("نظام")),
+        ("whatsapp", _("واتساب")),
     )
 
     key = models.CharField(_("المفتاح"), max_length=100, unique=True)
@@ -343,6 +344,11 @@ class NotificationPreference(models.Model):
         null=True,
         help_text=_("رقم الهاتف المستخدم لإرسال الإشعارات")
     )
+    notify_whatsapp = models.BooleanField(
+        _("واتساب"),
+        default=False,
+        help_text=_("إرسال إشعارات للعملاء عبر واتساب")
+    )
     
     # ==================== جدولة التنبيهات ====================
     inventory_check_frequency = models.CharField(
@@ -647,7 +653,7 @@ class DataRetentionPolicy(models.Model):
     
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True)
-    model_name = models.CharField(max_length=100)  # e.g., 'students.Student'
+    model_name = models.CharField(max_length=100)  # e.g., 'client.Customer'
     
     # Retention settings
     retention_days = models.IntegerField()

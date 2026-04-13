@@ -64,9 +64,6 @@ class PaymentSyncService:
             # تحديد العملية كمكتملة
             sync_operation.mark_completed()
 
-            logger.info(
-                f"تم تزامن الدفعة {payment_obj} بنجاح - العملية {sync_operation.operation_id}"
-            )
 
         except Exception as e:
             # معالجة الخطأ والتراجع
@@ -265,7 +262,6 @@ class PaymentSyncService:
                     }
                 )
 
-                logger.info(f"تم إنشاء دفعة مورد {supplier_payment.id}")
 
             elif sync_operation.operation_type == "update_payment" and existing_payment:
                 # تحديث دفعة مورد موجودة
@@ -287,7 +283,6 @@ class PaymentSyncService:
                     }
                 )
 
-                logger.info(f"تم تحديث دفعة مورد {existing_payment.id}")
 
             elif sync_operation.operation_type == "delete_payment" and existing_payment:
                 # حذف دفعة مورد
@@ -310,7 +305,6 @@ class PaymentSyncService:
                     }
                 )
 
-                logger.info(f"تم حذف دفعة مورد {existing_payment.id}")
 
     def _sync_to_journal_entry(
         self, sync_operation: PaymentSyncOperation, payment_obj, rule: PaymentSyncRule
@@ -329,7 +323,7 @@ class PaymentSyncService:
                     
                     entry = JournalEntryService.create_simple_entry(
                         debit_account="10100",  # الخزنة
-                        credit_account="10300",  # العملاء
+                        credit_account="10300",  # مدينو أولياء الأمور
                         amount=payment_obj.amount,
                         description=f"دفعة من العميل - فاتورة {payment_obj.sale.number}",
                         date=payment_obj.payment_date,
@@ -363,7 +357,6 @@ class PaymentSyncService:
                     }
                 )
 
-                logger.info(f"تم إنشاء قيد محاسبي {entry.number}")
 
         except Exception as e:
             logger.error(f"خطأ في إنشاء القيد المحاسبي: {str(e)}")
@@ -380,7 +373,7 @@ class PaymentSyncService:
             affected_accounts = []
 
             if hasattr(payment_obj, "sale"):
-                affected_accounts.extend(["10100", "10300"])  # الخزنة والعملاء
+                affected_accounts.extend(["10100", "10300"])  # الخزنة ومدينو أولياء الأمور
             elif hasattr(payment_obj, "purchase"):
                 affected_accounts.extend(["10100", "20100"])  # الخزنة والموردين
 
@@ -388,7 +381,6 @@ class PaymentSyncService:
             for account_code in affected_accounts:
                 financial_cache.delete_pattern(f"balance:*account_code:{account_code}*")
 
-            logger.info(f"تم إبطال كاش الأرصدة للحسابات: {affected_accounts}")
 
         except Exception as e:
             logger.error(f"خطأ في تحديث كاش الأرصدة: {str(e)}")
@@ -453,7 +445,6 @@ class PaymentSyncService:
         try:
             self._rollback_operations()
             sync_operation.status = "rolled_back"
-            logger.info(f"تم التراجع عن العملية {sync_operation.operation_id}")
         except Exception as rollback_error:
             logger.error(f"فشل في التراجع: {str(rollback_error)}")
             sync_operation.status = "failed"

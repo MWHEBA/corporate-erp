@@ -14,17 +14,17 @@ class ProductConfig(AppConfig):
         # استيراد الإشارات
         import product.signals
 
-        # ❌ تم تعطيل signals_governed - استخدم MovementService مباشرة
-        # See: STOCK_MOVEMENT_UNIFICATION_PLAN.md
-        
-        # ❌ تم تعطيل signals_accounting - القيود المحاسبية تُنشأ عبر:
-        # 1. MovementService → accounting_gateway.create_stock_movement_entry() (الطريقة الرسمية)
-        # 2. StockMovement.save() → accounting_gateway.create_stock_movement_entry() (للحالات الاستثنائية)
-        # Single Source of Truth: governance/services/accounting_gateway.py
-        # try:
-        #     import product.signals_accounting
-        # except ImportError:
-        #     pass
+        # استيراد إشارات الحوكمة (تحديث المخزون)
+        try:
+            import product.signals_governed
+        except ImportError:
+            pass
+
+        # استيراد إشارات المحاسبة
+        try:
+            import product.signals_accounting
+        except ImportError:
+            pass
 
         # استيراد إشارات إعادة حساب مخزون المنتجات المجمعة
         try:

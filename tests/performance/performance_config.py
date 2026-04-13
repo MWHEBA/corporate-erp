@@ -93,28 +93,18 @@ def get_low_resource_config() -> PerformanceTestConfig:
 
 # إعدادات العمليات الحرجة - معدلة لبيئة 1 كور و 1GB رام
 CRITICAL_OPERATIONS_LIMITS = {
-    'student_enrollment': {
-        'max_response_time_ms': 2500.0,  # زيادة الوقت للبيئة المحدودة
-        'max_database_queries': 25,     # تقليل الاستعلامات
-        'max_memory_mb': 200.0          # ذاكرة معقولة
-    },
-    'fee_calculation': {
-        'max_response_time_ms': 2000.0,
-        'max_database_queries': 20,
-        'max_memory_mb': 150.0
-    },
     'report_generation': {
-        'max_response_time_ms': 8000.0,  # التقارير تحتاج وقت أكثر
-        'max_database_queries': 80,     # تقليل الاستعلامات
-        'max_memory_mb': 400.0          # ذاكرة أكثر للتقارير
+        'max_response_time_ms': 8000.0,
+        'max_database_queries': 80,
+        'max_memory_mb': 400.0
     },
     'user_authentication': {
-        'max_response_time_ms': 1000.0,  # المصادقة يجب أن تكون سريعة
+        'max_response_time_ms': 1000.0,
         'max_database_queries': 8,
         'max_memory_mb': 50.0
     },
     'dashboard_loading': {
-        'max_response_time_ms': 3000.0,  # لوحة التحكم معقدة
+        'max_response_time_ms': 3000.0,
         'max_database_queries': 40,
         'max_memory_mb': 128.0
     },
@@ -162,25 +152,13 @@ BASIC_OPERATIONS = [
         'url': '/users/login/',
         'method': 'POST',
         'data': {'username': 'testuser', 'password': 'testpass'},
-        'weight': 10  # وزن العملية في الاختبار
+        'weight': 10
     },
     {
         'name': 'dashboard',
         'url': '/core/dashboard/',
         'method': 'GET',
         'weight': 20
-    },
-    {
-        'name': 'student_list',
-        'url': '/students/',
-        'method': 'GET',
-        'weight': 15
-    },
-    {
-        'name': 'student_detail',
-        'url': '/students/1/',
-        'method': 'GET',
-        'weight': 10
     },
     {
         'name': 'financial_reports',

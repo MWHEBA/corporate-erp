@@ -26,17 +26,13 @@ class AdminBypassRiskAssessor:
             'JournalEntry', 'JournalEntryLine', 'AccountingPeriod',
             
             # Payment Models
-            'FeePayment', 'PurchasePayment', 'SalaryPayment',
-            # Note: SalePayment removed - Sale module has been replaced
-            
-            # Fee Models
-            'StudentFee', 'TransportationFee', 'ActivityFee',
+            'CustomerPayment', 'PurchasePayment', 'SalaryPayment',
             
             # Stock Models
             'ProductStock', 'StockMovement', 'InventoryMovement',
             
             # Core Business Models
-            'StudentEnrollment', 'AcademicYear', 'Student',
+            'Customer', 'Sale', 'Purchase',
             
             # User & Permission Models
             'User', 'Group', 'Permission'

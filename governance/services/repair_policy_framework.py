@@ -207,10 +207,10 @@ class RepairPolicyFramework:
                     'verification_required': True
                 }
             },
-            'MULTIPLE_ACTIVE_ACADEMIC_YEARS': {
+            'MULTIPLE_ACTIVE_ACCOUNTING_PERIODS': {
                 ConfidenceLevel.HIGH: {
                     'policy': RepairPolicyType.REBUILD,
-                    'description': 'Rebuild academic year status from business rules',
+                    'description': 'Rebuild accounting period status from business rules',
                     'risk_level': 'HIGH',
                     'approval_required': True,
                     'batch_size': 1,
@@ -226,7 +226,7 @@ class RepairPolicyFramework:
                 },
                 ConfidenceLevel.LOW: {
                     'policy': RepairPolicyType.QUARANTINE,
-                    'description': 'Quarantine conflicting years for manual resolution',
+                    'description': 'Quarantine conflicting periods for manual resolution',
                     'risk_level': 'HIGH',
                     'approval_required': True,
                     'batch_size': 1,
@@ -311,28 +311,14 @@ class RepairPolicyFramework:
                     critical=False
                 )
             ],
-            'MULTIPLE_ACTIVE_ACADEMIC_YEARS': [
+            'MULTIPLE_ACTIVE_ACCOUNTING_PERIODS': [
                 VerificationInvariant(
-                    invariant_id='MAY_001',
-                    description='Exactly one academic year is active',
-                    validation_query='SELECT COUNT(*) FROM students_academicyear WHERE is_active = TRUE',
-                    expected_result=1,
-                    critical=True
-                ),
-                VerificationInvariant(
-                    invariant_id='MAY_002',
-                    description='Active year is the current year',
-                    validation_query='SELECT COUNT(*) FROM students_academicyear WHERE is_active = TRUE AND start_date <= CURRENT_DATE AND end_date >= CURRENT_DATE',
-                    expected_result=1,
-                    critical=True
-                ),
-                VerificationInvariant(
-                    invariant_id='MAY_003',
-                    description='No overlapping active periods',
-                    validation_query='SELECT COUNT(*) FROM students_academicyear a1 JOIN students_academicyear a2 ON a1.id != a2.id WHERE a1.is_active = TRUE AND a2.is_active = TRUE',
+                    invariant_id='MAP_001',
+                    description='No overlapping active accounting periods',
+                    validation_query='SELECT COUNT(*) FROM financial_accountingperiod p1 JOIN financial_accountingperiod p2 ON p1.id != p2.id WHERE p1.is_active = TRUE AND p2.is_active = TRUE',
                     expected_result=0,
                     critical=True
-                )
+                ),
             ],
             'UNBALANCED_JOURNAL_ENTRIES': [
                 VerificationInvariant(
@@ -412,23 +398,23 @@ class RepairPolicyFramework:
             'REBUILD_ROLLBACK': RollbackStrategy(
                 strategy_id='RB_REBUILD_001',
                 strategy_type='MANUAL',
-                description='Rollback academic year rebuild operations',
+                description='Rollback accounting period rebuild operations',
                 rollback_actions=[
                     {
-                        'action': 'RESTORE_YEAR_STATUS',
-                        'description': 'Manually restore academic year active status',
-                        'sql': 'UPDATE students_academicyear SET is_active = ? WHERE id = ?'
+                        'action': 'RESTORE_PERIOD_STATUS',
+                        'description': 'Manually restore accounting period active status',
+                        'sql': 'UPDATE financial_accountingperiod SET is_active = ? WHERE id = ?'
                     },
                     {
                         'action': 'VALIDATE_BUSINESS_RULES',
                         'description': 'Manually validate business rule compliance',
-                        'sql': 'SELECT * FROM students_academicyear WHERE is_active = TRUE'
+                        'sql': 'SELECT * FROM financial_accountingperiod WHERE is_active = TRUE'
                     }
                 ],
                 verification_steps=[
-                    'Manually verify academic year status is correct',
+                    'Manually verify accounting period status is correct',
                     'Confirm business rules are satisfied',
-                    'Validate student enrollment consistency'
+                    'Validate financial transaction consistency'
                 ],
                 recovery_time_estimate=timedelta(hours=2),
                 data_loss_risk='MODERATE'
@@ -616,9 +602,13 @@ class RepairPolicyFramework:
                     stock_id = obj.get('stock_id')
                     if stock_id is not None:
                         object_ids.append(stock_id)
-            elif corruption_type == 'MULTIPLE_ACTIVE_ACADEMIC_YEARS':
-                target_model = 'AcademicYear'
-                object_ids = [obj['year_id'] for obj in batch]
+            elif corruption_type == 'MULTIPLE_ACTIVE_ACCOUNTING_PERIODS':
+                target_model = 'AccountingPeriod'
+                object_ids = []
+                for obj in batch:
+                    period_id = obj.get('period_id')
+                    if period_id is not None:
+                        object_ids.append(period_id)
             else:
                 target_model = 'Unknown'
                 object_ids = [obj.get('id', 0) for obj in batch]
@@ -657,28 +647,26 @@ class RepairPolicyFramework:
         """Create rebuild repair actions"""
         actions = []
         
-        if corruption_type == 'MULTIPLE_ACTIVE_ACADEMIC_YEARS':
-            # Rebuild academic year status - high risk operation
+        if corruption_type == 'MULTIPLE_ACTIVE_ACCOUNTING_PERIODS':
             action = RepairAction(
-                action_id='REBUILD_ACADEMIC_YEAR_STATUS',
-                action_type='REBUILD_YEAR_STATUS',
-                description='Rebuild academic year active status from business rules',
-                target_model='AcademicYear',
-                target_objects=[obj['year_id'] for obj in corrupted_objects],
+                action_id='REBUILD_ACCOUNTING_PERIOD_STATUS',
+                action_type='REBUILD_PERIOD_STATUS',
+                description='Rebuild accounting period active status from business rules',
+                target_model='AccountingPeriod',
+                target_objects=[obj.get('period_id', 0) for obj in corrupted_objects],
                 parameters={
                     'rebuild_method': 'BUSINESS_RULE_BASED',
                     'current_date_check': True,
-                    'enrollment_validation': True
                 },
                 prerequisites=[
-                    'Backup current academic year data',
+                    'Backup current accounting period data',
                     'Validate business rules',
-                    'Check student enrollment dependencies'
+                    'Check financial transaction dependencies'
                 ],
                 validation_rules=[
-                    'Only one year can be active',
-                    'Active year must be current',
-                    'No enrollment conflicts'
+                    'Only one period can be open at a time',
+                    'Open period must cover current date',
+                    'No transaction conflicts'
                 ],
                 rollback_strategy='MANUAL',
                 estimated_duration=timedelta(hours=1),

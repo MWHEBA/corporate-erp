@@ -44,8 +44,7 @@ class PermissionService:
             start_time=start_time,
             end_time=end_time,
             duration_hours=duration,
-            reason=permission_data['reason'],
-            is_emergency=permission_data.get('is_emergency', False),
+            reason=permission_data.get('reason', ''),
             status='pending',
             requested_by=requested_by
         )
@@ -73,15 +72,26 @@ class PermissionService:
         Returns:
             bool: هل يمكن طلب الإذن
         """
+        from core.models import SystemSetting
+        from hr.models.attendance import RamadanSettings
+        
+        # Check if the date is in Ramadan
+        ramadan = RamadanSettings.objects.filter(
+            start_date__lte=perm_date,
+            end_date__gte=perm_date
+        ).first()
+        
         usage = PermissionRequest.get_monthly_usage(employee, perm_date)
         
-        # الحد الأقصى للأذونات الشهرية (4 أذونات)
-        max_count = 4
-        # الحد الأقصى لساعات الأذونات الشهرية (12 ساعة)
-        max_hours = 12
+        if ramadan:
+            max_count = ramadan.permission_max_count
+            max_hours = float(ramadan.permission_max_hours)
+        else:
+            max_count = int(SystemSetting.get_setting('hr_permission_max_count_monthly', 2))
+            max_hours = float(SystemSetting.get_setting('hr_permission_max_hours_monthly', 2))
         
         return (usage['total_count'] < max_count and 
-                (usage['total_hours'] + duration) <= max_hours)
+                (float(usage['total_hours']) + duration) <= max_hours)
     
     @staticmethod
     @transaction.atomic
@@ -128,12 +138,11 @@ class PermissionService:
             
             # تعديل التأخير/الانصراف المبكر حسب نوع الإذن
             if permission.permission_type.code == 'LATE_ARRIVAL':
-                # إلغاء التأخير
-                attendance.late_minutes = 0
+                # لا نصفر late_minutes - الحساب الصافي يتم في AttendanceSummary.calculate()
+                # نضيف ملاحظة فقط
                 attendance.notes = f"إذن معتمد: {permission.permission_type.name_ar}"
             elif permission.permission_type.code == 'EARLY_LEAVE':
-                # إلغاء الانصراف المبكر
-                attendance.early_leave_minutes = 0
+                # لا نصفر early_leave_minutes - الحساب الصافي يتم في AttendanceSummary.calculate()
                 attendance.notes = f"إذن معتمد: {permission.permission_type.name_ar}"
             else:
                 # أنواع أخرى - إضافة ملاحظة فقط
@@ -183,13 +192,29 @@ class PermissionService:
         Returns:
             dict: معلومات الحصة
         """
+        from core.models import SystemSetting
+        from hr.models.attendance import RamadanSettings
+        
+        # Check if the date is in Ramadan
+        ramadan = RamadanSettings.objects.filter(
+            start_date__lte=month_date,
+            end_date__gte=month_date
+        ).first()
+        
         usage = PermissionRequest.get_monthly_usage(employee, month_date)
+        
+        if ramadan:
+            max_count = ramadan.permission_max_count
+            max_hours = float(ramadan.permission_max_hours)
+        else:
+            max_count = int(SystemSetting.get_setting('hr_permission_max_count_monthly', 4))
+            max_hours = float(SystemSetting.get_setting('hr_permission_max_hours_monthly', 12))
         
         return {
             'used_count': usage['total_count'],
-            'max_count': 4,
-            'remaining_count': 4 - usage['total_count'],
+            'max_count': max_count,
+            'remaining_count': max_count - usage['total_count'],
             'used_hours': float(usage['total_hours']),
-            'max_hours': 12,
-            'remaining_hours': 12 - float(usage['total_hours']),
+            'max_hours': max_hours,
+            'remaining_hours': max_hours - float(usage['total_hours']),
         }

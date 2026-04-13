@@ -177,13 +177,14 @@ def journal_entries_list(request):
             total_debit = 0
             total_credit = 0
 
-        # إزالة Django pagination - DataTables سيتحكم في pagination
-        # paginator = Paginator(journal_entries_list, 25)  # 25 قيد في الصفحة
-        # page_number = request.GET.get("page")
-        # page_obj = paginator.get_page(page_number)
+        # Django pagination على مستوى database
+        from django.core.paginator import Paginator
+        paginator = Paginator(journal_entries_list, 50)  # 50 قيد في الصفحة
+        page_number = request.GET.get("page", 1)
+        page_obj = paginator.get_page(page_number)
         
-        # تحميل جميع القيود مع خطوطها والحسابات والمستخدمين
-        journal_entries_raw = journal_entries_list.prefetch_related(
+        # تحميل القيود للصفحة الحالية فقط مع خطوطها والحسابات والمستخدمين
+        journal_entries_raw = page_obj.object_list.prefetch_related(
             'lines__account'
         ).select_related('created_by', 'accounting_period')
         
@@ -205,71 +206,60 @@ def journal_entries_list(request):
                 first_line = lines[0]
                 amount = first_line.debit if first_line.debit > 0 else first_line.credit
                 
-                # تحديد نوع القيد بناءً على تحليل الخطوط (لجميع القيود)
-                if len(lines) == 2:
+                # استخدام النوع المحفوظ في القيد أولاً
+                if hasattr(entry, 'entry_type') and entry.entry_type and entry.entry_type != 'manual':
+                    # استخدام النوع المحفوظ مباشرة
+                    entry_type = entry.get_entry_type_display() if hasattr(entry, 'get_entry_type_display') else entry.entry_type
+                # تحديد نوع القيد بناءً على تحليل الخطوط (للقيود اليدوية فقط)
+                elif len(lines) == 2:
                     line1, line2 = lines[0], lines[1]
                     
-                    # تحليل ذكي لنوع القيد بناءً على أكواد الحسابات (أدق من الأسماء)
-                    account_codes = [line1.account.code, line2.account.code]
+                    # تحليل ذكي لنوع القيد بناءً على أسماء الحسابات الفعلية
                     account_names = [line1.account.name, line2.account.name]
                     
-                    # التحقق من وجود حسابات نقدية (صندوق) - كود 10100
-                    has_cash = any(code.startswith('10100') for code in account_codes)
+                    # التحقق من وجود حسابات نقدية (صندوق)
+                    cash_accounts = ['الصندوق', 'صندوق', 'نقدية', 'كاش']
+                    has_cash = any(cash_word in acc_name for acc_name in account_names for cash_word in cash_accounts)
                     
-                    # التحقق من وجود حسابات بنكية - كود 10200
-                    has_bank = any(code.startswith('10200') for code in account_codes)
+                    # التحقق من وجود حسابات بنكية
+                    bank_accounts = ['بنك', 'البنك', 'مصرف']
+                    has_bank = any(bank_word in acc_name for acc_name in account_names for bank_word in bank_accounts)
                     
-                    # التحقق من وجود حسابات العملاء - كود 11010
-                    has_parent = any(code.startswith('11010') for code in account_codes)
+                    # التحقق من وجود حسابات أولياء الأمور/موردين
+                    parent_accounts = ['العملاء', 'عميل', 'مدينون', 'أولياء الأمور', 'ولي أمر']
+                    supplier_accounts = ['الموردون', 'مورد', 'دائنون']
+                    has_parent = any(parent_word in acc_name for acc_name in account_names for parent_word in parent_accounts)
+                    has_supplier = any(supp_word in acc_name for acc_name in account_names for supp_word in supplier_accounts)
                     
-                    # التحقق من وجود حسابات الموردين - كود 21010
-                    has_supplier = any(code.startswith('21010') for code in account_codes)
-                    
-                    # التحقق من حسابات المخزون - كود 10400 أو 10300
-                    has_inventory = any(code.startswith('10400') or code.startswith('10300') for code in account_codes)
-                    
-                    # التحقق من حسابات الإيرادات - كود 40xxx
-                    has_revenue = any(code.startswith('40') for code in account_codes)
-                    
-                    # التحقق من حسابات المصروفات - كود 50xxx
-                    has_expense = any(code.startswith('50') for code in account_codes)
+                    # التحقق من حسابات الإيرادات والمصروفات والمخزون
+                    revenue_accounts = ['إيرادات', 'مبيعات', 'دخل']
+                    expense_accounts = ['مصروفات', 'مصاريف', 'تكلفة', 'مخزون']
+                    has_revenue = any(rev_word in acc_name for acc_name in account_names for rev_word in revenue_accounts)
+                    has_expense = any(exp_word in acc_name for acc_name in account_names for exp_word in expense_accounts)
                     
                     # تحديد نوع القيد بناءً على المنطق المحاسبي
-                    if has_cash and line1.debit > 0 and line1.account.code.startswith('10100'):
+                    if has_cash and (line1.debit > 0 and 'الصندوق' in line1.account.name) or (line2.debit > 0 and 'الصندوق' in line2.account.name):
                         entry_type = "إيراد نقدي"
-                    elif has_cash and line2.debit > 0 and line2.account.code.startswith('10100'):
-                        entry_type = "إيراد نقدي"
-                    elif has_cash and line1.credit > 0 and line1.account.code.startswith('10100'):
+                    elif has_cash and (line1.credit > 0 and 'الصندوق' in line1.account.name) or (line2.credit > 0 and 'الصندوق' in line2.account.name):
                         entry_type = "مصروف نقدي"
-                    elif has_cash and line2.credit > 0 and line2.account.code.startswith('10100'):
-                        entry_type = "مصروف نقدي"
-                    elif has_bank and line1.debit > 0 and line1.account.code.startswith('10200'):
+                    elif has_bank and (line1.debit > 0 and 'بنك' in line1.account.name) or (line2.debit > 0 and 'بنك' in line2.account.name):
                         entry_type = "إيراد بنكي"
-                    elif has_bank and line2.debit > 0 and line2.account.code.startswith('10200'):
-                        entry_type = "إيراد بنكي"
-                    elif has_bank and line1.credit > 0 and line1.account.code.startswith('10200'):
+                    elif has_bank and (line1.credit > 0 and 'بنك' in line1.account.name) or (line2.credit > 0 and 'بنك' in line2.account.name):
                         entry_type = "مصروف بنكي"
-                    elif has_bank and line2.credit > 0 and line2.account.code.startswith('10200'):
-                        entry_type = "مصروف بنكي"
-                    # فواتير المبيعات: العملاء (مدين) + إيرادات (دائن)
+                    # فواتير المبيعات: أولياء الأمور (مدين) + إيرادات (دائن)
                     elif has_parent and has_revenue:
                         entry_type = "فاتورة مبيعات"
-                    # فواتير المشتريات: مخزون (مدين) + موردون (دائن)
-                    elif has_inventory and has_supplier:
-                        entry_type = "فاتورة مشتريات"
-                    # فواتير المشتريات: مصروفات (مدين) + موردون (دائن)
-                    elif has_expense and has_supplier:
+                    # فواتير المشتريات: مصروفات/مخزون (مدين) + موردون (دائن)
+                    elif has_supplier and has_expense:
                         entry_type = "فاتورة مشتريات"
                     # فواتير المشتريات البديلة: موردون (دائن) + أي حساب آخر (مدين)
                     elif has_supplier and not (has_cash or has_bank or has_parent):
                         entry_type = "فاتورة مشتريات"
-                    # فواتير المبيعات البديلة: العملاء (مدين) + أي حساب آخر (دائن)
+                    # فواتير المبيعات البديلة: أولياء الأمور (مدين) + أي حساب آخر (دائن)
                     elif has_parent and not (has_cash or has_bank or has_supplier):
                         entry_type = "فاتورة مبيعات"
-                    # تحصيل من ولي أمر: العملاء (دائن) + نقدية/بنك (مدين)
                     elif has_parent and (has_cash or has_bank):
                         entry_type = "تحصيل من ولي أمر"
-                    # دفع لمورد: موردون (مدين) + نقدية/بنك (دائن)
                     elif has_supplier and (has_cash or has_bank):
                         entry_type = "دفع لمورد"
                     else:
@@ -286,8 +276,7 @@ def journal_entries_list(request):
                     entry_type = entry.entry_type
             
             # تحديد أيقونة ولون النوع
-            # استخدام النوع المحلل (entry_type) بدلاً من entry_type_display
-            entry_type_display = entry_type  # استخدام النوع المحلل الذكي
+            entry_type_display = entry.get_entry_type_display() if hasattr(entry, 'get_entry_type_display') else "غير محدد"
             entry_type_raw = entry.entry_type if hasattr(entry, 'entry_type') else 'manual'
             
             # تعيين الأيقونة واللون حسب النوع
@@ -410,8 +399,11 @@ def journal_entries_list(request):
                 cat = entry._original.financial_category
                 category_display = f'<span class="badge bg-primary">{cat.name}</span>'
         
-        # تحضير badge النوع مع الأيقونة
-        entry_type_badge = f'<span class="badge bg-{entry.entry_type_color}"><i class="fas {entry.entry_type_icon} me-1"></i>{entry.entry_type}</span>'
+        # تحضير badge النوع مع الأيقونة - استخدام entry_type_display للحصول على الترجمة الصحيحة
+        # entry.entry_type يحتوي على entry_type_display من enhanced_data
+        # لكن للتأكد، نستخدم القيمة مباشرة من الكائن الأصلي
+        display_text = entry._original.get_entry_type_display() if hasattr(entry._original, 'get_entry_type_display') else entry.entry_type
+        entry_type_badge = f'<span class="badge bg-{entry.entry_type_color}"><i class="fas {entry.entry_type_icon} me-1"></i>{display_text}</span>'
         
         row_data = {
             'id': entry.id,
@@ -427,8 +419,30 @@ def journal_entries_list(request):
         }
         table_data.append(row_data)
 
-    # إعداد action buttons - تم إزالة الإجراءات
-    action_buttons = []
+    # إعداد action buttons
+    header_buttons = [
+        {
+            "url": reverse("financial:cash_and_bank_accounts_list"),
+            "icon": "fa-wallet",
+            "text": "الخزائن والبنوك",
+            "class": "btn-outline-primary",
+        },
+        {
+            "url": reverse("financial:chart_of_accounts_list"),
+            "icon": "fa-sitemap",
+            "text": "دليل الحسابات",
+            "class": "btn-outline-secondary",
+        },
+    ]
+    
+    # إضافة زر القيود اليدوية للسوبر أدمن فقط
+    if request.user.is_superuser:
+        header_buttons.insert(0, {
+            "url": reverse("financial:manual_journal_entry_create"),
+            "icon": "fa-edit",
+            "text": "قيد يدوي",
+            "class": "btn-warning",
+        })
 
     # جلب التصنيفات المالية للفلتر
     from financial.models import FinancialCategory
@@ -439,11 +453,13 @@ def journal_entries_list(request):
         "table_headers": table_headers,
         "table_data": table_data,
         "headers": table_headers,  # للتوافق مع القالب القديم
-        "action_buttons": action_buttons,
         "primary_key": "id",
         "filter_form": filter_form or {},
         "status_choices": status_choices,
         "categories": categories,
+        # Django pagination
+        "page_obj": page_obj if 'page_obj' in locals() else None,
+        "paginator": paginator if 'paginator' in locals() else None,
         # إحصائيات متقدمة
         "total_transactions": total_transactions if 'total_transactions' in locals() else 0,
         "total_debit": total_debit if 'total_debit' in locals() else 0,
@@ -451,20 +467,7 @@ def journal_entries_list(request):
         "page_title": "القيود المحاسبية",
         "page_subtitle": "إدارة القيود المحاسبية والقيود اليومية",
         "page_icon": "fas fa-book",
-        "header_buttons": [
-            {
-                "url": reverse("financial:cash_and_bank_accounts_list"),
-                "icon": "fa-wallet",
-                "text": "الخزائن والبنوك",
-                "class": "btn-outline-primary",
-            },
-            {
-                "url": reverse("financial:chart_of_accounts_list"),
-                "icon": "fa-sitemap",
-                "text": "دليل الحسابات",
-                "class": "btn-outline-secondary",
-            },
-        ],
+        "header_buttons": header_buttons,
         "breadcrumb_items": [
             {
                 "title": "الرئيسية",
@@ -557,11 +560,10 @@ def journal_entries_detail(request, pk):
         from purchase.models import PurchasePayment
         from django.urls import reverse
 
-        # البحث في دفعات المشتريات - استخدام العلاقة العكسية الصحيحة
-        purchase_payment = PurchasePayment.objects.filter(
-            financial_transaction=journal_entry
-        ).select_related("purchase", "purchase__supplier").first()
-        
+        # البحث في دفعات المشتريات - استخدام العلاقة العكسية
+        purchase_payment = journal_entry.purchasepayment_set.select_related(
+            "purchase", "purchase__supplier"
+        ).first()
         if purchase_payment:
             source_payment = purchase_payment
             source_payment_url = reverse(
@@ -573,37 +575,15 @@ def journal_entries_detail(request, pk):
     except (ImportError, AttributeError):
         pass
 
-    # البحث في دفعات المبيعات - استخدام العلاقة العكسية الصحيحة
-    if not source_payment:
-        try:
-            from sale.models import SalePayment
-            from django.urls import reverse
-
-            sale_payment = SalePayment.objects.filter(
-                financial_transaction=journal_entry
-            ).select_related("sale", "sale__customer").first()
-            
-            if sale_payment:
-                source_payment = sale_payment
-                source_payment_url = reverse(
-                    "sale:payment_detail", args=[sale_payment.pk]
-                )
-                source_invoice = sale_payment.sale
-                source_party = sale_payment.sale.customer
-                invoice_type = "sale"
-        except (ImportError, AttributeError):
-            pass
+    # Sale module removed - skip sale payment lookup
 
     # ثانياً: إذا لم نجد دفعة، نبحث في الفواتير باستخدام العلاقات العكسية
     if not source_invoice:
         try:
             from purchase.models import Purchase
 
-            # البحث في فواتير المشتريات - استخدام العلاقة العكسية الصحيحة
-            purchase = Purchase.objects.filter(
-                journal_entry=journal_entry
-            ).select_related("supplier").first()
-            
+            # البحث في فواتير المشتريات - استخدام العلاقة العكسية
+            purchase = journal_entry.purchases.select_related("supplier").first()
             if purchase:
                 source_invoice = purchase
                 source_party = purchase.supplier
@@ -611,21 +591,7 @@ def journal_entries_detail(request, pk):
         except (ImportError, AttributeError):
             pass
 
-    # البحث في فواتير المبيعات - استخدام العلاقة العكسية الصحيحة
-    if not source_invoice:
-        try:
-            from sale.models import Sale
-
-            sale = Sale.objects.filter(
-                journal_entry=journal_entry
-            ).select_related("customer").first()
-            
-            if sale:
-                source_invoice = sale
-                source_party = sale.customer
-                invoice_type = "sale"
-        except (ImportError, AttributeError):
-            pass
+    # Sale module removed - skip sale invoice lookup
 
     context = {
         "journal_entry": journal_entry,
@@ -1689,3 +1655,138 @@ def reverse_entry_optimized(entry_id, reversal_date=None, user=None):
         return False, None, "القيد الأصلي غير موجود أو غير مرحل"
     except Exception as e:
         return False, None, str(e)
+
+
+
+# ============== القيود اليدوية (Manual Journal Entries) ==============
+
+@login_required
+def manual_journal_entry_create(request):
+    """
+    إنشاء قيد يدوي - متاح فقط للسوبر أدمن
+    """
+    # التحقق من صلاحيات السوبر أدمن
+    if not request.user.is_superuser:
+        messages.error(request, "عذراً، هذه الصفحة متاحة فقط للمسؤول الرئيسي")
+        return redirect('financial:journal_entries_list')
+    
+    if request.method == 'POST':
+        try:
+            # استيراد AccountingGateway والخدمات المطلوبة
+            from governance.services import AccountingGateway, JournalEntryLineData
+            from governance.exceptions import IdempotencyError, AuthorityViolationError
+            
+            # جلب البيانات من الفورم
+            amount = Decimal(request.POST.get('amount', 0))
+            debit_account_id = request.POST.get('debit_account')
+            credit_account_id = request.POST.get('credit_account')
+            description = request.POST.get('description', '').strip()
+            entry_date = request.POST.get('entry_date')
+            
+            # التحقق من البيانات
+            if not all([amount, debit_account_id, credit_account_id, description, entry_date]):
+                messages.error(request, "جميع الحقول مطلوبة")
+                return redirect('financial:manual_journal_entry_create')
+            
+            if amount <= 0:
+                messages.error(request, "المبلغ يجب أن يكون أكبر من صفر")
+                return redirect('financial:manual_journal_entry_create')
+            
+            if debit_account_id == credit_account_id:
+                messages.error(request, "لا يمكن أن يكون الحساب المدين والدائن نفس الحساب")
+                return redirect('financial:manual_journal_entry_create')
+            
+            # جلب الحسابات
+            debit_account = get_object_or_404(ChartOfAccounts, id=debit_account_id, is_active=True)
+            credit_account = get_object_or_404(ChartOfAccounts, id=credit_account_id, is_active=True)
+            
+            # تحويل التاريخ
+            entry_date_obj = datetime.strptime(entry_date, '%Y-%m-%d').date()
+            
+            # إنشاء idempotency key فريد
+            # استخدام timestamp بالثواني + user_id لضمان الفرادة
+            timestamp_seconds = int(timezone.now().timestamp())
+            unique_id = (timestamp_seconds % 1000000000) + request.user.id  # رقم صغير نسبياً
+            idempotency_key = f"manual_entry_{request.user.id}_{timestamp_seconds}"
+            
+            # إعداد بيانات خطوط القيد
+            lines = [
+                JournalEntryLineData(
+                    account_code=debit_account.code,
+                    debit=amount,
+                    credit=Decimal('0.00'),
+                    description=f"مدين - {description}"
+                ),
+                JournalEntryLineData(
+                    account_code=credit_account.code,
+                    debit=Decimal('0.00'),
+                    credit=amount,
+                    description=f"دائن - {description}"
+                )
+            ]
+            
+            # إنشاء القيد عبر AccountingGateway
+            gateway = AccountingGateway()
+            
+            journal_entry = gateway.create_journal_entry(
+                source_module='financial',
+                source_model='ManualJournalEntry',
+                source_id=unique_id,  # استخدام ID صغير نسبياً للقيود اليدوية
+                lines=lines,
+                idempotency_key=idempotency_key,
+                user=request.user,
+                entry_type='manual',
+                description=description,
+                reference=f"MANUAL-{timezone.now().strftime('%Y%m%d%H%M%S')}",
+                date=entry_date_obj
+            )
+            
+            messages.success(request, f"تم إنشاء القيد اليدوي بنجاح - رقم القيد: {journal_entry.number}")
+            return redirect('financial:journal_entries_detail', pk=journal_entry.id)
+            
+        except IdempotencyError as e:
+            messages.error(request, "هذا القيد موجود بالفعل (تكرار)")
+            return redirect('financial:manual_journal_entry_create')
+        except AuthorityViolationError as e:
+            messages.error(request, f"خطأ في الصلاحيات: {str(e)}")
+            return redirect('financial:manual_journal_entry_create')
+        except ValueError as e:
+            messages.error(request, f"خطأ في البيانات المدخلة: {str(e)}")
+            return redirect('financial:manual_journal_entry_create')
+        except Exception as e:
+            # Log the full error for debugging
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error creating manual journal entry: {str(e)}", exc_info=True)
+            messages.error(request, f"حدث خطأ أثناء إنشاء القيد: {str(e)}")
+            return redirect('financial:manual_journal_entry_create')
+    
+    # GET request - عرض الفورم
+    # جلب جميع الحسابات النشطة
+    accounts = ChartOfAccounts.objects.filter(
+        is_active=True
+    ).select_related('account_type').order_by('code')
+    
+    # تجميع الحسابات حسب النوع
+    accounts_by_type = {}
+    for account in accounts:
+        type_name = account.account_type.name if account.account_type else "غير مصنف"
+        if type_name not in accounts_by_type:
+            accounts_by_type[type_name] = []
+        accounts_by_type[type_name].append(account)
+    
+    context = {
+        'accounts': accounts,
+        'accounts_by_type': accounts_by_type,
+        'today': timezone.now().date(),
+        'page_title': 'إضافة قيد يدوي',
+        'page_subtitle': 'إنشاء قيد محاسبي يدوي (متاح للمسؤول الرئيسي فقط)',
+        'page_icon': 'fas fa-edit',
+        'breadcrumb_items': [
+            {'title': 'الرئيسية', 'url': reverse('core:dashboard'), 'icon': 'fas fa-home'},
+            {'title': 'القيود المحاسبية', 'url': reverse('financial:journal_entries_list'), 'icon': 'fas fa-book'},
+            {'title': 'إضافة قيد يدوي', 'active': True}
+        ]
+    }
+    
+    return render(request, 'financial/transactions/manual_journal_entry_create.html', context)

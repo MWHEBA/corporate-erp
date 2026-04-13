@@ -103,11 +103,6 @@ def recalculate_bundle_stock_on_movement(sender, instance, created, **kwargs):
             old_stock = result.get('old_stock', 'غير محدد')
             new_stock = result['new_stock']
             
-            logger.info(
-                f"Bundle stock recalculated: '{bundle.name}' "
-                f"from {old_stock} to {new_stock} "
-                f"due to component '{product.name}' movement {instance.id}"
-            )
         
         # إنشاء إشعارات للمخزون المنخفض إذا لزم الأمر
         _check_low_stock_alerts(recalculation_results)
@@ -211,10 +206,6 @@ def handle_product_activation_change(sender, instance, created, **kwargs):
             }
         )
         
-        logger.info(
-            f"Product activation changed: '{instance.name}' - {activation_status} - "
-            f"will recalculate {affected_bundles.count()} bundle products"
-        )
         
         # إعادة حساب مخزون المنتجات المجمعة المتأثرة
         recalculation_results = StockCalculationEngine.recalculate_affected_bundles(instance)
@@ -225,11 +216,6 @@ def handle_product_activation_change(sender, instance, created, **kwargs):
             old_stock = result.get('old_stock', 'غير محدد')
             new_stock = result['new_stock']
             
-            logger.info(
-                f"Bundle stock recalculated: '{bundle.name}' "
-                f"from {old_stock} to {new_stock} "
-                f"due to component '{instance.name}' {activation_status}"
-            )
         
         # إنشاء إشعارات خاصة لحالات إلغاء التفعيل
         if not current_is_active:
@@ -308,10 +294,6 @@ def recalculate_bundle_stock_on_direct_stock_change(sender, instance, **kwargs):
             }
         )
         
-        logger.info(
-            f"Bundle stock recalculated for {len(recalculation_results)} products "
-            f"due to direct stock change in component '{product.name}'"
-        )
         
         # فحص تنبيهات المخزون المنخفض
         _check_low_stock_alerts(recalculation_results)
@@ -363,7 +345,7 @@ def _check_low_stock_alerts(recalculation_results):
             
             # التحقق من المخزون المنخفض
             if new_stock == 0:
-                alert_type = "نفد"
+                alert_type = "نفذ"
                 notification_type = "danger"
             elif bundle.min_stock > 0 and new_stock <= bundle.min_stock:
                 alert_type = "منخفض"
@@ -405,10 +387,7 @@ def _check_low_stock_alerts(recalculation_results):
             )
             
             alerts_created += 1
-            logger.info(f"Created {alert_type} stock alert for bundle product {bundle.name} - {authorized_users.count()} notifications sent")
         
-        if alerts_created > 0:
-            logger.info(f"Created {alerts_created} bundle stock alerts")
             
     except Exception as e:
         logger.error(f"Error creating bundle low stock alerts: {e}")
@@ -471,10 +450,6 @@ def _create_component_deactivation_alerts(deactivated_product, affected_bundles)
             }
         )
         
-        logger.info(
-            f"Created component deactivation alert for {deactivated_product.name} "
-            f"affecting {len(affected_bundles)} bundle products - {authorized_users.count()} notifications sent"
-        )
         
     except Exception as e:
         logger.error(f"Error creating component deactivation alerts: {e}")

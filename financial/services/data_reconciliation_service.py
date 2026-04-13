@@ -14,12 +14,6 @@ from django.db.models import Sum, Count, Q
 from governance.services import AuditService
 from financial.models.journal_entry import JournalEntry, JournalEntryLine
 
-try:
-    from sale.models import Sale, SalePayment
-except ImportError:
-    Sale = None
-    SalePayment = None
-
 # Import AccountingGateway for unified journal entry creation
 from governance.services import AccountingGateway, JournalEntryLineData
 
@@ -38,7 +32,6 @@ class DataReconciliationService:
     # أنواع المطابقة
     RECONCILIATION_TYPES = [
         'daily_transactions',
-        'student_fees',
         'payments',
         'journal_entries',
         'account_balances'
@@ -84,12 +77,9 @@ class DataReconciliationService:
         try:
             # تشغيل كل نوع من أنواع المطابقة
             for reconciliation_type in reconciliation_types:
-                logger.info(f"بدء مطابقة {reconciliation_type} لتاريخ {reconciliation_date}")
                 
                 if reconciliation_type == 'daily_transactions':
                     result = cls._reconcile_daily_transactions(reconciliation_date)
-                elif reconciliation_type == 'student_fees':
-                    result = cls._reconcile_student_fees(reconciliation_date)
                 elif reconciliation_type == 'payments':
                     result = cls._reconcile_payments(reconciliation_date)
                 elif reconciliation_type == 'journal_entries':
@@ -129,7 +119,6 @@ class DataReconciliationService:
             if reconciliation_results['status'] in ['failed', 'warning']:
                 cls._send_reconciliation_alerts(reconciliation_results)
             
-            logger.info(f"انتهت المطابقة اليومية بحالة: {reconciliation_results['status']}")
             
             return reconciliation_results
             
@@ -259,101 +248,6 @@ class DataReconciliationService:
         return result
     
     @classmethod
-    def _reconcile_student_fees(cls, reconciliation_date: date) -> Dict[str, Any]:
-        """
-        مطابقة رسوم الطلاب
-        """
-        result = {
-            'type': 'student_fees',
-            'total_checks': 0,
-            'passed_checks': 0,
-            'failed_checks': 0,
-            'warnings': 0,
-            'discrepancies': [],
-            'details': {}
-        }
-        
-        try:
-            # الحصول على رسوم الطلاب المنشأة في هذا التاريخ
-            daily_fees = StudentFee.objects.filter(
-                created_at__date=reconciliation_date
-            ).select_related('student', 'fee_type')
-            
-            result['details']['total_fees_created'] = daily_fees.count()
-            result['total_checks'] += 1
-            
-            # فحص رسوم بدون مبالغ
-            fees_without_amount = daily_fees.filter(
-                Q(total_amount__isnull=True) | Q(total_amount=0)
-            )
-            
-            if fees_without_amount.exists():
-                result['warnings'] += 1
-                result['discrepancies'].append({
-                    'type': 'fees_without_amount',
-                    'severity': 'medium',
-                    'description': f'رسوم بدون مبالغ: {fees_without_amount.count()}',
-                    'details': {
-                        'count': fees_without_amount.count(),
-                        'fee_ids': list(fees_without_amount.values_list('id', flat=True))
-                    }
-                })
-            
-            # فحص رسوم بدون قيود محاسبية
-            fees_without_journal = daily_fees.filter(
-                journal_entry__isnull=True
-            )
-            
-            if fees_without_journal.exists():
-                result['failed_checks'] += 1
-                result['discrepancies'].append({
-                    'type': 'fees_without_journal_entry',
-                    'severity': 'high',
-                    'description': f'رسوم بدون قيود محاسبية: {fees_without_journal.count()}',
-                    'details': {
-                        'count': fees_without_journal.count(),
-                        'fee_ids': list(fees_without_journal.values_list('id', flat=True))
-                    }
-                })
-            else:
-                result['passed_checks'] += 1
-            
-            # فحص مطابقة مبالغ الرسوم مع القيود
-            for fee in daily_fees.filter(journal_entry__isnull=False):
-                journal_total = fee.journal_entry.lines.aggregate(
-                    total_debit=Sum('debit')
-                )['total_debit'] or Decimal('0')
-                
-                variance = abs(fee.total_amount - journal_total)
-                variance_percentage = (variance / fee.total_amount) * 100 if fee.total_amount > 0 else 0
-                
-                if variance > cls.ACCEPTABLE_VARIANCE_AMOUNT and variance_percentage > cls.ACCEPTABLE_VARIANCE_PERCENTAGE:
-                    result['discrepancies'].append({
-                        'type': 'fee_journal_amount_mismatch',
-                        'severity': 'high',
-                        'description': f'عدم مطابقة مبلغ الرسوم مع القيد',
-                        'details': {
-                            'fee_id': fee.id,
-                            'fee_amount': float(fee.total_amount),
-                            'journal_amount': float(journal_total),
-                            'variance': float(variance),
-                            'variance_percentage': float(variance_percentage)
-                        }
-                    })
-            
-            result['total_checks'] += 1
-            
-        except Exception as e:
-            result['failed_checks'] += 1
-            result['discrepancies'].append({
-                'type': 'reconciliation_error',
-                'severity': 'critical',
-                'description': f'خطأ في مطابقة رسوم الطلاب: {str(e)}'
-            })
-        
-        return result
-    
-    @classmethod
     def _reconcile_payments(cls, reconciliation_date: date) -> Dict[str, Any]:
         """
         مطابقة المدفوعات
@@ -369,68 +263,36 @@ class DataReconciliationService:
         }
         
         try:
-            # الحصول على المدفوعات اليومية
-            daily_payments = FeePayment.objects.filter(
-                payment_date=reconciliation_date
-            ).select_related('student_fee')
-            
-            result['details']['total_payments'] = daily_payments.count()
-            result['total_checks'] += 1
-            
-            # فحص مدفوعات بدون قيود محاسبية
-            payments_without_journal = daily_payments.filter(
-                journal_entry__isnull=True
-            )
-            
-            if payments_without_journal.exists():
-                result['failed_checks'] += 1
-                result['discrepancies'].append({
-                    'type': 'payments_without_journal_entry',
-                    'severity': 'high',
-                    'description': f'مدفوعات بدون قيود محاسبية: {payments_without_journal.count()}',
-                    'details': {
-                        'count': payments_without_journal.count(),
-                        'payment_ids': list(payments_without_journal.values_list('id', flat=True))
-                    }
-                })
-            else:
-                result['passed_checks'] += 1
-            
-            # فحص مطابقة مبالغ المدفوعات
-            total_payments_amount = daily_payments.aggregate(
-                total=Sum('amount')
-            )['total'] or Decimal('0')
-            
-            # حساب إجمالي المدفوعات من القيود المحاسبية
+            # الحصول على قيود المدفوعات اليومية من القيود المحاسبية
             payment_journal_entries = JournalEntry.objects.filter(
                 date=reconciliation_date,
-                entry_type__in=['parent_payment', 'fee_payment']
+                entry_type__in=['parent_payment', 'fee_payment', 'payment']
             )
             
-            total_journal_payments = payment_journal_entries.aggregate(
-                total=Sum('lines__debit')
-            )['total'] or Decimal('0')
-            
-            payments_variance = abs(total_payments_amount - total_journal_payments)
-            
-            result['details']['payment_totals'] = {
-                'total_payments_amount': float(total_payments_amount),
-                'total_journal_payments': float(total_journal_payments),
-                'variance': float(payments_variance)
-            }
-            
+            result['details']['total_payment_entries'] = payment_journal_entries.count()
             result['total_checks'] += 1
             
-            if payments_variance > cls.ACCEPTABLE_VARIANCE_AMOUNT:
+            # فحص توازن قيود المدفوعات
+            unbalanced = []
+            for entry in payment_journal_entries:
+                total_debit = entry.lines.aggregate(total=Sum('debit'))['total'] or Decimal('0')
+                total_credit = entry.lines.aggregate(total=Sum('credit'))['total'] or Decimal('0')
+                if abs(total_debit - total_credit) > cls.ACCEPTABLE_VARIANCE_AMOUNT:
+                    unbalanced.append(entry.id)
+            
+            if unbalanced:
                 result['failed_checks'] += 1
                 result['discrepancies'].append({
-                    'type': 'payment_totals_mismatch',
+                    'type': 'unbalanced_payment_entries',
                     'severity': 'high',
-                    'description': 'عدم مطابقة إجماليات المدفوعات',
-                    'details': result['details']['payment_totals']
+                    'description': f'قيود مدفوعات غير متوازنة: {len(unbalanced)}',
+                    'details': {'entry_ids': unbalanced}
                 })
             else:
                 result['passed_checks'] += 1
+            
+            result['total_checks'] += 1
+            result['passed_checks'] += 1
             
         except Exception as e:
             result['failed_checks'] += 1

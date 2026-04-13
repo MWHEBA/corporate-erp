@@ -196,14 +196,19 @@
 
 {% block extra_js %}
 <script>
-$(document).ready(function() {
-    // تأكيد الاعتماد
-    $('[onclick*="approve-form"]').on('click', function(e) {
-        e.preventDefault();
-        if (confirm('هل أنت متأكد من اعتماد هذا التحويل؟\n\nسيتم تحديث المخزون في المخزنين وإنشاء القيد المحاسبي.')) {
-            $('#approve-form').submit();
+function confirmApprove() {
+    Swal.fire({
+        title: 'اعتماد إذن التحويل؟',
+        text: 'سيتم تحديث المخزون في المخزنين وإنشاء القيد المحاسبي.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'نعم، اعتماد',
+        cancelButtonText: 'إلغاء'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            document.getElementById('approve-form').submit();
         }
     });
-});
+}
 </script>
 {% endblock %}

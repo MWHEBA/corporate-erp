@@ -33,8 +33,6 @@ class Employee(models.Model):
     EMPLOYMENT_TYPE_CHOICES = [
         ('full_time', 'دوام كامل'),
         ('part_time', 'دوام جزئي'),
-        ('contract', 'عقد'),
-        ('temporary', 'مؤقت'),
     ]
     
     STATUS_CHOICES = [
@@ -139,6 +137,11 @@ class Employee(models.Model):
         verbose_name='رقم الموظف في جهاز البصمة',
         help_text='رقم تعريف الموظف في نظام البصمة'
     )
+    attendance_exempt = models.BooleanField(
+        default=False,
+        verbose_name='معفى من البصمة',
+        help_text='موظفون إداريون أو مديرون لا يخضعون لنظام البصمة — يتم اعتماد حضورهم يدوياً'
+    )
     hire_date = models.DateField(verbose_name='تاريخ التعيين')
     employment_type = models.CharField(
         max_length=20,
@@ -156,6 +159,11 @@ class Employee(models.Model):
     )
     termination_date = models.DateField(null=True, blank=True, verbose_name='تاريخ إنهاء الخدمة')
     termination_reason = models.TextField(blank=True, verbose_name='سبب إنهاء الخدمة')
+    is_insurance_only = models.BooleanField(
+        default=False,
+        verbose_name='موظف تأمين فقط',
+        help_text='لا يدخل في كشف الرواتب — يدفع تأمينه للشركة مباشرة'
+    )
     
     # الصورة
     photo = models.ImageField(
@@ -225,10 +233,10 @@ class Employee(models.Model):
     
     @property
     def years_of_service(self):
-        """حساب سنوات الخدمة"""
+        """حساب سنوات الخدمة الفعلية (بالسنوات الكاملة)"""
+        from dateutil.relativedelta import relativedelta
         from datetime import date
-        today = date.today()
-        return today.year - self.hire_date.year
+        return relativedelta(date.today(), self.hire_date).years
     
     @property
     def is_active(self):

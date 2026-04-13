@@ -236,20 +236,38 @@
                                 {{ form.has_annual_increase }}
                                 <label class="form-check-label" for="id_has_annual_increase">
                                     <i class="fas fa-chart-line me-1"></i>
-                                    يوجد زيادة سنوية للراتب الأساسي
+                                    يوجد زيادة سنوية للأجر الأساسي
                                 </label>
                             </div>
                             <small class="text-muted d-block mt-1">
                                 <i class="fas fa-info-circle me-1"></i>
-                                عند التفعيل، سيتم تطبيق زيادة سنوية على الراتب الأساسي
+                                عند التفعيل، سيتم تطبيق زيادة سنوية على الأجر الأساسي
                             </small>
                         </div>
                     </div>
                 </div>
 
                 <div id="annual-increase-fields" style="display: none;">
+                    <!-- نوع الزيادة -->
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <div class="mb-3">
+                                <label class="form-label">نوع الزيادة <span class="text-danger">*</span></label>
+                                {{ form.increase_type }}
+                                <small class="text-muted d-block">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    اختر نسبة مئوية من الأجر الأساسي أو قيمة ثابتة
+                                </small>
+                                {% if form.increase_type.errors %}
+                                    <div class="text-danger">{{ form.increase_type.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="row">
-                        <div class="col-md-4">
+                        <!-- نسبة الزيادة (يظهر عند اختيار percentage) -->
+                        <div class="col-md-4" id="percentage-field">
                             <div class="mb-3">
                                 <label class="form-label">نسبة الزيادة السنوية الإجمالية (%) <span class="text-danger">*</span></label>
                                 {{ form.annual_increase_percentage }}
@@ -262,6 +280,22 @@
                                 {% endif %}
                             </div>
                         </div>
+                        
+                        <!-- قيمة الزيادة الثابتة (يظهر عند اختيار fixed) -->
+                        <div class="col-md-4" id="amount-field" style="display: none;">
+                            <div class="mb-3">
+                                <label class="form-label">قيمة الزيادة الثابتة (جنيه) <span class="text-danger">*</span></label>
+                                {{ form.annual_increase_amount }}
+                                <small class="text-muted d-block">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    مثال: 500 تعني زيادة 500 جنيه في السنة (يتم تقسيمها حسب التكرار)
+                                </small>
+                                {% if form.annual_increase_amount.errors %}
+                                    <div class="text-danger">{{ form.annual_increase_amount.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
                         <div class="col-md-4">
                             <div class="mb-3">
                                 <label class="form-label">عدد مرات التطبيق في السنة <span class="text-danger">*</span></label>
@@ -281,7 +315,7 @@
                                 {{ form.increase_start_reference }}
                                 <small class="text-muted d-block">
                                     <i class="fas fa-info-circle me-1"></i>
-                                    من متى تبدأ الزيادة؟
+                                    من متى تبدأ الزيادة؟ (بداية السنة المالية تُحسب ديناميكياً)
                                 </small>
                                 {% if form.increase_start_reference.errors %}
                                     <div class="text-danger">{{ form.increase_start_reference.errors }}</div>
@@ -291,13 +325,13 @@
                     </div>
 
                     <!-- معاينة الزيادة -->
-                    <div class="alert alert-info">
-                        <h6 class="alert-heading"><i class="fas fa-calculator me-2"></i>مثال توضيحي</h6>
+                    <div class="alert alert-info" id="percentage-example">
+                        <h6 class="alert-heading"><i class="fas fa-calculator me-2"></i>مثال توضيحي (نسبة مئوية)</h6>
                         <div class="row small">
                             <div class="col-md-6">
                                 <strong>الإعدادات:</strong>
                                 <ul class="mb-2">
-                                    <li>الراتب الأساسي: 10,000 جنيه</li>
+                                    <li>الأجر الأساسي: 10,000 جنيه</li>
                                     <li>نسبة الزيادة السنوية: <strong>10%</strong></li>
                                     <li>التكرار: <strong>نصف سنوي</strong> (مرتين)</li>
                                 </ul>
@@ -316,6 +350,64 @@
                             <i class="fas fa-lightbulb me-1"></i>
                             <strong>ملاحظة:</strong> النسبة السنوية (10%) تُقسم على عدد المرات، والزيادة تراكمية (تُحسب من الإجمالي).
                         </small>
+                    </div>
+                    
+                    <div class="alert alert-success" id="amount-example" style="display: none;">
+                        <h6 class="alert-heading"><i class="fas fa-calculator me-2"></i>مثال توضيحي (قيمة ثابتة)</h6>
+                        <div class="row small">
+                            <div class="col-md-6">
+                                <strong>الإعدادات:</strong>
+                                <ul class="mb-2">
+                                    <li>الأجر الأساسي: 10,000 جنيه</li>
+                                    <li>قيمة الزيادة السنوية: <strong>1,000 جنيه</strong></li>
+                                    <li>التكرار: <strong>نصف سنوي</strong> (مرتين)</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <strong>النتيجة:</strong>
+                                <ul class="mb-2">
+                                    <li>المرة الأولى: 500 جنيه</li>
+                                    <li>المرة الثانية: 500 جنيه</li>
+                                    <li>الإجمالي بعد سنة: 11,000 جنيه</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <hr class="my-2">
+                        <small class="text-muted">
+                            <i class="fas fa-lightbulb me-1"></i>
+                            <strong>ملاحظة:</strong> القيمة الثابتة (1,000 جنيه) تُقسم على عدد المرات بالتساوي.
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- التأمينات الاجتماعية -->
+        <h5 class="mb-3 mt-4">التأمينات الاجتماعية</h5>
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="section-container mb-0">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <div class="form-check">
+                                {{ form.is_social_insurance_enrolled }}
+                                <label class="form-check-label fw-semibold" for="id_is_social_insurance_enrolled">
+                                    <i class="fas fa-shield-alt me-1 text-primary"></i>
+                                    مسجل في التأمينات الاجتماعية
+                                </label>
+                                {% if form.is_social_insurance_enrolled.errors %}
+                                    <div class="text-danger small mt-1">{{ form.is_social_insurance_enrolled.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-6" id="social_insurance_number_row"
+                             style="display: {% if form.instance.is_social_insurance_enrolled %}block{% else %}none{% endif %};">
+                            <label class="form-label">الرقم التأميني</label>
+                            {{ form.social_insurance_number }}
+                            {% if form.social_insurance_number.errors %}
+                                <div class="text-danger small mt-1">{{ form.social_insurance_number.errors.0 }}</div>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -351,13 +443,13 @@
                             </tr>
                         </thead>
                         <tbody id="earnings-body">
-                            <!-- الراتب الأساسي (مقفول) -->
+                            <!-- الأجر الأساسي (مقفول) -->
                             <tr class="basic-row">
                                 <td class="text-center text-muted">
                                     <i class="fas fa-lock"></i>
                                 </td>
                                 <td>
-                                    <strong>الراتب الأساسي</strong>
+                                    <strong>الأجر الأساسي</strong>
                                 </td>
                                 <td class="bg-light"></td>
                                 <td>
@@ -368,6 +460,28 @@
                                 </td>
                             </tr>
                             {% for earning in earnings %}
+                            {% if earning.code == 'INSURABLE_SALARY' %}
+                            <tr data-id="{{ earning.id }}" data-type="earning" data-insurance="true" class="insurable-row">
+                                <td class="text-center text-muted"><i class="fas fa-lock"></i></td>
+                                <td>
+                                    <strong>الأجر التأميني</strong>
+                                    <input type="hidden" name="earning_name_{{ earning.id }}" value="{{ earning.name }}">
+                                    <input type="hidden" name="earning_id_{{ earning.id }}" value="{{ earning.id }}">
+                                    <input type="hidden" name="earning_code_{{ earning.id }}" value="{{ earning.code }}">
+                                    <input type="hidden" name="earning_order_{{ earning.id }}" value="{{ earning.order }}" class="order-input">
+                                </td>
+                                <td class="bg-light"></td>
+                                <td>
+                                    <input type="number" id="insurable_salary_input"
+                                           class="form-control form-control component-amount"
+                                           name="earning_amount_{{ earning.id }}"
+                                           value="{{ earning.amount }}" required step="1" min="0">
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-primary">تأميني</span>
+                                </td>
+                            </tr>
+                            {% else %}
                             <tr data-id="{{ earning.id }}" data-type="earning">
                                 <td class="text-center drag-handle" style="cursor: move;">
                                     <i class="fas fa-grip-vertical text-muted"></i>
@@ -377,6 +491,7 @@
                                            name="earning_name_{{ earning.id }}" 
                                            value="{{ earning.name }}" required>
                                     <input type="hidden" name="earning_id_{{ earning.id }}" value="{{ earning.id }}">
+                                    <input type="hidden" name="earning_code_{{ earning.id }}" value="{{ earning.code }}">
                                     <input type="hidden" name="earning_type_{{ earning.id }}" value="earning">
                                     <input type="hidden" name="earning_order_{{ earning.id }}" 
                                            value="{{ earning.order }}" class="order-input">
@@ -395,7 +510,7 @@
                                     </div>
                                 </td>
                                 <td>
-                                    <input type="text" class="form-control form-control-sm component-amount smart-float" 
+                                    <input type="text" class="form-control form-control component-amount smart-float" 
                                            name="earning_amount_{{ earning.id }}" 
                                            value="{{ earning.amount }}" required>
                                 </td>
@@ -405,6 +520,7 @@
                                     </button>
                                 </td>
                             </tr>
+                            {% endif %}
                             {% endfor %}
                         </tbody>
                     </table>
@@ -440,6 +556,29 @@
                         </thead>
                         <tbody id="deductions-body">
                             {% for deduction in deductions %}
+                            {% if deduction.code == 'SOCIAL_INSURANCE_EMP' %}
+                            <tr data-id="{{ deduction.id }}" data-type="deduction" data-insurance="true">
+                                <td class="text-center text-muted"><i class="fas fa-lock"></i></td>
+                                <td>
+                                    <strong>التأمينات الاجتماعية (حصة الموظف)</strong>
+                                    <input type="hidden" name="deduction_name_{{ deduction.id }}" value="{{ deduction.name }}">
+                                    <input type="hidden" name="deduction_id_{{ deduction.id }}" value="{{ deduction.id }}">
+                                    <input type="hidden" name="deduction_code_{{ deduction.id }}" value="{{ deduction.code }}">
+                                    <input type="hidden" name="deduction_order_{{ deduction.id }}" value="{{ deduction.order }}" class="order-input">
+                                </td>
+                                <td class="bg-light"></td>
+                                <td>
+                                    <input type="number" id="social_insurance_emp_input"
+                                           class="form-control form-control component-amount"
+                                           name="deduction_amount_{{ deduction.id }}"
+                                           value="{{ deduction.amount }}" required readonly step="1" min="0"
+                                           style="background-color: var(--bs-light);">
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-danger">تأميني</span>
+                                </td>
+                            </tr>
+                            {% else %}
                             <tr data-id="{{ deduction.id }}" data-type="deduction">
                                 <td class="text-center drag-handle" style="cursor: move;">
                                     <i class="fas fa-grip-vertical text-muted"></i>
@@ -449,6 +588,7 @@
                                            name="deduction_name_{{ deduction.id }}" 
                                            value="{{ deduction.name }}" required>
                                     <input type="hidden" name="deduction_id_{{ deduction.id }}" value="{{ deduction.id }}">
+                                    <input type="hidden" name="deduction_code_{{ deduction.id }}" value="{{ deduction.code }}">
                                     <input type="hidden" name="deduction_type_{{ deduction.id }}" value="deduction">
                                     <input type="hidden" name="deduction_order_{{ deduction.id }}" 
                                            value="{{ deduction.order }}" class="order-input">
@@ -467,7 +607,7 @@
                                     </div>
                                 </td>
                                 <td>
-                                    <input type="text" class="form-control form-control-sm component-amount smart-float" 
+                                    <input type="text" class="form-control form-control component-amount smart-float" 
                                            name="deduction_amount_{{ deduction.id }}" 
                                            value="{{ deduction.amount }}" required>
                                 </td>
@@ -477,6 +617,7 @@
                                     </button>
                                 </td>
                             </tr>
+                            {% endif %}
                             {% endfor %}
                         </tbody>
                     </table>
@@ -540,7 +681,17 @@
         {% endif %}
 
         <div class="mt-4">
-            {% if not contract %}
+            {% if is_renewal %}
+                <!-- تجديد عقد: زر واحد فقط للتفعيل المباشر -->
+                <button type="submit" name="action" value="save_activate" class="btn btn-success">
+                    <i class="fas fa-redo me-2"></i>
+                    تجديد وتفعيل العقد
+                </button>
+                <small class="text-muted d-block mt-2">
+                    <i class="fas fa-info-circle me-1"></i>
+                    سيتم تحويل العقد القديم لحالة "مجدد" وتفعيل العقد الجديد مباشرة
+                </small>
+            {% elif not contract %}
                 <!-- عقد جديد: زرين -->
                 <button type="submit" name="action" value="save_draft" class="btn btn-secondary">
                     <i class="fas fa-save me-2"></i>
@@ -913,7 +1064,11 @@ $(document).ready(function() {
         }
         
         const duration = $(this).val();
-        const startDate = $('#id_start_date').val();
+        // جلب تاريخ البداية: من Flatpickr أو من قيمة الـ input مباشرة (يعمل حتى لو الحقل disabled)
+        const startDateSelected = startDatePicker.selectedDates[0];
+        const startDate = startDateSelected
+            ? startDatePicker.formatDate(startDateSelected, 'Y-m-d')
+            : ($('#id_start_date').val() || $('input[name="start_date"]').val() || '{{ contract.start_date|date:"Y-m-d"|default:"" }}');
         
         // إذا لم يتم اختيار مدة، فتح الحقل للإدخال اليدوي
         if (!duration || duration === '') {
@@ -923,7 +1078,12 @@ $(document).ready(function() {
         }
         
         if (!startDate) {
-            alert('يرجى اختيار تاريخ البداية أولاً');
+            Swal.fire({
+                icon: 'warning',
+                title: 'تاريخ البداية مطلوب',
+                text: 'يرجى اختيار تاريخ البداية أولاً',
+                confirmButtonText: 'حسناً'
+            });
             $(this).val('');
             return;
         }
@@ -1050,6 +1210,7 @@ $(document).ready(function() {
                 'start_date': startDate,
                 'end_date': endDate,
                 'contract_id': contractId,
+                'old_contract_id': '{{ old_contract.pk|default:"" }}',  // للتجديد
                 'csrfmiddlewaretoken': '{{ csrf_token }}'
             },
             timeout: 10000, // 10 ثواني timeout
@@ -1111,19 +1272,50 @@ $(document).ready(function() {
     // معالجة الزيادة السنوية
     const hasAnnualIncrease = $('#id_has_annual_increase');
     const annualIncreaseFields = $('#annual-increase-fields');
+    const increaseType = $('#id_increase_type');
+    const percentageField = $('#percentage-field');
+    const amountField = $('#amount-field');
+    const percentageExample = $('#percentage-example');
+    const amountExample = $('#amount-example');
     
     // إظهار/إخفاء حقول الزيادة السنوية
     hasAnnualIncrease.on('change', function() {
         if ($(this).is(':checked')) {
             annualIncreaseFields.slideDown();
+            toggleIncreaseTypeFields(); // تحديث الحقول حسب النوع
         } else {
             annualIncreaseFields.slideUp();
         }
     });
     
+    // إظهار/إخفاء حقول النسبة أو المبلغ حسب نوع الزيادة
+    function toggleIncreaseTypeFields() {
+        const selectedType = increaseType.val();
+        
+        if (selectedType === 'percentage') {
+            percentageField.show();
+            amountField.hide();
+            percentageExample.show();
+            amountExample.hide();
+            // مسح قيمة المبلغ
+            $('#id_annual_increase_amount').val('');
+        } else if (selectedType === 'fixed') {
+            percentageField.hide();
+            amountField.show();
+            percentageExample.hide();
+            amountExample.show();
+            // مسح قيمة النسبة
+            $('#id_annual_increase_percentage').val('');
+        }
+    }
+    
+    // عند تغيير نوع الزيادة
+    increaseType.on('change', toggleIncreaseTypeFields);
+    
     // التحقق من الحالة الأولية
     if (hasAnnualIncrease.is(':checked')) {
         annualIncreaseFields.show();
+        toggleIncreaseTypeFields();
     }
 
 
@@ -1747,6 +1939,16 @@ $(document).ready(function() {
     $(document).ready(function() {
         if (typeof SalaryComponentManager !== 'undefined') {
             window.salaryManager = new SalaryComponentManager();
+
+            // تهيئة حالة التأمينات عند التعديل (لو الموظف مسجل بالفعل)
+            if ($('#id_is_social_insurance_enrolled').is(':checked')) {
+                $('#social_insurance_number_row').show();
+                const hasInsurableRow = $('[data-insurance="true"]').length > 0;
+                if (!hasInsurableRow) {
+                    window.salaryManager.addInsurableRow();
+                    window.salaryManager.addSocialInsuranceRow();
+                }
+            }
         } else {
             console.error('SalaryComponentManager class not found');
         }

@@ -330,14 +330,7 @@ def purchase_return_detail(request, pk):
         "page_title": f"مرتجع رقم {purchase_return.number}",
         "page_subtitle": f"فاتورة {purchase_return.purchase.number} | {purchase_return.purchase.supplier.name}",
         "page_icon": "fas fa-undo-alt",
-        "header_buttons": [
-            {
-                "url": reverse("purchase:purchase_return_list"),
-                "icon": "fa-list",
-                "text": "العودة للقائمة",
-                "class": "btn-outline-secondary",
-            },
-        ] + ([
+        "header_buttons": ([] if purchase_return.status != 'draft' else [
             {
                 "url": reverse("purchase:purchase_return_confirm", kwargs={"pk": purchase_return.pk}),
                 "icon": "fa-check",
@@ -352,7 +345,7 @@ def purchase_return_detail(request, pk):
                 "class": "btn-danger",
                 "onclick": "return confirm('هل أنت متأكد من إلغاء هذا المرتجع؟')",
             },
-        ] if purchase_return.status == 'draft' else []),
+        ]),
         "breadcrumb_items": [
             {
                 "title": "لوحة التحكم",

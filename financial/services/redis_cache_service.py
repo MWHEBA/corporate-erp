@@ -46,7 +46,6 @@ class RedisFinancialCache:
             # عدم استخدام Redis - الاعتماد على Django cache
             self.redis_available = False
             self.redis_client = None
-            logger.info("سيتم استخدام Django cache للبيانات المالية (Redis معطل).")
         else:
             # الاتصال بـ Redis
             try:
@@ -60,7 +59,6 @@ class RedisFinancialCache:
                 # اختبار الاتصال
                 self.redis_client.ping()
                 self.redis_available = True
-                logger.info("تم الاتصال بـ Redis بنجاح")
             except Exception as e:
                 logger.warning(
                     f"فشل الاتصال بـ Redis: {str(e)}، سيتم استخدام Django cache"
@@ -291,7 +289,6 @@ class RedisFinancialCache:
         for pattern in patterns:
             deleted_count += self.delete_pattern(pattern)
 
-        logger.info(f"تم حذف {deleted_count} مفتاح كاش للحساب {account_id}")
         return deleted_count
 
     def get_cache_stats(self) -> Dict:
@@ -461,7 +458,6 @@ class CachedBalanceService:
         # إبطال ميزان المراجعة أيضاً
         financial_cache.delete_pattern("trial_balance:*")
 
-        logger.info(f"تم إبطال كاش الحساب {account_id}")
 
 
 # تصدير الخدمات

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Django Signals محسنة لتزامن المدفوعات
 """
 from django.db.models.signals import post_save, post_delete, pre_delete
@@ -95,8 +95,8 @@ class PaymentSignalHandler:
 
         try:
             # تسجيل حذف الدفعة
-            logger.info(f"تم حذف الدفعة {instance.id} من {sender.__name__}")
-
+            pass  # Can add additional cleanup logic here
+            
             # يمكن إضافة منطق إضافي هنا إذا لزم الأمر
             # مثل تنظيف القيود المحاسبية المرتبطة
 
@@ -159,7 +159,6 @@ class PaymentSignalHandler:
         الخدمة الجديدة PaymentIntegrationService هي الوحيدة المستخدمة الآن
         """
         # تم تعطيل الطريقة القديمة - لا نريد قيود مكررة أو أخطاء
-        logger.info(f"تم تخطي التزامن القديم للدفعة {instance.id} - الخدمة الجديدة فقط")
         pass
 
     @staticmethod
@@ -194,7 +193,6 @@ class PaymentSignalHandler:
 # except ImportError:
 #     logger.info("موديول المبيعات غير مفعل - تم تخطي إشارات دفعات المبيعات")
 
-logger.info("موديول المبيعات معطل - تم تخطي إشارات دفعات المبيعات")
 
 # تسجيل الإشارات لدفعات المشتريات
 try:
@@ -223,18 +221,12 @@ try:
         # تم تعطيل المعالجة التلقائية
         pass
 
-    logger.info("تم تسجيل إشارات دفعات المشتريات (معطلة)")
 
 except ImportError:
-    logger.info("موديول المشتريات غير متاح")
+    logger.warning("Payment models not available for signal registration")
 
 # تسجيل الإشارات لدفعات العملاء
 # Customer payment signals removed - client module no longer exists
-
-    logger.info("تم تسجيل إشارات دفعات العملاء")
-
-except ImportError:
-    pass
 
 # تسجيل الإشارات لدفعات الموردين
 try:
@@ -263,13 +255,11 @@ try:
         # تم تعطيل المعالجة التلقائية
         pass
 
-    logger.info("تم تسجيل إشارات دفعات الموردين (معطلة)")
 
 except ImportError:
     pass
 
-# Student payment signals removed - no longer applicable for ERP system
-logger.info("Student payment signals removed - system converted to corporate ERP")
+# تسجيل الإشارات لدفعات الرواتب والموردين - لا تحتاج تعديل
 
 
 class PaymentSyncSignalManager:

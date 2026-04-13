@@ -90,8 +90,7 @@ class AccountReconciliationService:
                 user=user,
                 date=reconciliation_date,
                 description=f"تسوية حساب - {account.name} - فرق {difference}",
-                reference=f"ACCT-RECON-{account.code}",
-                auto_post=True
+                reference=f"ACCT-RECON-{account.code}"
             )
             
             return entry

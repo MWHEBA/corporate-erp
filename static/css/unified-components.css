@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ========================================
  * Unified UI Components Library
  * مكتبة المكونات الموحدة لواجهة المستخدم
@@ -1755,88 +1755,6 @@
 }
 
 /* ========================================
-   STUDENT COUNT DISPLAY (عرض عدد الطلاب)
-   ======================================== */
-
-/* Student Count with Difference Indicator */
-.student-count-display {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--spacing-1);
-    min-height: 40px;
-    justify-content: center;
-}
-
-.student-count-main {
-    font-weight: var(--font-weight-bold);
-    font-size: var(--font-size-base);
-    line-height: 1.2;
-}
-
-.student-count-actual {
-    font-size: var(--font-size-xs);
-    line-height: 1.2;
-    color: var(--text-light);
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-1);
-    margin-top: 2px;
-    padding: 2px 6px;
-    background-color: var(--bg-light);
-    border-radius: var(--border-radius);
-    border: 1px solid var(--border-color);
-}
-
-.student-count-actual .icon {
-    font-size: 0.7em;
-    opacity: 0.8;
-    color: var(--info-color);
-}
-
-/* Status Colors for Student Count */
-.student-count-warning {
-    color: var(--warning-color);
-}
-
-.student-count-success {
-    color: var(--success-color);
-}
-
-.student-count-muted {
-    color: var(--text-muted);
-}
-
-/* Hover Effect for Better UX */
-.student-count-display:hover .student-count-actual {
-    color: var(--text-color);
-    background-color: var(--primary-soft);
-    border-color: var(--primary-color);
-}
-
-.student-count-display:hover .student-count-actual .icon {
-    opacity: 1;
-    color: var(--primary-color);
-}
-
-/* Animation for smooth appearance */
-.student-count-actual {
-    transition: var(--transition-all);
-    animation: fadeInUp 0.3s ease-out;
-}
-
-@keyframes fadeInUp {
-    from {
-        opacity: 0;
-        transform: translateY(5px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* ========================================
    11. UNIFIED PAGE HEADER COMPONENT (مكون هيدر الصفحة الموحد)
    ======================================== */
 
@@ -2575,17 +2493,6 @@
 }
 
 /* ========================================
-   STATUS BADGE STYLES (أنماط شارات الحالة)
-   ======================================== */
-
-.status-badge {
-    font-size: 0.875rem;
-    padding: 0.375rem 0.75rem;
-    border-radius: var(--border-radius);
-    font-weight: 500;
-}
-
-/* ========================================
    RESUBMISSION ALERT STYLES (أنماط تنبيه الإعادة)
    ======================================== */
 
@@ -2604,10 +2511,10 @@
 }
 
 /* ========================================
-   STUDENT PHOTO STYLES (أنماط صورة الطالب)
+   PHOTO STYLES (أنماط الصورة)
    ======================================== */
 
-.student-photo {
+.profile-photo {
     width: 150px;
     height: 150px;
     object-fit: cover;

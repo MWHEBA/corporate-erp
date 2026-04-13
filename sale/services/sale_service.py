@@ -72,7 +72,8 @@ class SaleService:
                 total=Decimal('0'),
                 notes=data.get('notes', ''),
                 status='confirmed',
-                created_by=user
+                created_by=user,
+                financial_category_id=data.get('financial_category_id'),
             )
             
             logger.info(f"✅ تم إنشاء فاتورة المبيعات: {sale.number}")
@@ -176,7 +177,7 @@ class SaleService:
                         error_msg = (
                             f"❌ فشل إنشاء حساب محاسبي للعميل '{sale.customer.name}' (ID: {sale.customer.id}). "
                             f"يرجى التأكد من:\n"
-                            f"1. وجود حساب العملاء الرئيسي (11030)\n"
+                            f"1. وجود حساب العملاء الرئيسي (10300)\n"
                             f"2. تفعيل AUTO_CREATE_CUSTOMER_ACCOUNTS في settings\n"
                             f"3. عدم وجود أخطاء في CustomerService.create_financial_account_for_customer()"
                         )
@@ -336,9 +337,10 @@ class SaleService:
                     idempotency_key=f'sale_{sale.id}_item_{item.id}_movement',
                     user=user,
                     unit_cost=item.product.cost_price,
-                    document_number=None,  # لا نستخدم document_number لتجنب مشاكل parsing
+                    document_number=None,
                     notes=f'مبيعات - فاتورة رقم {sale.number}',
-                    movement_date=sale.date
+                    movement_date=sale.date,
+                    warehouse_id=sale.warehouse_id if sale.warehouse_id else None
                 )
                 
                 logger.info(f"✅ تم إنشاء حركة مخزون: {movement.id} للبند: {item.product.name}")
@@ -601,7 +603,7 @@ class SaleService:
                 if sale.customer.financial_account:
                     credit_account_code = sale.customer.financial_account.code
                 else:
-                    credit_account_code = '11030'  # حساب العملاء الرئيسي
+                    credit_account_code = '10300'  # حساب العملاء الرئيسي
                     logger.warning(f"استخدام حساب العملاء الرئيسي للعميل {sale.customer.name}")
             
             # حساب تكلفة البضاعة المرتجعة
@@ -685,9 +687,10 @@ class SaleService:
                     idempotency_key=f'sale_return_{sale_return.id}_item_{item.id}_movement',
                     user=user,
                     unit_cost=item.product.cost_price,
-                    document_number=None,  # لا نستخدم document_number لتجنب مشاكل parsing
+                    document_number=None,
                     notes=f'مرتجع مبيعات - فاتورة {sale_return.sale.number}',
-                    movement_date=sale_return.date
+                    movement_date=sale_return.date,
+                    warehouse_id=sale_return.sale.warehouse_id if sale_return.sale.warehouse_id else None
                 )
                 
                 logger.info(f"✅ تم إنشاء حركة مخزون (إرجاع): {movement.id}")

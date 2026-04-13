@@ -44,6 +44,7 @@ urlpatterns = [
     path("sales/", include("sale.urls")),
     path("supplier/", include("supplier.urls")),
     path("products/", include("product.urls")),
+    path("printing-pricing/", include("printing_pricing.urls")),  # نظام تسعير المطبوعات
     path("purchases/", include("purchase.urls")),
     path("financial/", include("financial.urls")),
     path("hr/", include("hr.urls")),

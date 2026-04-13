@@ -195,7 +195,8 @@ $(document).ready(function() {
 
 // فتح مودال إنشاء حساب محاسبي
 function openCreateAccountModal(customerId) {
-    fetch(`/client/${customerId}/create-account/`, {
+    const createAccountUrl = `{% url 'client:customer_create_account' 0 %}`.replace('/0/', `/${customerId}/`);
+    fetch(createAccountUrl, {
         method: 'GET',
         headers: {
             'X-Requested-With': 'XMLHttpRequest',
@@ -210,15 +211,15 @@ function openCreateAccountModal(customerId) {
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('حدث خطأ في تحميل المودال');
+        toastr.error('حدث خطأ في تحميل المودال');
     });
 }
 
 // إنشاء حساب محاسبي للعميل
 function createCustomerAccount(customerId) {
     const modal = bootstrap.Modal.getInstance(document.getElementById('createAccountModal'));
-    
-    fetch(`/client/${customerId}/create-account/`, {
+    const createAccountUrl = `{% url 'client:customer_create_account' 0 %}`.replace('/0/', `/${customerId}/`);
+    fetch(createAccountUrl, {
         method: 'POST',
         headers: {
             'X-Requested-With': 'XMLHttpRequest',

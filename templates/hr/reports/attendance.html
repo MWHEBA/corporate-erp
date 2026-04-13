@@ -117,15 +117,22 @@
                                     <td class="text-center">{{ attendance.employee.get_full_name_ar }}</td>
                                     <td class="text-center">{{ attendance.date }}</td>
                                     <td class="text-center">{{ attendance.shift.name }}</td>
-                                    <td class="text-center">{{ attendance.check_in|date:"H:i" }}</td>
-                                    <td class="text-center">{{ attendance.check_out|date:"H:i"|default:"-" }}</td>
+                                    {% if attendance.status == 'absent' or attendance.status == 'on_leave' %}
+                                        <td class="text-center">-</td>
+                                        <td class="text-center">-</td>
+                                    {% else %}
+                                        <td class="text-center">{{ attendance.check_in|date:"H:i"|default:"-" }}</td>
+                                        <td class="text-center">{{ attendance.check_out|date:"H:i"|default:"-" }}</td>
+                                    {% endif %}
                                     <td class="text-center">{{ attendance.work_hours }}</td>
                                     <td class="text-center">
-                                        {% if attendance.late_minutes > 0 %}
-                                            <span class="text-danger">{{ attendance.late_minutes }} دقيقة</span>
+                                        {% with adjusted_late=attendance.get_adjusted_late_minutes %}
+                                        {% if adjusted_late > 0 %}
+                                            <span class="text-danger">{{ adjusted_late }} دقيقة</span>
                                         {% else %}
                                             -
                                         {% endif %}
+                                        {% endwith %}
                                     </td>
                                     <td class="text-center">
                                         {% if attendance.status == 'present' %}

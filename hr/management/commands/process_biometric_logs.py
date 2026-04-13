@@ -158,10 +158,17 @@ class Command(BaseCommand):
         
         # Create attendance record
         with transaction.atomic():
-            # Calculate late minutes
-            late_minutes = self.calculate_late_minutes(
-                check_in_log.timestamp, shift
+            # استخدام AttendanceService لحساب التأخير مع مراعاة رمضان
+            late_minutes = AttendanceService._calculate_late_minutes(
+                check_in_log.timestamp, shift, date
             )
+            
+            # حساب الانصراف المبكر إذا كان هناك check-out
+            early_leave_minutes = 0
+            if check_out_log:
+                early_leave_minutes = AttendanceService._calculate_early_leave(
+                    check_out_log.timestamp, shift, date
+                )
             
             # Determine status
             if late_minutes > shift.grace_period_in:
@@ -177,12 +184,14 @@ class Command(BaseCommand):
                 check_in=check_in_log.timestamp,
                 check_out=check_out_log.timestamp if check_out_log else None,
                 late_minutes=late_minutes,
+                early_leave_minutes=early_leave_minutes,
                 status=status
             )
             
             # Calculate work hours if check-out exists
             if check_out_log:
                 attendance.calculate_work_hours()
+                attendance.save(update_fields=['work_hours', 'overtime_hours'])
             
             # Link logs to attendance
             check_in_log.attendance = attendance
@@ -214,13 +223,3 @@ class Command(BaseCommand):
         )
         
         return 'processed'
-    
-    def calculate_late_minutes(self, check_in, shift):
-        """Calculate late minutes"""
-        shift_start = datetime.combine(check_in.date(), shift.start_time)
-        shift_start = timezone.make_aware(shift_start)
-        
-        if check_in > shift_start:
-            delta = check_in - shift_start
-            return int(delta.total_seconds() / 60)
-        return 0

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Views إدارة أجهزة البصمة
 """
 from .base_imports import *
@@ -94,6 +94,7 @@ def biometric_device_list(request):
             {'title': 'الرئيسية', 'url': reverse('core:dashboard'), 'icon': 'fas fa-home'},
             {'title': 'الموارد البشرية', 'url': reverse('hr:employee_list'), 'icon': 'fas fa-users-cog'},
             {'title': 'الإعدادات', 'url': reverse('hr:hr_settings'), 'icon': 'fas fa-cog'},
+            {'title': 'لوحة تحكم البصمة', 'url': reverse('hr:biometric_dashboard'), 'icon': 'fas fa-fingerprint'},
             {'title': 'ماكينات البصمة', 'active': True},
         ],
     }
@@ -211,7 +212,8 @@ def biometric_device_form(request, pk=None):
         'breadcrumb_items': [
             {'title': 'الرئيسية', 'url': reverse('core:dashboard'), 'icon': 'fas fa-home'},
             {'title': 'الموارد البشرية', 'url': reverse('hr:employee_list'), 'icon': 'fas fa-users'},
-            {'title': 'ماكينات البصمة', 'url': reverse('hr:biometric_device_list'), 'icon': 'fas fa-fingerprint'},
+            {'title': 'لوحة تحكم البصمة', 'url': reverse('hr:biometric_dashboard'), 'icon': 'fas fa-fingerprint'},
+            {'title': 'ماكينات البصمة', 'url': reverse('hr:biometric_device_list'), 'icon': 'fas fa-server'},
             {'title': 'تعديل ماكينة' if is_edit else 'إضافة ماكينة', 'active': True},
         ],
     }
@@ -388,8 +390,56 @@ def biometric_log_list(request):
         logs_page = paginator.page(paginator.num_pages)
     
     devices = BiometricDevice.objects.filter(is_active=True)
-    employees = Employee.objects.filter(status='active').order_by('name')
-    
+    employees = Employee.objects.filter(status='active', is_insurance_only=False).order_by('name')
+
+    # حساب display_log_type لكل بصمة بناءً على ترتيبها في اليوم لنفس الموظف
+    # الجهاز أحياناً بيبعت كل البصمات بـ log_type=check_in، فنحدد النوع الصحيح من الترتيب
+    page_log_ids = [log.id for log in logs_page]
+    if page_log_ids:
+        # جلب كل بصمات نفس الموظفين/الأيام الموجودة في الصفحة الحالية
+        from django.db.models import Min, Max
+        page_logs_qs = BiometricLog.objects.filter(id__in=page_log_ids).select_related('employee')
+        
+        # بناء map: (employee_id, date) → [sorted log ids]
+        from collections import defaultdict
+        day_employee_logs = defaultdict(list)
+        for log in page_logs_qs:
+            if log.employee_id:
+                key = (log.employee_id, log.timestamp.date())
+                day_employee_logs[key].append((log.timestamp, log.id))
+
+        # جلب كل بصمات هذه الموظفين في هذه الأيام (مش بس الصفحة الحالية)
+        all_day_logs_map = {}  # (employee_id, date) → sorted list of (timestamp, id)
+        for (emp_id, log_date) in day_employee_logs.keys():
+            day_start = timezone.make_aware(datetime(log_date.year, log_date.month, log_date.day, 0, 0, 0))
+            day_end = timezone.make_aware(datetime(log_date.year, log_date.month, log_date.day, 23, 59, 59))
+            all_day = list(
+                BiometricLog.objects.filter(
+                    employee_id=emp_id,
+                    timestamp__gte=day_start,
+                    timestamp__lte=day_end,
+                ).values_list('id', 'timestamp').order_by('timestamp')
+            )
+            all_day_logs_map[(emp_id, log_date)] = all_day  # [(id, timestamp), ...]
+
+        # بناء display_log_type map: log_id → 'check_in' | 'check_out' | 'intermediate'
+        display_type_map = {}
+        for (emp_id, log_date), sorted_logs in all_day_logs_map.items():
+            for idx, (log_id, _) in enumerate(sorted_logs):
+                if idx == 0:
+                    display_type_map[log_id] = 'check_in'
+                elif idx == len(sorted_logs) - 1:
+                    display_type_map[log_id] = 'check_out'
+                else:
+                    display_type_map[log_id] = 'intermediate'
+
+        # إضافة display_log_type لكل log في الصفحة
+        for log in logs_page:
+            log.display_log_type = display_type_map.get(log.id, log.log_type)
+    else:
+        for log in logs_page:
+            log.display_log_type = log.log_type
+
     # إعداد headers للجدول الموحد
     headers = [
         {'key': 'timestamp', 'label': 'التاريخ والوقت', 'sortable': True, 'width': '15%', 'template': 'components/cells/biometric_log_timestamp.html'},
@@ -446,6 +496,7 @@ def biometric_log_list(request):
         'breadcrumb_items': [
             {'title': 'الرئيسية', 'url': reverse('core:dashboard'), 'icon': 'fas fa-home'},
             {'title': 'الموارد البشرية', 'url': reverse('hr:employee_list'), 'icon': 'fas fa-users-cog'},
+            {'title': 'لوحة تحكم البصمة', 'url': reverse('hr:biometric_dashboard'), 'icon': 'fas fa-fingerprint'},
             {'title': 'سجلات البصمات', 'active': True},
         ],
     }

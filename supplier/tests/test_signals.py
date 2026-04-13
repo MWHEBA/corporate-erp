@@ -1,5 +1,5 @@
 """
-اختبارات شاملة لـ Signals الموردين - تغطية 100%
+اختبارات شاملة لـ Signals الموردين
 """
 
 from django.test import TestCase, override_settings

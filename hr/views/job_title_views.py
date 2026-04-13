@@ -17,10 +17,17 @@ def job_title_list(request):
     """قائمة المسميات الوظيفية"""
     from django.urls import reverse
     
-    job_titles = JobTitle.objects.select_related('department').filter(is_active=True)
-    
+    job_titles = JobTitle.objects.select_related('department').prefetch_related('employees').filter(is_active=True)
+
+    # تجهيز أسماء الموظفين لكل مسمى وظيفي
+    jt_employees = {}
+    for jt in job_titles:
+        names = list(jt.employees.filter(status='active', is_insurance_only=False).values_list('name', flat=True))
+        jt_employees[jt.pk] = names
+
     context = {
         'job_titles': job_titles,
+        'jt_employees': jt_employees,
         
         # بيانات الهيدر
         'page_title': 'المسميات الوظيفية',

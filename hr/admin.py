@@ -4,13 +4,14 @@
 from django.contrib import admin
 from .models import (
     Employee, Department, JobTitle,
-    Shift, Attendance,
+    Shift, Attendance, RamadanSettings, AttendancePenalty,
     LeaveType, LeaveBalance, Leave,
     PermissionType, PermissionRequest,
     Payroll, Advance, AdvanceInstallment,
     SalaryComponent, SalaryComponentTemplate, PayrollLine,
     ContractSalaryComponent  # TEMP: سيتم إزالته لاحقاً
 )
+from .models.attendance_summary import AttendanceSummary
 from .models.contract import Contract, ContractAmendment, ContractDocument, ContractIncrease
 from .models.payroll_payment import PayrollPayment
 
@@ -80,6 +81,10 @@ class EmployeeAdmin(admin.ModelAdmin):
                 'hire_date', 'employment_type'
             )
         }),
+        ('إعدادات الحضور', {
+            'fields': ('biometric_user_id', 'attendance_exempt'),
+            'description': 'تفعيل "معفى من البصمة" يتطلب اعتماد ملخص الحضور يدوياً قبل معالجة الراتب'
+        }),
         ('الحالة', {
             'fields': ('status', 'termination_date', 'termination_reason')
         }),
@@ -91,7 +96,7 @@ class EmployeeAdmin(admin.ModelAdmin):
 
 @admin.register(Shift)
 class ShiftAdmin(admin.ModelAdmin):
-    list_display = ['name', 'shift_type', 'start_time', 'end_time', 'work_hours', 'is_active']
+    list_display = ['name', 'shift_type', 'start_time', 'end_time', 'is_active']
     list_filter = ['shift_type', 'is_active']
     search_fields = ['name']
 
@@ -103,6 +108,92 @@ class AttendanceAdmin(admin.ModelAdmin):
     search_fields = ['employee__name', 'employee__employee_number']
     date_hierarchy = 'date'
     ordering = ['-date']
+
+
+@admin.register(AttendanceSummary)
+class AttendanceSummaryAdmin(admin.ModelAdmin):
+    """
+    Admin للاطلاع على ملخصات الحضور الشهرية - وضع القراءة فقط.
+    التعديل يتم عبر واجهة الحضور المخصصة: /hr/attendance/summaries/
+    """
+
+    list_display = [
+        'employee', 'month', 'present_days', 'absent_days', 'late_days',
+        'total_work_hours', 'absence_deduction_amount', 'late_deduction_amount',
+        'is_calculated', 'is_approved', 'approved_by'
+    ]
+    list_filter = ['is_calculated', 'is_approved', 'month', 'employee__department']
+    search_fields = ['employee__name', 'employee__employee_number']
+    date_hierarchy = 'month'
+    ordering = ['-month', 'employee']
+
+    readonly_fields = [
+        'employee', 'month',
+        'total_working_days', 'present_days', 'absent_days', 'late_days', 'half_days',
+        'paid_leave_days', 'unpaid_leave_days',
+        'total_work_hours', 'total_late_minutes', 'total_early_leave_minutes',
+        'total_overtime_hours', 'net_penalizable_minutes',
+        'extra_permissions_hours', 'extra_permissions_deduction_amount',
+        'absence_deduction_amount', 'absence_multiplier',
+        'late_deduction_amount', 'overtime_amount',
+        'is_calculated', 'is_approved', 'approved_by', 'approved_at',
+        'notes', 'calculation_details', 'created_at', 'updated_at',
+    ]
+
+    fieldsets = (
+        ('معلومات أساسية', {
+            'fields': ('employee', 'month')
+        }),
+        ('إحصائيات الحضور', {
+            'fields': (
+                'total_working_days', 'present_days', 'absent_days',
+                'late_days', 'half_days', 'paid_leave_days', 'unpaid_leave_days'
+            )
+        }),
+        ('الساعات والدقائق', {
+            'fields': (
+                'total_work_hours', 'total_late_minutes', 'total_early_leave_minutes',
+                'total_overtime_hours', 'net_penalizable_minutes',
+                'extra_permissions_hours'
+            )
+        }),
+        ('المبالغ المالية', {
+            'fields': (
+                'absence_multiplier', 'absence_deduction_amount',
+                'late_deduction_amount', 'extra_permissions_deduction_amount',
+                'overtime_amount'
+            )
+        }),
+        ('الحالة والاعتماد', {
+            'fields': ('is_calculated', 'is_approved', 'approved_by', 'approved_at')
+        }),
+        ('ملاحظات وتفاصيل الحساب', {
+            'fields': ('notes', 'calculation_details'),
+            'classes': ('collapse',)
+        }),
+        ('معلومات النظام', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        # عرض فقط - لا تعديل
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def changelist_view(self, request, extra_context=None):
+        from django.contrib import messages
+        messages.info(
+            request,
+            "ملخصات الحضور للعرض فقط. للحساب والاعتماد استخدم: /hr/attendance/summaries/"
+        )
+        return super().changelist_view(request, extra_context)
 
 
 @admin.register(LeaveType)
@@ -542,18 +633,16 @@ class PayrollAdmin(admin.ModelAdmin):
             )
             return
         
-        # Perform approval with audit logging
+        # Perform approval through PayrollService to enforce attendance gate
+        from ..services.payroll_service import PayrollService
         approved_count = 0
-        approval_time = timezone.now()
-        
+        failed_count = 0
+
         for payroll in approvable_payrolls:
             try:
-                # Update payroll status
-                payroll.status = 'approved'
-                payroll.approved_by = request.user
-                payroll.approved_at = approval_time
-                payroll.save(update_fields=['status', 'approved_by', 'approved_at'])
-                
+                # Route through PayrollService — attendance gate is enforced there
+                PayrollService.approve_payroll(payroll, request.user)
+
                 # Log individual approval
                 self._log_admin_access_attempt(
                     request,
@@ -564,15 +653,31 @@ class PayrollAdmin(admin.ModelAdmin):
                         'employee_id': payroll.employee.id,
                         'employee_name': payroll.employee.get_full_name_ar(),
                         'month': payroll.month.isoformat(),
-                        'net_salary': str(payroll.net_salary),
-                        'approval_time': approval_time.isoformat()
+                        'net_salary': str(payroll.correct_net_salary),
                     }
                 )
-                
                 approved_count += 1
-                
+
+            except ValueError as e:
+                # Attendance gate rejection or business rule violation
+                failed_count += 1
+                messages.warning(
+                    request,
+                    f"⚠️ {payroll.employee.get_full_name_ar()}: {e}"
+                )
+                self._log_admin_access_attempt(
+                    request,
+                    'payroll_approval_blocked',
+                    'gate_rejected',
+                    additional_context={
+                        'payroll_id': payroll.id,
+                        'employee_name': payroll.employee.get_full_name_ar(),
+                        'reason': str(e)
+                    }
+                )
             except Exception as e:
-                # Log approval failure
+                # Unexpected error
+                failed_count += 1
                 self._log_admin_access_attempt(
                     request,
                     'payroll_approval_failed',
@@ -584,138 +689,55 @@ class PayrollAdmin(admin.ModelAdmin):
                     }
                 )
         
-        # Show success message
+        # Show results
         if approved_count > 0:
             messages.success(
                 request,
                 f"✅ تم اعتماد {approved_count} قسيمة راتب بنجاح."
             )
-            
-            # Log bulk approval summary
-            self._log_admin_access_attempt(
+        if failed_count > 0:
+            messages.error(
                 request,
-                'bulk_payroll_approval',
-                'success',
-                additional_context={
-                    'total_selected': queryset.count(),
-                    'approved_count': approved_count,
-                    'non_approvable_count': non_approvable_count,
-                    'approval_time': approval_time.isoformat()
-                }
+                f"❌ فشل اعتماد {failed_count} قسيمة راتب — راجع التحذيرات أعلاه."
             )
-    
+
+        self._log_admin_access_attempt(
+            request,
+            'bulk_payroll_approval',
+            'completed',
+            additional_context={
+                'total_selected': queryset.count(),
+                'approved_count': approved_count,
+                'failed_count': failed_count,
+                'non_approvable_count': non_approvable_count,
+            }
+        )
+
     approve_selected_payrolls.short_description = "اعتماد قسائم الرواتب المحددة"
     
     def mark_as_paid(self, request, queryset):
         """
-        Secure action to mark selected payrolls as paid with authority validation.
-        
-        This action implements payroll payment workflow authority by:
-        - Validating user has payment permissions
-        - Logging all payment attempts
-        - Enforcing business rules for payment
-        - Creating comprehensive audit trail
+        Payment must go through the business UI (payroll_pay view) which requires
+        a payment account and creates the journal entry via PayrollService.pay_payroll.
+        This admin action is intentionally blocked to prevent bypassing financial controls.
         """
         from django.contrib import messages
-        from django.utils import timezone
-        
-        # Validate authority for payment
-        if not request.user.has_perm('hr.can_pay_payroll'):
-            self._log_admin_access_attempt(
-                request,
-                'bulk_payment_attempt',
-                'permission_denied',
-                additional_context={
-                    'queryset_count': queryset.count(),
-                    'queryset_ids': list(queryset.values_list('pk', flat=True))
-                }
-            )
-            messages.error(
-                request,
-                "❌ ليس لديك صلاحية تعيين قسائم الرواتب كمدفوعة. "
-                "يتطلب صلاحية 'can_pay_payroll'."
-            )
-            return
-        
-        # Filter payrolls that can be marked as paid
-        payable_payrolls = queryset.filter(status='approved')
-        non_payable_count = queryset.count() - payable_payrolls.count()
-        
-        if non_payable_count > 0:
-            messages.warning(
-                request,
-                f"⚠️ تم تجاهل {non_payable_count} قسيمة راتب لأنها ليست في حالة 'معتمد'."
-            )
-        
-        if not payable_payrolls.exists():
-            messages.error(
-                request,
-                "❌ لا توجد قسائم رواتب قابلة للدفع في التحديد."
-            )
-            return
-        
-        # Perform payment marking with audit logging
-        paid_count = 0
-        payment_time = timezone.now()
-        
-        for payroll in payable_payrolls:
-            try:
-                # Update payroll status
-                payroll.status = 'paid'
-                payroll.paid_by = request.user
-                payroll.paid_at = payment_time
-                payroll.payment_date = payment_time.date()
-                payroll.save(update_fields=['status', 'paid_by', 'paid_at', 'payment_date'])
-                
-                # Log individual payment
-                self._log_admin_access_attempt(
-                    request,
-                    'payroll_marked_paid',
-                    'success',
-                    additional_context={
-                        'payroll_id': payroll.id,
-                        'employee_id': payroll.employee.id,
-                        'employee_name': payroll.employee.get_full_name_ar(),
-                        'month': payroll.month.isoformat(),
-                        'net_salary': str(payroll.net_salary),
-                        'payment_time': payment_time.isoformat()
-                    }
-                )
-                
-                paid_count += 1
-                
-            except Exception as e:
-                # Log payment failure
-                self._log_admin_access_attempt(
-                    request,
-                    'payroll_payment_failed',
-                    'error',
-                    additional_context={
-                        'payroll_id': payroll.id,
-                        'employee_name': payroll.employee.get_full_name_ar(),
-                        'error': str(e)
-                    }
-                )
-        
-        # Show success message
-        if paid_count > 0:
-            messages.success(
-                request,
-                f"✅ تم تعيين {paid_count} قسيمة راتب كمدفوعة بنجاح."
-            )
-            
-            # Log bulk payment summary
-            self._log_admin_access_attempt(
-                request,
-                'bulk_payroll_payment',
-                'success',
-                additional_context={
-                    'total_selected': queryset.count(),
-                    'paid_count': paid_count,
-                    'non_payable_count': non_payable_count,
-                    'payment_time': payment_time.isoformat()
-                }
-            )
+
+        self._log_admin_access_attempt(
+            request,
+            'bulk_payment_blocked',
+            'blocked',
+            additional_context={
+                'queryset_count': queryset.count(),
+                'reason': 'Payment requires payment_account — must use business UI'
+            }
+        )
+        messages.error(
+            request,
+            "❌ لا يمكن تعيين الرواتب كمدفوعة من هنا — "
+            "الدفع يتطلب تحديد حساب الدفع وإنشاء قيد محاسبي. "
+            "استخدم واجهة الرواتب المخصصة: /hr/payroll/"
+        )
     
     mark_as_paid.short_description = "تعيين كمدفوعة"
 
@@ -1082,10 +1104,6 @@ class SalaryComponentAdmin(admin.ModelAdmin):
                 context.update(additional_context)
             
             # Log to security logger
-            logger.info(
-                f"SalaryComponent admin access: {action_type} by {request.user.username} - Result: {result}",
-                extra=context
-            )
             
         except Exception as e:
             # Don't let audit logging failures break the admin
@@ -1533,7 +1551,7 @@ class ContractAdmin(admin.ModelAdmin):
     search_fields = ['contract_number', 'employee__name']
     ordering = ['-start_date']
     inlines = [ContractSalaryComponentInline, ContractDocumentInline, ContractAmendmentInline]
-    readonly_fields = ['created_at', 'created_by']
+    readonly_fields = ['created_by']
     
     fieldsets = (
         ('معلومات العقد الأساسية', {
@@ -1548,7 +1566,9 @@ class ContractAdmin(admin.ModelAdmin):
         ('الزيادة السنوية التلقائية', {
             'fields': (
                 'has_annual_increase',
+                'increase_type',
                 'annual_increase_percentage',
+                'annual_increase_amount',
                 'increase_frequency',
                 'increase_start_reference',
                 'next_increase_date',
@@ -1559,8 +1579,7 @@ class ContractAdmin(admin.ModelAdmin):
             'fields': ('terms_and_conditions', 'notes', 'auto_renew')
         }),
         ('معلومات النظام', {
-            'fields': ('created_at', 'created_by'),
-            'classes': ('collapse',)
+            'fields': ('created_at', 'updated_at', 'created_by'),
         }),
     )
 
@@ -1991,17 +2010,41 @@ class PermissionTypeAdmin(admin.ModelAdmin):
     ordering = ['code']
 
 
+@admin.register(RamadanSettings)
+class RamadanSettingsAdmin(admin.ModelAdmin):
+    list_display = ['hijri_year', 'start_date', 'end_date', 'duration_days', 'permission_max_count', 'permission_max_hours']
+    search_fields = ['hijri_year']
+    ordering = ['-hijri_year']
+
+    fieldsets = (
+        ('بيانات رمضان', {
+            'fields': ('hijri_year', 'start_date', 'end_date')
+        }),
+        ('حدود الأذونات في رمضان', {
+            'fields': ('permission_max_count', 'permission_max_hours'),
+            'description': 'الحد الأقصى للأذونات العادية (غير الإضافية) خلال شهر رمضان'
+        }),
+    )
+
+
 @admin.register(PermissionRequest)
 class PermissionRequestAdmin(admin.ModelAdmin):
-    list_display = ['employee', 'permission_type', 'date', 'start_time', 'end_time', 'duration_hours', 'status', 'requested_at']
-    list_filter = ['status', 'permission_type', 'date', 'is_emergency']
+    list_display = [
+        'employee', 'permission_type', 'date', 'start_time', 'end_time',
+        'duration_hours', 'is_extra', 'is_deduction_exempt', 'deduction_hours', 'status'
+    ]
+    list_filter = ['status', 'permission_type', 'is_extra', 'is_deduction_exempt', 'date']
     search_fields = ['employee__name', 'employee__employee_number', 'reason']
     readonly_fields = ['requested_at', 'reviewed_at', 'approved_at', 'duration_hours']
     ordering = ['-requested_at']
-    
+
     fieldsets = (
         ('معلومات الإذن', {
-            'fields': ('employee', 'permission_type', 'date', 'start_time', 'end_time', 'duration_hours', 'reason', 'is_emergency')
+            'fields': ('employee', 'permission_type', 'date', 'start_time', 'end_time', 'duration_hours', 'reason')
+        }),
+        ('نوع الإذن', {
+            'fields': ('is_extra', 'deduction_hours', 'is_deduction_exempt'),
+            'description': 'الأذونات الإضافية تتجاوز الحصة الشهرية. يمكن إعفاؤها من الخصم المالي.'
         }),
         ('سير العمل', {
             'fields': ('status', 'requested_at', 'requested_by')

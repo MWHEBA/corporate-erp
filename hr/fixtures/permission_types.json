@@ -9,7 +9,7 @@
       "max_hours_per_request": "2.00",
       "requires_advance_request": false,
       "advance_hours": 0,
-      "affects_salary": false,
+      "affects_salary": true,
       "is_active": true
     }
   },
@@ -20,10 +20,10 @@
       "name_ar": "انصراف مبكر",
       "name_en": "Early Leave",
       "code": "EARLY_LEAVE",
-      "max_hours_per_request": "3.00",
-      "requires_advance_request": true,
-      "advance_hours": 24,
-      "affects_salary": false,
+      "max_hours_per_request": "2.00",
+      "requires_advance_request": false,
+      "advance_hours": 0,
+      "affects_salary": true,
       "is_active": true
     }
   },
@@ -36,50 +36,8 @@
       "code": "MIDDAY_LEAVE",
       "max_hours_per_request": "4.00",
       "requires_advance_request": true,
-      "advance_hours": 24,
-      "affects_salary": false,
-      "is_active": true
-    }
-  },
-  {
-    "model": "hr.permissiontype",
-    "pk": 4,
-    "fields": {
-      "name_ar": "مهمة خارجية",
-      "name_en": "External Mission",
-      "code": "EXTERNAL_MISSION",
-      "max_hours_per_request": "4.00",
-      "requires_advance_request": true,
-      "advance_hours": 48,
-      "affects_salary": false,
-      "is_active": true
-    }
-  },
-  {
-    "model": "hr.permissiontype",
-    "pk": 5,
-    "fields": {
-      "name_ar": "موعد طبي",
-      "name_en": "Medical Appointment",
-      "code": "MEDICAL_APPOINTMENT",
-      "max_hours_per_request": "3.00",
-      "requires_advance_request": true,
-      "advance_hours": 24,
-      "affects_salary": false,
-      "is_active": true
-    }
-  },
-  {
-    "model": "hr.permissiontype",
-    "pk": 6,
-    "fields": {
-      "name_ar": "ظرف طارئ",
-      "name_en": "Emergency",
-      "code": "EMERGENCY",
-      "max_hours_per_request": "4.00",
-      "requires_advance_request": false,
-      "advance_hours": 0,
-      "affects_salary": false,
+      "advance_hours": 5,
+      "affects_salary": true,
       "is_active": true
     }
   }

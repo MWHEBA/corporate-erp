@@ -24,47 +24,61 @@ from ..forms.supplier_type_forms import (
 
 @login_required
 def supplier_type_settings_list(request):
-    """عرض قائمة إعدادات أنواع الموردين"""
-    
-    # جلب البيانات
+    """عرض صفحة إعدادات الموردين الموحدة — أنواع الموردين + أنواع خدمات التسعير"""
+
+    # ── أنواع الموردين ──────────────────────────────────────────
     supplier_types = SupplierTypeSettings.objects.all().order_by('display_order', 'name')
-    
-    # تقسيم الصفحات
-    paginator = Paginator(supplier_types, 20)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    
-    # إحصائيات
+    paginator  = Paginator(supplier_types, 20)
+    page_obj   = paginator.get_page(request.GET.get('page'))
+
+    # ── أنواع خدمات التسعير ─────────────────────────────────────
+    from supplier.models import ServiceType
+    from core.models import SystemModule
+    printing_pricing_enabled = SystemModule.objects.filter(code='printing_pricing', is_enabled=True).exists()
+    service_types = ServiceType.objects.all().order_by('order', 'name') if printing_pricing_enabled else ServiceType.objects.none()
+
+    # ── إحصائيات موحدة ──────────────────────────────────────────
     stats = {
-        'total': SupplierTypeSettings.objects.count(),
-        'active': SupplierTypeSettings.objects.filter(is_active=True).count(),
-        'inactive': SupplierTypeSettings.objects.filter(is_active=False).count(),
-        'system': SupplierTypeSettings.objects.filter(is_system=True).count(),
+        # أنواع الموردين
+        'supplier_types_total':  SupplierTypeSettings.objects.count(),
+        'supplier_types_active': SupplierTypeSettings.objects.filter(is_active=True).count(),
+        'supplier_types_system': SupplierTypeSettings.objects.filter(is_system=True).count(),
+        # أنواع خدمات التسعير
+        'service_types_total':    service_types.count(),
+        'service_types_active':   service_types.filter(is_active=True).count() if printing_pricing_enabled else 0,
+        'service_types_printing': service_types.filter(category='printing').count() if printing_pricing_enabled else 0,
     }
-    
+
     context = {
-        'page_obj': page_obj,
+        'page_obj':      page_obj,
         'supplier_types': page_obj.object_list,
-        'stats': stats,
-        'page_title': _('إعدادات أنواع الموردين'),
-        'page_subtitle': 'إدارة وتخصيص أنواع الموردين والخدمات',
-        'page_icon': 'fas fa-tags',
+        'service_types':  service_types,
+        'stats':          stats,
+        'page_title':    'إعدادات الموردين',
+        'page_subtitle': 'إدارة أنواع الموردين وأنواع خدمات التسعير',
+        'page_icon':     'fas fa-cog',
         'header_buttons': [
             {
                 'onclick': "openCreateModal()",
-                'icon': 'fa-plus',
-                'text': 'إضافة نوع جديد',
-                'class': 'btn-primary',
+                'icon':    'fa-truck',
+                'text':    'إضافة نوع مورد',
+                'class':   'btn-outline-primary',
             },
-        ],
+        ] + ([
+            {
+                'onclick': "openServiceTypeModal()",
+                'icon':    'fa-tags',
+                'text':    'إضافة نوع خدمة',
+                'class':   'btn-primary',
+            },
+        ] if printing_pricing_enabled else []),
         'breadcrumb_items': [
             {'title': 'الرئيسية', 'url': reverse('core:dashboard'), 'icon': 'fas fa-home'},
-            {'title': 'الموردين', 'url': reverse('supplier:supplier_list'), 'icon': 'fas fa-truck'},
-            {'title': 'الإعدادات', 'icon': 'fas fa-cog'},
-            {'title': 'أنواع الموردين', 'active': True},
+            {'title': 'الموردين',  'url': reverse('supplier:supplier_list'), 'icon': 'fas fa-truck'},
+            {'title': 'الإعدادات', 'active': True},
         ],
     }
-    
+
     return render(request, 'supplier/settings/supplier_types/list.html', context)
 
 

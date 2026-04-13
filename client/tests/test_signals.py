@@ -32,7 +32,7 @@ class CustomerSignalsTest(TestCase):
         )
         
         self.customers_parent = ChartOfAccounts.objects.create(
-            code='11030',
+            code='10300',
             name='العملاء',
             name_en='Customers',
             account_type=asset_type,
@@ -243,9 +243,9 @@ class CustomerSignalsIntegrationTest(TestCase):
         )
         
         ChartOfAccounts.objects.create(
-            code='11030',
-            name='العملاء',
-            name_en='Customers',
+            code='10300',
+            name='مدينو العملاء',
+            name_en='Customers Receivables',
             account_type=asset_type,
             is_active=True,
             is_leaf=False
@@ -268,8 +268,8 @@ class CustomerSignalsIntegrationTest(TestCase):
         
         # التحقق من إنشاء 3 حسابات فرعية
         customer_accounts = ChartOfAccounts.objects.filter(
-            code__startswith='1103',
-            parent__code='11030'
+            code__startswith='1030',
+            parent__code='10300'
         )
         self.assertEqual(customer_accounts.count(), 3)
         

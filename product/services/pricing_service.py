@@ -77,9 +77,6 @@ class PricingService:
                 if supplier_price.is_default:
                     PricingService._update_product_main_cost_price(product, new_price)
 
-                logger.info(
-                    f"تم تحديث سعر المنتج {product.name} للمورد {supplier.name} إلى {new_price}"
-                )
                 return supplier_price
 
         except Exception as e:
@@ -122,9 +119,6 @@ class PricingService:
                     product, supplier_price.cost_price
                 )
 
-                logger.info(
-                    f"تم تعيين {supplier.name} كمورد افتراضي للمنتج {product.name}"
-                )
                 return True
 
         except Exception as e:
@@ -304,9 +298,6 @@ class PricingService:
         try:
             if product.cost_price != new_price:
                 Product.objects.filter(pk=product.pk).update(cost_price=new_price)
-                logger.info(
-                    f"تم تحديث سعر التكلفة الرئيسي للمنتج {product.name} إلى {new_price}"
-                )
         except Exception as e:
             logger.error(f"خطأ في تحديث سعر التكلفة الرئيسي: {e}")
 

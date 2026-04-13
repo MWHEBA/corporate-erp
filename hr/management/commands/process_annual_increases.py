@@ -83,7 +83,7 @@ class Command(BaseCommand):
                                 f"✓ تم إضافة بند زيادة {increase.increase_percentage}% = {increase.increase_amount} جنيه"
                             ))
                             self.stdout.write(self.style.SUCCESS(
-                                f"  الراتب الأساسي: {contract.basic_salary} (ثابت) | "
+                                f"  الأجر الأساسي: {contract.basic_salary} (ثابت) | "
                                 f"الإجمالي: {contract.total_earnings}"
                             ))
                     else:
@@ -122,7 +122,7 @@ class Command(BaseCommand):
                     f"\n✓ تم إضافة {total_created} بند زيادة سنوية للرواتب"
                 ))
                 self.stdout.write(self.style.SUCCESS(
-                    "  ملاحظة: الراتب الأساسي ثابت، الزيادات في بنود منفصلة"
+                    "  ملاحظة: الأجر الأساسي ثابت، الزيادات في بنود منفصلة"
                 ))
             self.stdout.write(f"{'='*60}\n")
             
@@ -131,10 +131,6 @@ class Command(BaseCommand):
                 self._send_notification_email(total_created, total_errors, errors_list)
             
             # Log النتائج
-            logger.info(
-                f"Annual increases processed: {total_created} created, "
-                f"{total_errors} errors, duration: {duration:.2f}s"
-            )
             
         except Exception as e:
             error_msg = f"خطأ عام في المعالجة: {str(e)}"
@@ -307,7 +303,6 @@ class Command(BaseCommand):
                     [admin_email],
                     fail_silently=True,
                 )
-                logger.info(f"Notification email sent to {admin_email}")
         
         except Exception as e:
             logger.error(f"Failed to send notification email: {str(e)}")

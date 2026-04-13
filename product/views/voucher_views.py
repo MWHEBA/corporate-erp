@@ -33,7 +33,7 @@ class GetProductWarehousesView(LoginRequiredMixin, View):
             product = Product.objects.get(id=product_id)
             unit_name = product.unit.name if product.unit else 'وحدة'
             
-            # جلب المخازن التي يتوفر فيها المنتج
+            # جلب المخازن التي يتوفر فيها المنتج فقط (كمية > 0)
             stocks = Stock.objects.filter(
                 product_id=product_id,
                 quantity__gt=0
@@ -48,23 +48,48 @@ class GetProductWarehousesView(LoginRequiredMixin, View):
                 for stock in stocks
             ]
             
-            # إضافة المخازن النشطة الأخرى (حتى لو مفيش فيها كمية)
-            all_warehouses = Warehouse.objects.filter(is_active=True).exclude(
-                id__in=[w['id'] for w in warehouses]
-            )
-            
-            for wh in all_warehouses:
-                warehouses.append({
-                    'id': wh.id,
-                    'name': wh.name,
-                    'quantity': 0
-                })
-            
             return JsonResponse({'warehouses': warehouses, 'unit': unit_name})
         except Product.DoesNotExist:
             return JsonResponse({'warehouses': [], 'unit': '', 'error': 'Product not found'})
         except Exception as e:
             return JsonResponse({'warehouses': [], 'unit': '', 'error': str(e)})
+
+
+class GetAvailableProductsView(LoginRequiredMixin, View):
+    """الحصول على المنتجات المتاحة (التي لها stock)"""
+    
+    def get(self, request):
+        try:
+            # جلب المنتجات التي لها stock متاح
+            products_with_stock = Stock.objects.filter(
+                quantity__gt=0
+            ).values('product_id').distinct()
+            
+            product_ids = [item['product_id'] for item in products_with_stock]
+            
+            products = Product.objects.filter(
+                id__in=product_ids,
+                is_active=True
+            ).select_related('category', 'unit').order_by('name')
+            
+            products_data = [
+                {
+                    'id': product.id,
+                    'name': product.name,
+                    'code': product.code,
+                    'category': product.category.name if product.category else '',
+                    'unit': product.unit.name if product.unit else 'وحدة',
+                    'total_stock': sum(
+                        Stock.objects.filter(product=product, quantity__gt=0)
+                        .values_list('quantity', flat=True)
+                    )
+                }
+                for product in products
+            ]
+            
+            return JsonResponse({'products': products_data})
+        except Exception as e:
+            return JsonResponse({'products': [], 'error': str(e)})
 
 
 class ReceiptVoucherListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):

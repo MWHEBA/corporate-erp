@@ -46,14 +46,7 @@ def payment_detail(request, pk):
         "page_title": f"دفعة رقم #{payment.id}",
         "page_subtitle": f"فاتورة {purchase.number} | {purchase.supplier.name}",
         "page_icon": "fas fa-money-bill-wave",
-        "header_buttons": [
-            {
-                "url": reverse("purchase:purchase_detail", kwargs={"pk": purchase.pk}),
-                "icon": "fa-arrow-left",
-                "text": "العودة للفاتورة",
-                "class": "btn-outline-secondary",
-            },
-        ],
+        "header_buttons": [],
         "breadcrumb_items": [
             {
                 "title": "لوحة التحكم",
@@ -211,14 +204,7 @@ def add_payment(request, pk):
         "is_purchase": True,
         "title": f"إضافة دفعة لفاتورة المشتريات {purchase.number}",
         "page_subtitle": "إضافة دفعة جديدة لفاتورة المشتريات",
-        "header_buttons": [
-            {
-                "url": reverse("purchase:purchase_detail", kwargs={"pk": purchase.pk}),
-                "icon": "fa-arrow-right",
-                "text": "العودة للفاتورة",
-                "class": "btn-outline-secondary"
-            }
-        ],
+        "header_buttons": [],
         "breadcrumb_items": [
             {
                 "title": "الرئيسية",
@@ -448,14 +434,7 @@ def edit_payment(request, payment_id):
         "page_title": f"تعديل الدفعة #{payment.id}",
         "page_subtitle": f"فاتورة {payment.purchase.number} | {payment.purchase.supplier.name}",
         "page_icon": "fas fa-edit",
-        "header_buttons": [
-            {
-                "url": reverse("purchase:purchase_detail", kwargs={"pk": payment.purchase.pk}),
-                "icon": "fa-arrow-left",
-                "text": "العودة للفاتورة",
-                "class": "btn-outline-secondary",
-            },
-        ],
+        "header_buttons": [],
         "breadcrumb_items": [
             {
                 "title": "لوحة التحكم",

@@ -79,11 +79,6 @@ class BundleFinancialService:
                     journal_entry, bundle_product, component_deductions, transaction_context
                 )
                 
-                logger.info(
-                    f"تم إنشاء قيد محاسبي لبيع المنتج المجمع {bundle_product.name}. "
-                    f"القيد المحاسبي: {journal_entry.number}, "
-                    f"المبلغ: {bundle_product.selling_price * quantity}"
-                )
                 
                 return True, {
                     'journal_entry_id': journal_entry.id,
@@ -148,11 +143,6 @@ class BundleFinancialService:
                     journal_entry, reversal_entry, financial_transaction_record
                 )
                 
-                logger.info(
-                    f"تم عكس القيد المحاسبي للمنتج المجمع. "
-                    f"القيد الأصلي: {journal_entry.number}, "
-                    f"القيد العكسي: {reversal_entry.number}"
-                )
                 
                 return True, None
                 
@@ -371,7 +361,6 @@ class BundleFinancialService:
             financial_subcategory=bundle_product.financial_subcategory if hasattr(bundle_product, 'financial_subcategory') else None
         )
         
-        logger.info(f"تم إنشاء قيد محاسبي لبيع المنتج المجمع: {journal_entry.number}")
         
         return journal_entry
     
@@ -439,7 +428,6 @@ class BundleFinancialService:
             }
         }
         
-        logger.info(f"Bundle Financial Audit Trail: {audit_record}")
         
         return audit_record
     
@@ -478,7 +466,6 @@ class BundleFinancialService:
             }
         }
         
-        logger.info(f"Bundle Financial Reversal Audit Trail: {reversal_audit}")
     
     @staticmethod
     def generate_bundle_financial_report(
@@ -705,7 +692,6 @@ class BundleFinancialService:
             }
             
             # حفظ مسار التدقيق المحسن
-            logger.info(f"Enhanced Bundle Financial Audit Trail: {enhanced_audit}")
             
             return enhanced_audit
             

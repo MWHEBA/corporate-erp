@@ -87,21 +87,17 @@ class PermissionService:
             'add_qrapplication', 'change_qrapplication', 'view_qrapplication',
             'can_convert_application', 'view_qrcode',
             
-            # Financial
-            'add_studentfee', 'change_studentfee', 'view_studentfee',
-            'add_feepayment', 'change_feepayment', 'view_feepayment',
-            
             # Products and Purchases
             'add_product', 'change_product', 'view_product',
             'add_purchase', 'change_purchase', 'view_purchase',
             
+            # Customers
+            'add_customer', 'change_customer', 'view_customer',
+            'add_customerpayment', 'change_customerpayment', 'view_customerpayment',
+            
             # HR and Users
             'add_employee', 'change_employee', 'view_employee',
             'add_user', 'change_user', 'view_user',
-            
-            # Activities and Transportation
-            'add_activity', 'change_activity', 'view_activity',
-            'add_transportationrequest', 'change_transportationrequest', 'view_transportationrequest'
         ]
         
         specific_query = Q()
@@ -216,12 +212,7 @@ class PermissionService:
                   any(keyword in model for keyword in ['employee', 'salary', 'staff'])):
                 categories['hr']['permissions'].append(permission)
             
-            # Activities & Transportation (الأنشطة والنقل)
-            elif (any(keyword in codename for keyword in ['activity', 'transportation', 'route', 'bus', 'نشاط', 'نقل', 'باص']) or
-                  app_label in ['activities', 'transportation'] or
-                  any(keyword in model for keyword in ['activity', 'transportation', 'route'])):
-                categories['customers_suppliers']['permissions'].append(permission)  # Reusing this category for activities
-            
+            # Activities & Transportation — removed (modules deleted)
             # Reports & Analytics (التقارير والتحليلات)
             elif (any(keyword in codename for keyword in ['report', 'export', 'audit', 'monitor', 'dashboard', 'تقارير', 'تصدير', 'مراقبة']) or
                   'view_report' in codename or 'can_export' in codename):

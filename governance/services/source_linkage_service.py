@@ -23,9 +23,7 @@ class SourceLinkageService:
     
     # Allowlist of valid source models for journal entries
     ALLOWED_SOURCES = {
-        'students.StudentFee',
-        'students.FeePayment',
-        'students.StudentRefund',  # Added for settlement/refund transactions
+        'client.CustomerPayment',
         'purchase.PurchasePayment',
         'hr.PayrollPayment',
         'hr.Payroll',  # Added for POC testing - HR payroll records
@@ -52,8 +50,8 @@ class SourceLinkageService:
         Thread-safe implementation with proper error handling.
         
         Args:
-            source_module: Module name (e.g., 'students')
-            source_model: Model name (e.g., 'StudentFee')
+            source_module: Module name 
+            source_model: Model name 
             source_id: ID of the source record
             
         Returns:

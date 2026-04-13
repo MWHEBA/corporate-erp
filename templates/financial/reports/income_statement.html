@@ -67,6 +67,7 @@
   
   .final-row {
     background-color: var(--primary-color);
+    color: white;
     font-weight: 700;
     font-size: 1.15rem;
     border-radius: var(--border-radius);
@@ -208,12 +209,12 @@
                 {% for item in income_statement_data.revenues %}
                 <div class="account-row">
                   <span class="account-name">{{ item.account.name }}</span>
-                  <span class="account-balance">{{ item.amount|smart_float }} {% currency_symbol %}</span>
+                  <span class="account-balance">{{ item.amount|currency }}</span>
                 </div>
                 {% endfor %}
                 <div class="account-row total-row">
                   <span>{% trans "إجمالي الإيرادات" %}</span>
-                  <span>{{ income_statement_data.total_revenue|smart_float }} {% currency_symbol %}</span>
+                  <span>{{ income_statement_data.total_revenue|currency }}</span>
                 </div>
               {% else %}
                 <div class="empty-state">
@@ -235,12 +236,12 @@
                 {% for item in income_statement_data.expenses %}
                 <div class="account-row">
                   <span class="account-name">{{ item.account.name }}</span>
-                  <span class="account-balance">{{ item.amount|smart_float }} {% currency_symbol %}</span>
+                  <span class="account-balance">{{ item.amount|currency }}</span>
                 </div>
                 {% endfor %}
                 <div class="account-row total-row">
                   <span>{% trans "إجمالي المصروفات" %}</span>
-                  <span>{{ income_statement_data.total_expense|smart_float }} {% currency_symbol %}</span>
+                  <span>{{ income_statement_data.total_expense|currency }}</span>
                 </div>
               {% else %}
                 <div class="text-center text-muted py-3">
@@ -256,7 +257,7 @@
           <div class="account-row">
             <span>{% trans "صافي الربح (الخسارة)" %}</span>
             <span class="{% if income_statement_data.is_profit %}profit{% else %}loss{% endif %}">
-              {{ income_statement_data.net_income|smart_float }} {% currency_symbol %}
+              {{ income_statement_data.net_income|currency }}
             </span>
           </div>
         </div>
@@ -307,21 +308,21 @@
       csvContent += 'الإيرادات\n';
       {% if income_statement_data.revenues %}
         {% for item in income_statement_data.revenues %}
-          csvContent += '"{{ item.account.name }}","{{ item.amount|smart_float }}"\n';
+          csvContent += '"{{ item.account.name }}","{{ item.amount|currency }}"\n';
         {% endfor %}
-        csvContent += '"إجمالي الإيرادات","{{ income_statement_data.total_revenue|smart_float }}"\n\n';
+        csvContent += '"إجمالي الإيرادات","{{ income_statement_data.total_revenue|currency }}"\n\n';
       {% endif %}
       
       // المصروفات
       csvContent += 'المصروفات\n';
       {% if income_statement_data.expenses %}
         {% for item in income_statement_data.expenses %}
-          csvContent += '"{{ item.account.name }}","{{ item.amount|smart_float }}"\n';
+          csvContent += '"{{ item.account.name }}","{{ item.amount|currency }}"\n';
         {% endfor %}
-        csvContent += '"إجمالي المصروفات","{{ income_statement_data.total_expense|smart_float }}"\n\n';
+        csvContent += '"إجمالي المصروفات","{{ income_statement_data.total_expense|currency }}"\n\n';
       {% endif %}
       
-      csvContent += '"صافي الربح (الخسارة)","{{ income_statement_data.net_income|smart_float }}"\n';
+      csvContent += '"صافي الربح (الخسارة)","{{ income_statement_data.net_income|currency }}"\n';
       
       // تحميل الملف
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -354,9 +355,9 @@
       data.push(['الإيرادات']);
       {% if income_statement_data.revenues %}
         {% for item in income_statement_data.revenues %}
-          data.push(['{{ item.account.name }}', '{{ item.amount|smart_float }}']);
+          data.push(['{{ item.account.name }}', '{{ item.amount|currency }}']);
         {% endfor %}
-        data.push(['إجمالي الإيرادات', '{{ income_statement_data.total_revenue|smart_float }}']);
+        data.push(['إجمالي الإيرادات', '{{ income_statement_data.total_revenue|currency }}']);
       {% endif %}
       data.push([]);
       
@@ -364,13 +365,13 @@
       data.push(['المصروفات']);
       {% if income_statement_data.expenses %}
         {% for item in income_statement_data.expenses %}
-          data.push(['{{ item.account.name }}', '{{ item.amount|smart_float }}']);
+          data.push(['{{ item.account.name }}', '{{ item.amount|currency }}']);
         {% endfor %}
-        data.push(['إجمالي المصروفات', '{{ income_statement_data.total_expense|smart_float }}']);
+        data.push(['إجمالي المصروفات', '{{ income_statement_data.total_expense|currency }}']);
       {% endif %}
       data.push([]);
       
-      data.push(['صافي الربح (الخسارة)', '{{ income_statement_data.net_income|smart_float }}']);
+      data.push(['صافي الربح (الخسارة)', '{{ income_statement_data.net_income|currency }}']);
       
       // إنشاء ملف Excel
       const ws = XLSX.utils.aoa_to_sheet(data);
@@ -385,6 +386,23 @@
     }
   }
   
+  // دالة إظهار الإشعارات
+  // Removed: Using toastr library directly alert-dismissible fade show position-fixed" 
+             style="top: 20px; right: 20px; z-index: 9999; min-width: 300px;">
+            <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'} me-2"></i>
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `);
+    
+    $('body').append(notification);
+    
+    // إزالة الإشعار تلقائياً بعد 5 ثوان
+    setTimeout(() => {
+        notification.alert('close');
+    }, 5000);
+  }
+
   $(document).ready(function() {
     // إعداد الرسوم البيانية
     initCharts();

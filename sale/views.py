@@ -27,7 +27,20 @@ def sale_create(request, customer_id=None):
     إنشاء فاتورة مبيعات جديدة
     ✅ محدث: يستخدم SaleService مع الحوكمة الكاملة
     """
-    products = Product.objects.filter(is_active=True).order_by("name")
+    # جلب المخزن الافتراضي
+    default_warehouse = Warehouse.objects.filter(is_active=True).order_by("name").first()
+
+    # افتراضياً: المنتجات اللي ليها stock في المخزن الافتراضي فقط
+    if default_warehouse:
+        from product.models import Stock
+        products_with_stock = Stock.objects.filter(
+            warehouse=default_warehouse, quantity__gt=0
+        ).values_list("product_id", flat=True)
+        products = Product.objects.filter(
+            is_active=True, is_service=False, is_bundle=False, id__in=products_with_stock
+        ).order_by("name")
+    else:
+        products = Product.objects.filter(is_active=True, is_service=False, is_bundle=False).order_by("name")
     
     # التحقق من وجود العميل إذا تم تمرير معرفه
     selected_customer = None
@@ -66,7 +79,12 @@ def sale_create(request, customer_id=None):
                 else:
                     # افتراضي: آجل
                     sale_data['payment_method'] = "credit"
-                
+
+                # التصنيف المالي
+                financial_category = form.cleaned_data.get('financial_category')
+                if financial_category:
+                    sale_data['financial_category_id'] = financial_category.pk
+
                 # تجهيز بيانات البنود
                 product_ids = request.POST.getlist("product[]")
                 quantities = request.POST.getlist("quantity[]")
@@ -149,8 +167,15 @@ def sale_create(request, customer_id=None):
     customers = Customer.objects.filter(is_active=True).order_by("name")
     warehouses = Warehouse.objects.filter(is_active=True).order_by("name")
 
+    # جلب التصنيفات للفلترة في مودال اختيار المنتج
+    from product.models import Category
+    product_categories = Category.objects.filter(
+        is_active=True, products__is_active=True, products__is_service=False, products__is_bundle=False
+    ).distinct().order_by("name")
+
     context = {
         "products": products,
+        "product_categories": product_categories,
         "form": form,
         "next_sale_number": next_sale_number,
         "customers": customers,
@@ -160,14 +185,14 @@ def sale_create(request, customer_id=None):
         "page_title": "إضافة فاتورة مبيعات" + (f" - {selected_customer.name}" if selected_customer else ""),
         "page_subtitle": "إضافة فاتورة مبيعات جديدة إلى النظام",
         "page_icon": "fas fa-file-invoice-dollar",
-        "header_buttons": [
+        "header_buttons": ([
             {
-                "url": reverse("client:customer_detail", kwargs={"pk": selected_customer.pk}) if selected_customer else reverse("sale:sale_list"),
+                "url": reverse("client:customer_detail", kwargs={"pk": selected_customer.pk}),
                 "icon": "fa-arrow-right",
-                "text": f"العودة لتفاصيل {selected_customer.name}" if selected_customer else "العودة للقائمة",
+                "text": f"العودة لتفاصيل {selected_customer.name}",
                 "class": "btn-secondary",
             }
-        ],
+        ] if selected_customer else []),
         "breadcrumb_items": [
             {"title": "الرئيسية", "url": reverse("core:dashboard"), "icon": "fas fa-home"},
             {"title": "المبيعات", "url": reverse("sale:sale_list"), "icon": "fas fa-shopping-cart"},
@@ -268,14 +293,7 @@ def add_payment(request, pk):
             {"title": f"فاتورة {sale.number}", "url": reverse("sale:sale_detail", kwargs={"pk": sale.pk}), "icon": "fas fa-file-invoice"},
             {"title": "إضافة دفعة", "active": True},
         ],
-        "header_buttons": [
-            {
-                "url": reverse("sale:sale_detail", kwargs={"pk": sale.pk}),
-                "icon": "fa-arrow-right",
-                "text": "العودة للفاتورة",
-                "class": "btn-secondary",
-            }
-        ],
+        "header_buttons": [],
     }
     return render(request, "sale/sale_payment_form.html", context)
 
@@ -289,41 +307,43 @@ def sale_return(request, pk):
     sale = get_object_or_404(Sale, pk=pk)
 
     if request.method == "POST":
-        form = SaleReturnForm(request.POST)
-        if form.is_valid():
-            try:
-                # تجهيز بيانات المرتجع
+        try:
+            sale_item_ids = request.POST.getlist("sale_item[]")
+            quantities = request.POST.getlist("quantity[]")
+
+            # التحقق من وجود كميات مرتجعة
+            has_returns = any(
+                q and int(float(q)) > 0
+                for q in quantities
+            )
+            if not has_returns:
+                messages.error(request, "يجب تحديد كمية مرتجعة واحدة على الأقل")
+            else:
                 return_data = {
-                    'date': form.cleaned_data.get('date', timezone.now().date()),
-                    'reason': form.cleaned_data.get('reason', ''),
-                    'notes': form.cleaned_data.get('notes', ''),
+                    'date': request.POST.get('date') or timezone.now().date(),
+                    'reason': '',
+                    'notes': '',
                     'items': []
                 }
-                
-                # تجهيز بنود المرتجع
-                sale_item_ids = request.POST.getlist("sale_item[]")
-                quantities = request.POST.getlist("quantity[]")
-                
+
                 for i in range(len(sale_item_ids)):
                     if sale_item_ids[i] and quantities[i]:
-                        sale_item = get_object_or_404(SaleItem, id=sale_item_ids[i], sale=sale)
-                        return_data['items'].append({
-                            'sale_item_id': int(sale_item_ids[i]),
-                            'quantity': Decimal(quantities[i]),
-                            'unit_price': sale_item.unit_price,
-                        })
-                
-                # إنشاء المرتجع عبر SaleService
+                        qty = int(float(quantities[i]))
+                        if qty > 0:
+                            sale_item = get_object_or_404(SaleItem, id=sale_item_ids[i], sale=sale)
+                            return_data['items'].append({
+                                'sale_item_id': int(sale_item_ids[i]),
+                                'quantity': Decimal(str(qty)),
+                                'unit_price': sale_item.unit_price,
+                            })
+
                 sale_return = SaleService.create_return(sale, return_data, request.user)
-                
                 messages.success(request, f"تم إنشاء المرتجع بنجاح - رقم المرتجع: {sale_return.number}")
                 return redirect("sale:sale_return_detail", pk=sale_return.pk)
-                
-            except Exception as e:
-                logger.error(f"❌ خطأ في إنشاء المرتجع: {str(e)}")
-                messages.error(request, f"حدث خطأ أثناء إنشاء المرتجع: {str(e)}")
-        else:
-            messages.error(request, "يرجى تصحيح الأخطاء في النموذج")
+
+        except Exception as e:
+            logger.error(f"❌ خطأ في إنشاء المرتجع: {str(e)}")
+            messages.error(request, f"حدث خطأ أثناء إنشاء المرتجع: {str(e)}")
     else:
         initial_data = {
             'date': timezone.now().date(),
@@ -332,18 +352,16 @@ def sale_return(request, pk):
 
     context = {
         "sale": sale,
-        "form": form,
         "sale_items": sale.items.all(),
         "page_title": f"إنشاء مرتجع - فاتورة {sale.number}",
         "page_subtitle": f"العميل: {sale.customer.name}",
         "page_icon": "fas fa-undo",
-        "header_buttons": [
-            {
-                "url": reverse("sale:sale_detail", kwargs={"pk": sale.pk}),
-                "icon": "fa-arrow-right",
-                "text": "العودة للفاتورة",
-                "class": "btn-secondary",
-            }
+        "header_buttons": [],
+        "breadcrumb_items": [
+            {"title": "الرئيسية", "url": reverse("core:dashboard"), "icon": "fas fa-home"},
+            {"title": "المبيعات", "url": reverse("sale:sale_list"), "icon": "fas fa-shopping-cart"},
+            {"title": f"فاتورة {sale.number}", "url": reverse("sale:sale_detail", kwargs={"pk": sale.pk}), "icon": "fas fa-file-invoice"},
+            {"title": "إنشاء مرتجع", "active": True},
         ],
     }
     return render(request, "sale/sale_return_form.html", context)
@@ -371,21 +389,28 @@ def sale_detail(request, pk):
         "payments": payments,
         "returns": returns,
         "statistics": statistics,
+        "title": f"تفاصيل فاتورة مبيعات - {sale.number}",
         "page_title": f"فاتورة مبيعات {sale.number}",
         "page_subtitle": f"العميل: {sale.customer.name} - التاريخ: {sale.date}",
         "page_icon": "fas fa-file-invoice-dollar",
         "header_buttons": [
-            {
+            *([{
                 "url": reverse("sale:sale_add_payment", kwargs={"pk": sale.pk}),
                 "icon": "fa-money-bill-wave",
                 "text": "إضافة دفعة",
                 "class": "btn-success",
-            },
-            {
+            }] if sale.payment_status != 'paid' else []),
+            *([{
                 "url": reverse("sale:sale_return", kwargs={"pk": sale.pk}),
                 "icon": "fa-undo",
                 "text": "إنشاء مرتجع",
                 "class": "btn-warning",
+            }] if sale.status != 'cancelled' else []),
+            {
+                "url": reverse("sale:sale_duplicate", kwargs={"pk": sale.pk}),
+                "icon": "fa-copy",
+                "text": "نسخ",
+                "class": "btn-outline-primary",
             },
             {
                 "url": reverse("sale:sale_print", kwargs={"pk": sale.pk}),
@@ -393,12 +418,6 @@ def sale_detail(request, pk):
                 "text": "طباعة",
                 "class": "btn-info",
             },
-            {
-                "url": reverse("sale:sale_list"),
-                "icon": "fa-arrow-right",
-                "text": "العودة للقائمة",
-                "class": "btn-secondary",
-            }
         ],
         "breadcrumb_items": [
             {"title": "الرئيسية", "url": reverse("core:dashboard"), "icon": "fas fa-home"},
@@ -422,6 +441,11 @@ def sale_list(request):
     if customer:
         sales_query = sales_query.filter(customer_id=customer)
 
+    # تصفية حسب المخزن
+    warehouse = request.GET.get("warehouse")
+    if warehouse:
+        sales_query = sales_query.filter(warehouse_id=warehouse)
+
     # تصفية حسب حالة الدفع
     payment_status = request.GET.get("payment_status")
     if payment_status:
@@ -439,8 +463,8 @@ def sale_list(request):
     # الترقيم
     from django.core.paginator import Paginator
     paginator = Paginator(sales_query, 25)
-    page = request.GET.get("page")
-    sales_page = paginator.get_page(page)
+    page_number = request.GET.get("page", 1)
+    sales_page = paginator.get_page(page_number)
     
     # تحويل الـ queryset لـ list of dicts للجدول الموحد
     sales_data = []
@@ -454,15 +478,40 @@ def sale_list(request):
             payment_status_html = '<span class="badge bg-danger">غير مدفوعة</span>'
         
         # أزرار الإجراءات
-        actions = [
-            {'url': reverse('sale:sale_detail', args=[sale.pk]), 'icon': 'fas fa-eye', 'label': 'عرض', 'class': 'btn-outline-info btn-sm action-view'},
-            {'url': reverse('sale:sale_print', args=[sale.pk]), 'icon': 'fas fa-print', 'label': 'طباعة', 'class': 'btn-outline-secondary btn-sm', 'target': '_blank'},
-        ]
+        actions = []
+
+        # زر إضافة دفعة (إذا لم تكن مدفوعة بالكامل)
+        if sale.payment_status != 'paid':
+            actions.append({
+                'url': reverse('sale:sale_add_payment', args=[sale.pk]),
+                'icon': 'fas fa-money-bill',
+                'label': 'دفعة',
+                'class': 'btn-outline-success btn-sm',
+            })
+
+        # زر الطباعة (للفواتير المدفوعة فقط)
+        if sale.payment_status == 'paid':
+            actions.append({
+                'url': reverse('sale:sale_print', args=[sale.pk]),
+                'icon': 'fas fa-print',
+                'label': 'طباعة',
+                'class': 'btn-outline-secondary btn-sm',
+                'target': '_blank',
+            })
+
+        # زر نسخ الفاتورة
+        actions.append({
+            'url': reverse('sale:sale_duplicate', args=[sale.pk]),
+            'icon': 'fas fa-copy',
+            'label': 'نسخ',
+            'class': 'btn-outline-primary btn-sm',
+        })
+
         
         sales_data.append({
             'id': sale.id,
             'number': sale.number,
-            'date': sale.date,
+            'created_at': sale.created_at,
             'customer': sale.customer.name,
             'warehouse': sale.warehouse.name,
             'total': sale.total,
@@ -479,31 +528,80 @@ def sale_list(request):
     returned_sales_count = Sale.objects.filter(returns__status="confirmed").distinct().count()
     total_amount = Sale.objects.aggregate(Sum("total"))["total__sum"] or 0
 
-    customers = Customer.objects.filter(is_active=True).order_by("name")
+    customers = Customer.objects.filter(id__in=Sale.objects.values('customer_id')).order_by("name")
+    warehouses = Warehouse.objects.filter(is_active=True).order_by("name")
 
     # إعداد headers للجدول الموحد
     sale_headers = [
-        {'key': 'number', 'label': 'رقم الفاتورة', 'sortable': True, 'width': '10%', 'class': 'text-center'},
-        {'key': 'date', 'label': 'التاريخ', 'sortable': True, 'width': '10%', 'class': 'text-center', 'format': 'date'},
-        {'key': 'customer', 'label': 'العميل', 'sortable': True, 'width': '20%'},
+        {
+            'key': 'number',
+            'label': 'رقم الفاتورة',
+            'sortable': True,
+            'class': 'text-center',
+            'format': 'reference',
+            'variant': 'highlight-code',
+            'app': 'sale',
+        },
+        {
+            'key': 'created_at',
+            'label': 'التاريخ والوقت',
+            'sortable': True,
+            'class': 'text-center',
+            'format': 'datetime_12h',
+        },
+        {'key': 'customer', 'label': 'العميل', 'sortable': True, 'width': '20%', 'class': 'fw-bold'},
         {'key': 'warehouse', 'label': 'المخزن', 'sortable': True, 'width': '12%'},
-        {'key': 'total', 'label': 'الإجمالي', 'sortable': True, 'width': '10%', 'class': 'text-center', 'format': 'currency'},
-        {'key': 'amount_paid', 'label': 'المدفوع', 'sortable': True, 'width': '10%', 'class': 'text-center', 'format': 'currency'},
-        {'key': 'amount_due', 'label': 'المتبقي', 'sortable': True, 'width': '10%', 'class': 'text-center', 'format': 'currency'},
-        {'key': 'payment_status', 'label': 'حالة الدفع', 'sortable': True, 'width': '10%', 'class': 'text-center', 'format': 'html'},
-        {'key': 'actions', 'label': 'الإجراءات', 'width': '8%', 'class': 'text-center'}
+        {'key': 'total', 'label': 'الإجمالي', 'sortable': True, 'class': 'text-center', 'format': 'currency'},
+        {'key': 'amount_due', 'label': 'المتبقي', 'sortable': True, 'class': 'text-center', 'format': 'currency', 'variant': 'text-danger'},
+        {'key': 'payment_status', 'label': 'حالة الدفع', 'sortable': True, 'class': 'text-center', 'format': 'html'},
+        {'key': 'actions', 'label': 'الإجراءات', 'width': '1%', 'class': 'text-center text-nowrap'}
     ]
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        from django.template.loader import render_to_string
+        from django.http import JsonResponse
+        ctx = {
+            'table_id': 'sales-table',
+            'headers': sale_headers,
+            'data': sales_data,
+            'empty_message': 'لا توجد فواتير مبيعات متاحة',
+            'table_class': 'hover',
+            'primary_key': 'id',
+            'clickable_rows': True,
+            'row_click_url': '/sales/0/',
+            'show_currency': True,
+            'currency_symbol': getattr(request, 'currency_symbol', 'ج.م'),
+            'disable_pagination': True,
+            'show_search': False,
+            'show_length_menu': False,
+            'sortable': False,
+        }
+        table_html = render_to_string('components/data_table.html', ctx, request=request)
+        pagination_html = ''
+        if paginator.num_pages > 1:
+            pagination_html = render_to_string('partials/pagination.html', {
+                'page_obj': sales_page,
+                'align': 'center',
+            }, request=request)
+            
+        return JsonResponse({
+            'table_html': table_html,
+            'pagination_html': pagination_html,
+            'count': paginator.count,
+        })
 
     context = {
         "sales": sales_data,
         "sale_headers": sale_headers,
         "page_obj": sales_page,  # للـ pagination
+        "paginator": paginator,
         "paid_sales_count": paid_sales_count,
         "partially_paid_sales_count": partially_paid_sales_count,
         "unpaid_sales_count": unpaid_sales_count,
         "returned_sales_count": returned_sales_count,
         "total_amount": total_amount,
         "customers": customers,
+        "warehouses": warehouses,
         "page_title": "فواتير المبيعات",
         "page_subtitle": "قائمة بجميع فواتير المبيعات في النظام",
         "page_icon": "fas fa-shopping-cart",
@@ -630,12 +728,11 @@ def unpost_payment(request, payment_id):
         messages.warning(request, "هذه الدفعة غير مرحلة")
     else:
         try:
-            # TODO: Implement unposting logic with SaleService
-            payment.is_posted = False
-            payment.posted_at = None
-            payment.posted_by = None
-            payment.save()
-            messages.success(request, "تم إلغاء ترحيل الدفعة بنجاح")
+            result = payment.unpost(user=request.user)
+            if result["success"]:
+                messages.success(request, "تم إلغاء ترحيل الدفعة بنجاح")
+            else:
+                messages.error(request, result.get("message", "فشل إلغاء الترحيل"))
         except Exception as e:
             messages.error(request, f"خطأ في إلغاء ترحيل الدفعة: {str(e)}")
     
@@ -653,11 +750,11 @@ def unpost_payment_only(request, payment_id):
         messages.warning(request, "هذه الدفعة غير مرحلة")
     else:
         try:
-            payment.is_posted = False
-            payment.posted_at = None
-            payment.posted_by = None
-            payment.save()
-            messages.success(request, "تم إلغاء ترحيل الدفعة")
+            result = payment.unpost(user=request.user)
+            if result["success"]:
+                messages.success(request, "تم إلغاء ترحيل الدفعة")
+            else:
+                messages.error(request, result.get("message", "فشل إلغاء الترحيل"))
         except Exception as e:
             messages.error(request, f"خطأ: {str(e)}")
     
@@ -778,3 +875,115 @@ def sale_return_cancel(request, pk):
             messages.error(request, f"خطأ في إلغاء المرتجع: {str(e)}")
     
     return redirect("sale:sale_return_detail", pk=pk)
+
+
+@login_required
+def sale_duplicate(request, pk):
+    """
+    نسخ فاتورة مبيعات - فتح صفحة الإنشاء مع تحميل بيانات الفاتورة الأصلية
+    المستخدم يراجع ويعدّل ثم يحفظ
+    """
+    import json
+    original = get_object_or_404(Sale, pk=pk)
+
+    # جلب المنتجات اللي ليها stock في مخزن الفاتورة الأصلية
+    from product.models import Stock as StockModel
+    products_with_stock = StockModel.objects.filter(
+        warehouse=original.warehouse, quantity__gt=0
+    ).values_list("product_id", flat=True)
+    products = Product.objects.filter(
+        is_active=True, is_service=False, is_bundle=False, id__in=products_with_stock
+    ).order_by("name")
+    customers = Customer.objects.filter(is_active=True).order_by("name")
+    warehouses = Warehouse.objects.filter(is_active=True).order_by("name")
+
+    # جلب التصنيفات
+    from product.models import Category
+    product_categories = Category.objects.filter(
+        is_active=True, products__is_active=True, products__is_service=False, products__is_bundle=False
+    ).distinct().order_by("name")
+
+    # رقم الفاتورة الجديد
+    next_sale_number = None
+    try:
+        serial, _ = SerialNumber.objects.get_or_create(
+            document_type="sale",
+            year=timezone.now().year,
+            defaults={"prefix": "SALE", "last_number": 0},
+        )
+        last_sale = Sale.objects.order_by("-id").first()
+        last_number = 0
+        if last_sale and last_sale.number:
+            try:
+                last_number = int(last_sale.number.replace("SALE", ""))
+            except (ValueError, AttributeError):
+                pass
+        next_number = max(serial.last_number, last_number) + 1
+        next_sale_number = f"{serial.prefix}{next_number:04d}"
+    except Exception as e:
+        logger.error(f"خطأ في الحصول على الرقم التالي: {str(e)}")
+
+    # تحديد نوع الفاتورة
+    invoice_type = "credit" if original.payment_method == "credit" else "cash"
+
+    # التصنيف المالي بصيغة cat_X
+    financial_category_id = f"cat_{original.financial_category.id}" if original.financial_category else None
+
+    # بيانات البنود
+    duplicate_items = json.dumps([
+        {
+            "product_id": item.product.id,
+            "quantity": float(item.quantity),
+            "unit_price": float(item.unit_price),
+            "discount": float(item.discount),
+            "total": float(item.total),
+        }
+        for item in original.items.all()
+    ])
+
+    form = SaleForm(initial={
+        "date": timezone.now().date(),
+        "customer": original.customer,
+        "warehouse": original.warehouse,
+        "discount": original.discount,
+        "notes": original.notes,
+        "payment_method": original.payment_method,
+        "financial_category": financial_category_id,
+    })
+
+    context = {
+        "form": form,
+        "products": products,
+        "product_categories": product_categories,
+        "customers": customers,
+        "warehouses": warehouses,
+        "next_sale_number": next_sale_number,
+        "selected_customer": original.customer,
+        "default_warehouse": original.warehouse or (warehouses.first() if warehouses.exists() else None),
+        # بيانات النسخ
+        "is_duplicate": True,
+        "duplicate_from": original.number,
+        "duplicate_items": duplicate_items,
+        "duplicate_invoice_type": invoice_type,
+        "duplicate_payment_method": original.payment_method,
+        "duplicate_financial_category_id": financial_category_id,
+        "page_title": f"نسخ فاتورة - {original.number}",
+        "page_subtitle": f"نسخة من فاتورة {original.number} | {original.customer.name}",
+        "page_icon": "fas fa-copy",
+        "header_buttons": [
+            {
+                "url": reverse("sale:sale_detail", kwargs={"pk": original.pk}),
+                "icon": "fa-arrow-right",
+                "text": "العودة للفاتورة الأصلية",
+                "class": "btn-secondary",
+            },
+        ],
+        "breadcrumb_items": [
+            {"title": "الرئيسية", "url": reverse("core:dashboard"), "icon": "fas fa-home"},
+            {"title": "المبيعات", "url": reverse("sale:sale_list"), "icon": "fas fa-shopping-cart"},
+            {"title": original.number, "url": reverse("sale:sale_detail", kwargs={"pk": original.pk}), "icon": "fas fa-file-invoice"},
+            {"title": "نسخ الفاتورة", "active": True},
+        ],
+    }
+
+    return render(request, "sale/sale_form.html", context)

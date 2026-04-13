@@ -1,4 +1,4 @@
-# دليل المكونات المشتركة - Corporate ERP
+﻿# دليل المكونات المشتركة - Corporate ERP
 
 ## 📋 نظرة عامة
 
@@ -634,7 +634,7 @@ axe.run(document, function (err, results) {
 
 ### ما تم توحيده:
 
-#### 1. صفحة قائمة الطلاب (`templates/students/students/list.html`)
+#### 1. صفحة قائمة العناصر (`templates/students/students/list.html`)
 **قبل التوحيد:**
 - هيدر مكتوب يدوياً مع breadcrumb منفصل
 - كروت إحصائيات Bootstrap عادية
@@ -650,8 +650,8 @@ axe.run(document, function (err, results) {
 **الإضافات:**
 ```python
 # بيانات الهيدر الموحد
-context['page_title'] = 'قائمة الطلاب'
-context['page_subtitle'] = 'إدارة الطلاب وعرض بياناتهم الأكاديمية والمالية'
+context['page_title'] = 'قائمة العناصر'
+context['page_subtitle'] = 'إدارة العناصر وعرض بياناتهم'
 context['page_icon'] = 'fas fa-graduation-cap'
 
 # أزرار الهيدر
@@ -659,7 +659,7 @@ context['header_buttons'] = [
     {
         'url': reverse('students:student_create'),
         'icon': 'fa-plus',
-        'text': 'إضافة طالب جديد',
+        'text': 'إضافة عنصر جديد',
         'class': 'btn-primary'
     }
 ]
@@ -672,7 +672,7 @@ context['breadcrumb_items'] = [
         'icon': 'fas fa-home'
     },
     {
-        'title': 'الطلاب',
+        'title': 'العناصر',
         'active': True,
         'icon': 'fas fa-graduation-cap'
     }
@@ -724,24 +724,24 @@ context['breadcrumb_items'] = [
 
 #### 5. الصفحات المتوافقة الآن:
 - ✅ صفحة الموردين (`supplier/core/supplier_list.html`)
-- ✅ صفحة الطلاب (`students/students/list.html`)
+- ✅ صفحة العناصر (`students/students/list.html`)
 - 🔄 باقي الصفحات (قيد التوحيد التدريجي)
 
 #### 6. المكونات المستخدمة:
 ```django
 <!-- الهيدر الموحد -->
 {% include "shared/page_header.html" with 
-    title="قائمة الطلاب" 
-    subtitle="إدارة الطلاب وعرض بياناتهم الأكاديمية والمالية" 
+    title="قائمة العناصر" 
+    subtitle="إدارة العناصر وعرض بياناتهم" 
     icon="fas fa-graduation-cap" 
     header_buttons=header_buttons 
 %}
 
 <!-- كروت الإحصائيات الموحدة -->
 {% include "shared/stats_card.html" with 
-    title="إجمالي الطلاب" 
+    title="إجمالي العناصر" 
     value=stats.total_students 
-    unit="طالب" 
+    unit="عنصر" 
     icon="fa-users" 
     color="primary" 
 %}

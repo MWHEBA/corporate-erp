@@ -1,15 +1,7 @@
 """
 خدمة إدارة حسابات الموردين والعملاء في دليل الحسابات
-
-⚠️ DEPRECATED: This service is deprecated and should not be used for new code.
-
-For suppliers, use: supplier.services.supplier_service.SupplierService
-For customers, use: client.services.CustomerService
-
-This service is kept for backward compatibility with parent accounts only.
 """
 import logging
-import warnings
 from django.db import transaction
 from django.db.models import Sum
 from django.utils.translation import gettext_lazy as _
@@ -19,48 +11,16 @@ logger = logging.getLogger(__name__)
 
 class SupplierParentAccountService:
     """
-    خدمة مركزية لإدارة ربط الموردين والعملاء بدليل الحسابات
-    
-    ⚠️ DEPRECATED: Use unified services instead:
-    - For suppliers: SupplierService.create_financial_account_for_supplier()
-    - For customers: CustomerService.create_financial_account_for_customer()
+    خدمة مركزية لإدارة ربط الموردين وأولياء الأمور بدليل الحسابات
     """
 
     @staticmethod
     def create_supplier_account(supplier, user=None):
         """
         إنشاء حساب محاسبي للمورد
-        
-        ⚠️ DEPRECATED: Use SupplierService.create_financial_account_for_supplier() instead
 
         Args:
             supplier: كائن المورد
-            user: المستخدم الذي ينشئ الحساب (اختياري)
-
-        Returns:
-            ChartOfAccounts: الحساب المحاسبي المنشأ
-        """
-        warnings.warn(
-            "SupplierParentAccountService.create_supplier_account() is deprecated. "
-            "Use SupplierService.create_financial_account_for_supplier() instead.",
-            DeprecationWarning,
-            stacklevel=2
-        )
-        
-        # Redirect to unified service
-        from supplier.services.supplier_service import SupplierService
-        return SupplierService.create_financial_account_for_supplier(
-            supplier=supplier,
-            user=user
-        )
-
-    @staticmethod
-    def create_parent_account(parent, user=None):
-        """
-        إنشاء حساب محاسبي لالعميل
-
-        Args:
-            parent: كائن العميل
             user: المستخدم الذي ينشئ الحساب (اختياري)
 
         Returns:
@@ -70,23 +30,21 @@ class SupplierParentAccountService:
 
         try:
             with transaction.atomic():
-                # البحث عن الحساب الرئيسي للعملاء
-                receivables_type = AccountType.objects.filter(
-                    code="RECEIVABLES"
-                ).first()
-                if not receivables_type:
-                    raise ValueError("نوع حساب RECEIVABLES غير موجود")
+                # البحث عن الحساب الرئيسي للموردين
+                payables_type = AccountType.objects.filter(code="PAYABLES").first()
+                if not payables_type:
+                    raise ValueError("نوع حساب PAYABLES غير موجود")
 
                 parent_account = ChartOfAccounts.objects.filter(
-                    account_type=receivables_type, parent__isnull=True, is_active=True
+                    account_type=payables_type, is_active=True
                 ).first()
 
                 if not parent_account:
                     # إنشاء الحساب الرئيسي إذا لم يكن موجوداً
                     parent_account = ChartOfAccounts.objects.create(
-                        code="10300",
-                        name="العملاء",
-                        account_type=receivables_type,
+                        code="20100",
+                        name="الموردون",
+                        account_type=payables_type,
                         is_active=True,
                         is_leaf=False,
                         is_control_account=True,
@@ -94,63 +52,131 @@ class SupplierParentAccountService:
                     )
 
                 # توليد كود فريد للحساب الفرعي
-                code = f"1030{parent.id:03d}"  # مثال: 10300001
+                code = f"2010{supplier.id:03d}"  # مثال: 20100001
 
                 # التحقق من عدم وجود الكود
                 if ChartOfAccounts.objects.filter(code=code).exists():
                     # إذا كان موجوداً، نستخدم timestamp
                     import time
 
-                    code = f"1103{int(time.time()) % 1000:03d}"
+                    code = f"2010{int(time.time()) % 10000:04d}"
 
-                # حساب الرصيد الافتتاحي من طلبات المنتجات المُسلمة
-                from student_products.models import ProductRequest
-                from decimal import Decimal
-                
-                # إجمالي طلبات المنتجات المُسلمة لأبناء العميل
-                opening_balance = Decimal('0')
-                for student in parent.students.all():
-                    student_debt = ProductRequest.objects.filter(
-                        student=student,
-                        status='delivered'
-                    ).aggregate(
-                        total=Sum('outstanding_amount')
-                    )['total'] or Decimal('0')
-                    
-                    opening_balance += student_debt
+                # حساب الرصيد الافتتاحي من القيود المرحلة فقط
+                from purchase.models import Purchase, PurchasePayment
+                # إجمالي فواتير الشراء المرحلة
+                total_purchases = (
+                    Purchase.objects.filter(
+                        supplier=supplier,
+                        journal_entry__isnull=False,
+                        journal_entry__status="posted",
+                    ).aggregate(total=Sum("total"))["total"]
+                    or 0
+                )
+
+                # إجمالي المدفوعات المرحلة
+                total_payments = (
+                    PurchasePayment.objects.filter(
+                        purchase__supplier=supplier,
+                        purchase__journal_entry__isnull=False,
+                        purchase__journal_entry__status="posted",
+                    ).aggregate(total=Sum("amount"))["total"]
+                    or 0
+                )
+
+                opening_balance = total_purchases - total_payments
 
                 # إنشاء الحساب الفرعي
                 account = ChartOfAccounts.objects.create(
                     code=code,
-                    name=f"ولي أمر - {parent.name}",
+                    name=f"مورد - {supplier.name}",
+                    parent=parent_account,
+                    account_type=payables_type,
+                    is_active=True,
+                    is_leaf=True,
+                    opening_balance=opening_balance,
+                    description=f"حساب المورد: {supplier.name} (كود: {supplier.code})",
+                    created_by=user,
+                )
+
+                # ربط الحساب بالمورد
+                supplier.financial_account = account
+                supplier.save(update_fields=["financial_account"])
+
+                return account
+
+        except Exception as e:
+            logger.error(f"فشل إنشاء حساب للمورد {supplier.name}: {e}")
+            raise
+
+    @staticmethod
+    def create_customer_account(customer, user=None):
+        """
+        إنشاء حساب محاسبي للعميل (بديل create_parent_account)
+
+        Args:
+            customer: كائن العميل (client.Customer)
+            user: المستخدم الذي ينشئ الحساب (اختياري)
+
+        Returns:
+            ChartOfAccounts: الحساب المحاسبي المنشأ
+        """
+        from financial.models import ChartOfAccounts, AccountType
+        from decimal import Decimal
+
+        try:
+            with transaction.atomic():
+                receivables_type = AccountType.objects.filter(code="RECEIVABLES").first()
+                if not receivables_type:
+                    raise ValueError("نوع حساب RECEIVABLES غير موجود")
+
+                parent_account = ChartOfAccounts.objects.filter(
+                    code="10300", is_active=True
+                ).first()
+
+                if not parent_account:
+                    parent_account = ChartOfAccounts.objects.create(
+                        code="10300",
+                        name="مدينو العملاء",
+                        account_type=receivables_type,
+                        is_active=True,
+                        is_leaf=False,
+                        is_control_account=True,
+                        created_by=user,
+                    )
+
+                code = f"1030{customer.id:04d}"
+                if ChartOfAccounts.objects.filter(code=code).exists():
+                    import time
+                    code = f"1030{int(time.time()) % 10000:04d}"
+
+                account = ChartOfAccounts.objects.create(
+                    code=code,
+                    name=f"عميل - {customer}",
                     parent=parent_account,
                     account_type=receivables_type,
                     is_active=True,
                     is_leaf=True,
-                    opening_balance=opening_balance,
-                    description=f"حساب العميل: {parent.name} (كود: {parent.id})",
+                    opening_balance=Decimal('0'),
+                    description=f"حساب العميل: {customer}",
                     created_by=user,
                 )
 
-                # ربط الحساب بالعميل
-                parent.financial_account = account
-                parent.save(update_fields=["financial_account"])
+                customer.financial_account = account
+                customer.save(update_fields=["financial_account"])
 
-                logger.info(
-                    f"تم إنشاء حساب محاسبي {account.code} لالعميل {parent.name}"
-                )
                 return account
 
         except Exception as e:
-            logger.error(f"فشل إنشاء حساب لالعميل {parent.name}: {e}")
+            logger.error(f"فشل إنشاء حساب للعميل {customer}: {e}")
             raise
+
+    # Alias للتوافق مع الكود القديم
+    create_parent_account = create_customer_account
 
     @staticmethod
     def get_or_create_supplier_account(supplier, user=None):
         """
         الحصول على الحساب المحاسبي للمورد أو إنشاؤه إذا لم يكن موجوداً
-        
-        ⚠️ DEPRECATED: Use SupplierService.create_financial_account_for_supplier() instead
 
         Args:
             supplier: كائن المورد
@@ -159,37 +185,25 @@ class SupplierParentAccountService:
         Returns:
             ChartOfAccounts: الحساب المحاسبي
         """
-        warnings.warn(
-            "SupplierParentAccountService.get_or_create_supplier_account() is deprecated. "
-            "Use SupplierService.create_financial_account_for_supplier() instead.",
-            DeprecationWarning,
-            stacklevel=2
-        )
-        
         if supplier.financial_account:
             return supplier.financial_account
-        
-        from supplier.services.supplier_service import SupplierService
-        return SupplierService.create_financial_account_for_supplier(
-            supplier=supplier,
-            user=user
-        )
+        return SupplierParentAccountService.create_supplier_account(supplier, user)
 
     @staticmethod
+    def get_or_create_customer_account(customer, user=None):
+        """
+        الحصول على الحساب المحاسبي للعميل أو إنشاؤه إذا لم يكن موجوداً
+        """
+        if customer.financial_account:
+            return customer.financial_account
+        return SupplierParentAccountService.create_customer_account(customer, user)
+
+    # Alias للتوافق مع الكود القديم
+    @staticmethod
     def get_or_create_parent_account(parent, user=None):
-        """
-        الحصول على الحساب المحاسبي لالعميل أو إنشاؤه إذا لم يكن موجوداً
-
-        Args:
-            parent: كائن العميل
-            user: المستخدم (اختياري)
-
-        Returns:
-            ChartOfAccounts: الحساب المحاسبي
-        """
         if parent.financial_account:
             return parent.financial_account
-        return SupplierParentAccountService.create_parent_account(parent, user)
+        return SupplierParentAccountService.create_customer_account(parent, user)
 
     @staticmethod
     def sync_balance(entity):

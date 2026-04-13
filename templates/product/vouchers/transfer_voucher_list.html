@@ -5,6 +5,9 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/shared-components.css' %}">
 <link rel="stylesheet" href="{% static 'css/unified-components.css' %}">
+<style>
+.select2-container { width: 100% !important; }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -12,16 +15,7 @@
     {% csrf_token %}
     
     {% include "shared/page_header.html" with title=title header_buttons=header_buttons breadcrumb_items=breadcrumb_items %}
-    
-    <!-- تنبيه: استخدام الأذون الجماعية -->
-    <div class="alert alert-info alert-dismissible fade show" role="alert">
-        <i class="fas fa-info-circle me-2"></i>
-        <strong>ملاحظة:</strong> للعمل بشكل أسرع وأكثر كفاءة، يُنصح باستخدام 
-        <a href="{% url 'product:batch_voucher_list' %}" class="alert-link">الأذون الجماعية</a>
-        التي تسمح بإضافة عدة منتجات في إذن واحد.
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-    
+
     <!-- فلاتر البحث -->
     <div class="section-container mb-4">
         <h5 class="section-title"><i class="fas fa-filter me-2"></i>فلاتر البحث</h5>
@@ -149,36 +143,43 @@
 
 {% block extra_js %}
 <script src="{% static 'js/global-table.js' %}"></script>
+<script src="{% static 'js/product-select2.js' %}"></script>
 <script>
 $(document).ready(function() {
-    // تهيئة الجدول - التحقق من وجوده أولاً
+    // تهيئة الجدول
     if ($('#transfer-vouchers-table').length && typeof GlobalTableManager !== 'undefined') {
         GlobalTableManager.initializeTable('transfer-vouchers-table', {
             order: [[1, 'desc']],
-            columnDefs: [
-                { targets: -1, orderable: false }
-            ]
+            columnDefs: [{ targets: -1, orderable: false }]
         });
     }
     
+    // تهيئة select2 عند فتح المودال
+    $('#transferVoucherModal').on('shown.bs.modal', function() {
+        ProductSelect2.initAll($('#transferVoucherModal'), $('#transferVoucherModal'));
+        // ربط الـ change event بعد تهيئة select2
+        $('#id_product').off('change.transfer').on('change.transfer', handleProductChange);
+    });
+    
     // فتح مودال التحويل
     window.openTransferVoucherModal = function() {
-        // إعادة تعيين النموذج
         $('#transferVoucherForm')[0].reset();
+        var $product = $('#id_product');
+        if ($product.hasClass('select2-hidden-accessible')) {
+            $product.val(null).trigger('change');
+        }
         $('#id_from_warehouse').prop('disabled', true).html('<option value="">--- اختر المنتج أولاً ---</option>');
         $('#id_to_warehouse').prop('disabled', true).html('<option value="">--- اختر المخزن المصدر أولاً ---</option>');
         $('#from-warehouse-stock').text('');
-        
         $('#transferVoucherModal').modal('show');
     };
     
-    // عند اختيار المنتج، تحميل المخازن التي تحتوي على هذا المنتج
-    $('#id_product').on('change', function() {
+    // عند اختيار المنتج
+    function handleProductChange() {
         const productId = $(this).val();
         const fromWarehouseSelect = $('#id_from_warehouse');
         const toWarehouseSelect = $('#id_to_warehouse');
         
-        // إعادة تعيين الحقول
         fromWarehouseSelect.prop('disabled', true).html('<option value="">جاري التحميل...</option>');
         toWarehouseSelect.prop('disabled', true).html('<option value="">--- اختر المخزن المصدر أولاً ---</option>');
         $('#from-warehouse-stock').text('');
@@ -188,14 +189,11 @@ $(document).ready(function() {
             return;
         }
         
-        // جلب المخازن التي تحتوي على المنتج
         $.ajax({
             url: '{% url "product:get_product_warehouses" %}',
             data: { product_id: productId },
             success: function(data) {
                 let options = '<option value="">--- اختر المخزن ---</option>';
-                
-                // فلترة المخازن التي تحتوي على كمية فقط
                 const availableWarehouses = data.warehouses.filter(w => w.quantity > 0);
                 
                 if (availableWarehouses.length === 0) {
@@ -209,8 +207,6 @@ $(document).ready(function() {
                 }
                 
                 fromWarehouseSelect.html(options);
-                
-                // حفظ بيانات المخازن للاستخدام لاحقاً
                 fromWarehouseSelect.data('all-warehouses', data.warehouses);
                 fromWarehouseSelect.data('unit', data.unit);
             },
@@ -218,9 +214,9 @@ $(document).ready(function() {
                 fromWarehouseSelect.html('<option value="">حدث خطأ في تحميل المخازن</option>');
             }
         });
-    });
+    }
     
-    // عند اختيار المخزن المصدر، تحميل باقي المخازن (ماعدا المصدر)
+    // عند اختيار المخزن المصدر
     $('#id_from_warehouse').on('change', function() {
         const selectedWarehouseId = $(this).val();
         const selectedOption = $(this).find('option:selected');
@@ -228,14 +224,12 @@ $(document).ready(function() {
         const unit = $(this).data('unit') || 'وحدة';
         const toWarehouseSelect = $('#id_to_warehouse');
         
-        // عرض الكمية المتاحة
         if (selectedWarehouseId && quantity) {
             $('#from-warehouse-stock').text(`الكمية المتاحة: ${quantity} ${unit}`);
         } else {
             $('#from-warehouse-stock').text('');
         }
         
-        // إعادة تعيين حقل المخزن الهدف
         toWarehouseSelect.prop('disabled', true).html('<option value="">جاري التحميل...</option>');
         
         if (!selectedWarehouseId) {
@@ -243,7 +237,6 @@ $(document).ready(function() {
             return;
         }
         
-        // تحميل جميع المخازن النشطة ماعدا المخزن المصدر
         const allWarehouses = [
             {% for warehouse in warehouses %}
             {id: '{{ warehouse.id }}', name: '{{ warehouse.name }}'}{% if not forloop.last %},{% endif %}
@@ -274,21 +267,19 @@ $(document).ready(function() {
             url: form.attr('action'),
             method: 'POST',
             data: form.serialize(),
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            },
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
             success: function(response) {
                 if (response.success) {
                     $('#transferVoucherModal').modal('hide');
                     window.location.href = response.redirect_url;
                 } else {
-                    alert(response.message || 'حدث خطأ');
+                    toastr.error(response.message || 'حدث خطأ');
                     submitBtn.prop('disabled', false).html(originalText);
                 }
             },
             error: function(xhr) {
                 const response = xhr.responseJSON;
-                alert(response?.message || 'حدث خطأ في الحفظ');
+                toastr.error(response?.message || 'حدث خطأ في الحفظ');
                 submitBtn.prop('disabled', false).html(originalText);
             }
         });

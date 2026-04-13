@@ -180,7 +180,7 @@ def test_contract(db, test_employee, test_user, test_chart_of_accounts):
     """Create test contract with salary components"""
     from hr.models import Contract, SalaryComponent
     from datetime import date
-    
+
     # Create contract
     contract, created = Contract.objects.get_or_create(
         employee=test_employee,
@@ -193,58 +193,70 @@ def test_contract(db, test_employee, test_user, test_chart_of_accounts):
             'created_by': test_user
         }
     )
-    
+
     if not created:
-        # Update existing contract
         contract.start_date = date(2024, 1, 1)
         contract.basic_salary = Decimal('5000')
         contract.status = 'active'
         contract.save()
-    
-    # Create salary components
+
     components_data = [
         {
-            'code': 'BASIC_SALARY',
-            'name': 'Basic Salary',
-            'component_type': 'earning',
-            'amount': Decimal('5000'),
-            'calculation_method': 'fixed',
-            'order': 1,
-            'effective_from': date(2024, 1, 1),
-            'is_active': True,
-            'is_basic': True
+            'code': 'BASIC_SALARY', 'name': 'Basic Salary',
+            'component_type': 'earning', 'amount': Decimal('5000'),
+            'calculation_method': 'fixed', 'order': 1,
+            'effective_from': date(2024, 1, 1), 'is_active': True, 'is_basic': True
         },
         {
-            'code': 'HOUSING_ALLOWANCE',
-            'name': 'Housing Allowance',
-            'component_type': 'earning',
-            'amount': Decimal('1000'),
-            'calculation_method': 'fixed',
-            'order': 2,
-            'effective_from': date(2024, 1, 1),
-            'is_active': True
+            'code': 'HOUSING_ALLOWANCE', 'name': 'Housing Allowance',
+            'component_type': 'earning', 'amount': Decimal('1000'),
+            'calculation_method': 'fixed', 'order': 2,
+            'effective_from': date(2024, 1, 1), 'is_active': True
         },
         {
-            'code': 'SOCIAL_INSURANCE',
-            'name': 'Social Insurance',
-            'component_type': 'deduction',
-            'amount': Decimal('600'),
-            'calculation_method': 'fixed',
-            'order': 3,
-            'effective_from': date(2024, 1, 1),
-            'is_active': True
+            'code': 'SOCIAL_INSURANCE', 'name': 'Social Insurance',
+            'component_type': 'deduction', 'amount': Decimal('600'),
+            'calculation_method': 'fixed', 'order': 3,
+            'effective_from': date(2024, 1, 1), 'is_active': True
         }
     ]
-    
+
     for comp_data in components_data:
         SalaryComponent.objects.get_or_create(
-            employee=test_employee,
-            contract=contract,
-            code=comp_data['code'],
-            defaults=comp_data
+            employee=test_employee, contract=contract,
+            code=comp_data['code'], defaults=comp_data
         )
-    
+
     return contract
+
+
+@pytest.fixture
+def approved_attendance_summaries(db, test_employee, test_user):
+    """
+    Create approved AttendanceSummary records for all months used in POC tests.
+    Required by the attendance approval gate before any payroll can be calculated.
+    """
+    from hr.models import AttendanceSummary
+    from django.utils import timezone as tz
+
+    months = [
+        date(2024, 1, 1), date(2024, 2, 1), date(2024, 3, 1),
+        date(2024, 4, 1), date(2024, 5, 1), date(2024, 6, 1),
+        date(2024, 7, 1),
+    ]
+    summaries = []
+    for month in months:
+        summary, _ = AttendanceSummary.objects.get_or_create(
+            employee=test_employee,
+            month=month,
+            defaults={
+                'total_working_days': 22, 'present_days': 22,
+                'is_calculated': True, 'is_approved': True,
+                'approved_by': test_user, 'approved_at': tz.now(),
+            }
+        )
+        summaries.append(summary)
+    return summaries
 
 
 @pytest.mark.django_db(transaction=True)
@@ -252,7 +264,7 @@ class TestPayrollGatewayPOC:
     """POC tests for PayrollGateway integration"""
     
     @pytest.mark.django_db
-    def test_01_payroll_gateway_basic_creation(self, test_employee, test_contract, test_user):
+    def test_01_payroll_gateway_basic_creation(self, test_employee, test_contract, test_user, approved_attendance_summaries):
         """
         Test 1: Basic payroll creation via PayrollGateway
         
@@ -286,11 +298,11 @@ class TestPayrollGatewayPOC:
         print(f"   Employee: {payroll.employee.get_full_name_ar()}")
         print(f"   Month: {payroll.month.strftime('%Y-%m')}")
         print(f"   Gross Salary: {payroll.gross_salary}")
-        print(f"   Net Salary: {payroll.net_salary}")
+        print(f"   Net Salary: {payroll.correct_net_salary}")
         print(f"   Status: {payroll.status}")
     
     @pytest.mark.django_db
-    def test_02_idempotency_protection(self, test_employee, test_contract, test_user):
+    def test_02_idempotency_protection(self, test_employee, test_contract, test_user, approved_attendance_summaries):
         """
         Test 2: Idempotency protection prevents duplicate payrolls
         
@@ -337,7 +349,7 @@ class TestPayrollGatewayPOC:
         print(f"   Total payrolls for month: {payroll_count}")
     
     @pytest.mark.django_db
-    def test_03_audit_trail_creation(self, test_employee, test_contract, test_user):
+    def test_03_audit_trail_creation(self, test_employee, test_contract, test_user, approved_attendance_summaries):
         """
         Test 3: Audit trail is created automatically
         
@@ -385,7 +397,7 @@ class TestPayrollGatewayPOC:
         assert payroll.status == 'calculated', "Payroll should be calculated"
     
     @pytest.mark.django_db
-    def test_04_salary_calculation_accuracy(self, test_employee, test_contract, test_user):
+    def test_04_salary_calculation_accuracy(self, test_employee, test_contract, test_user, approved_attendance_summaries):
         """
         Test 4: Salary calculations are accurate
         
@@ -434,7 +446,7 @@ class TestAccountingGatewayPOC:
     """POC tests for AccountingGateway integration"""
     
     @pytest.mark.django_db
-    def test_05_journal_entry_creation(self, test_employee, test_contract, test_user, test_accounting_period):
+    def test_05_journal_entry_creation(self, test_employee, test_contract, test_user, test_accounting_period, approved_attendance_summaries):
         """
         Test 5: Journal entry creation via AccountingGateway
         
@@ -514,7 +526,7 @@ class TestAccountingGatewayPOC:
         print(f"   Lines: {entry.lines.count()}")
     
     @pytest.mark.django_db
-    def test_06_journal_entry_idempotency(self, test_employee, test_contract, test_user, test_accounting_period):
+    def test_06_journal_entry_idempotency(self, test_employee, test_contract, test_user, test_accounting_period, approved_attendance_summaries):
         """
         Test 6: Journal entry idempotency protection
         
@@ -667,7 +679,18 @@ class TestPerformancePOC:
                 is_active=True,
                 is_basic=True
             )
-            
+
+            # Attendance approval gate requires an approved summary
+            from hr.models import AttendanceSummary
+            from django.utils import timezone as tz
+            AttendanceSummary.objects.create(
+                employee=employee,
+                month=date(2024, 7, 1),
+                total_working_days=22, present_days=22,
+                is_calculated=True, is_approved=True,
+                approved_by=test_user, approved_at=tz.now(),
+            )
+
             employees.append(employee)
         
         print(f"[OK] Created {len(employees)} test employees")

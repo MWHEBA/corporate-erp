@@ -9,9 +9,6 @@
     </div>
     <div>
       <span class="fw-bold">{{ title }}</span>
-      <br><small class="text-muted">
-        {% if supplier_type %}تعديل بيانات نوع المورد{% else %}إضافة نوع مورد جديد{% endif %}
-      </small>
     </div>
   </h5>
   <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -282,12 +279,13 @@
 }
 
 .modal-header {
-  background: #f8f9fa;
-  border-bottom: 1px solid #dee2e6;
+  background-color: var(--bg-light);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .modal-title {
-  font-size: 1.1rem;
+  font-size: var(--font-size-lg);
+  color: var(--text-dark);
 }
 
 /* form-section موجود في components.css */
@@ -296,14 +294,14 @@
 
 .form-label.required::after {
   content: " *";
-  color: #dc3545;
+  color: var(--danger-color);
 }
 
 /* Icon Field */
 .icon-field-wrapper {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-sm);
 }
 
 .icon-field-wrapper select {
@@ -314,15 +312,15 @@
 .selected-icon-preview {
   width: 38px;
   height: 38px;
-  border-radius: 6px;
-  border: 2px solid #dee2e6;
-  background-color: #f8f9fa;
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-light);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
-  color: #495057;
-  transition: all 0.3s ease;
+  font-size: var(--font-size-xl);
+  color: var(--text-medium);
+  transition: var(--transition-all);
   flex-shrink: 0;
 }
 
@@ -335,37 +333,37 @@ select.form-select option {
 .color-input-wrapper {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-sm);
 }
 
 .color-preview {
   width: 38px;
   height: 38px;
-  border-radius: 6px;
-  border: 2px solid #dee2e6;
-  background-color: #007bff;
-  transition: all 0.3s ease;
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--border-color);
+  background-color: var(--primary-color);
+  transition: var(--transition-all);
 }
 
 .color-btn {
   width: 28px;
   height: 28px;
-  border-radius: 6px;
-  border: 2px solid #dee2e6;
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--border-color);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: var(--transition-all);
   position: relative;
 }
 
 .color-btn:hover {
   transform: scale(1.1);
-  border-color: #007bff;
-  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
+  border-color: var(--primary-color);
+  box-shadow: 0 2px 8px rgba(var(--primary-rgb), 0.3);
 }
 
 .color-btn.selected {
-  border-color: #007bff;
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.25);
 }
 
 .color-btn.selected::after {
@@ -374,9 +372,9 @@ select.form-select option {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  color: white;
-  font-size: 12px;
-  font-weight: bold;
+  color: var(--white);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
   text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
 }
 
@@ -387,28 +385,28 @@ select.form-select option {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
-  border-radius: 6px;
+  transition: var(--transition-all);
+  border-radius: var(--border-radius-md);
 }
 
 .icon-btn:hover {
-  background-color: #007bff;
-  color: white;
-  border-color: #007bff;
+  background-color: var(--primary-color);
+  color: var(--white);
+  border-color: var(--primary-color);
   transform: scale(1.05);
 }
 
 .icon-btn.selected {
-  background-color: #007bff;
-  color: white;
-  border-color: #007bff;
+  background-color: var(--primary-color);
+  color: var(--white);
+  border-color: var(--primary-color);
 }
 
 /* Preview Section */
 .preview-section {
-  background: #f8f9fa;
-  border-radius: 8px;
-  padding: 1.5rem;
+  background-color: var(--bg-light);
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-6);
   height: fit-content;
   position: sticky;
   top: 20px;
@@ -417,43 +415,43 @@ select.form-select option {
 .preview-container {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: var(--spacing-6);
 }
 
 .preview-item {
-  background: white;
-  border-radius: 6px;
-  padding: 1rem;
-  border: 1px solid #e9ecef;
+  background-color: var(--white);
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-4);
+  border: 1px solid var(--border-color);
 }
 
 .preview-label {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #6c757d;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-muted);
   display: block;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-sm);
 }
 
 /* Table Preview */
 .table-preview {
-  padding: 0.5rem;
-  background: #fff;
-  border-radius: 4px;
+  padding: var(--spacing-sm);
+  background-color: var(--white);
+  border-radius: var(--border-radius-sm);
 }
 
 .type-icon-small {
   width: 32px;
   height: 32px;
-  border-radius: 50%;
-  background-color: #007bff;
-  color: white;
+  border-radius: var(--border-radius-full);
+  background-color: var(--primary-color);
+  color: var(--white);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.875rem;
-  margin-left: 0.75rem;
-  transition: all 0.3s ease;
+  font-size: var(--font-size-sm);
+  margin-left: var(--spacing-3);
+  transition: var(--transition-all);
 }
 
 /* Card Preview */
@@ -464,41 +462,42 @@ select.form-select option {
 
 .type-card {
   text-align: center;
-  padding: 1rem;
+  padding: var(--spacing-4);
 }
 
 .type-icon-large {
   width: 60px;
   height: 60px;
-  border-radius: 50%;
-  background-color: #007bff;
-  color: white;
+  border-radius: var(--border-radius-full);
+  background-color: var(--primary-color);
+  color: var(--white);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.5rem;
-  margin: 0 auto 0.75rem;
-  transition: all 0.3s ease;
+  font-size: var(--font-size-2xl);
+  margin: 0 auto var(--spacing-3);
+  transition: var(--transition-all);
 }
 
 .type-details h6 {
-  margin-bottom: 0.25rem;
-  font-size: 1rem;
-  font-weight: 600;
+  margin-bottom: var(--spacing-1);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
 }
 
 .type-code {
-  font-size: 0.8rem;
-  background: #e9ecef;
-  padding: 0.2rem 0.4rem;
-  border-radius: 3px;
+  font-size: var(--font-size-sm);
+  background-color: var(--bg-soft-secondary);
+  color: var(--text-dark);
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--border-radius-sm);
   display: inline-block;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
 }
 
 .type-description {
-  font-size: 0.85rem;
-  color: #6c757d;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
   margin: 0;
 }
 
@@ -510,14 +509,14 @@ select.form-select option {
 .type-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background-color: #007bff;
-  color: white;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2) var(--spacing-4);
+  background-color: var(--primary-color);
+  color: var(--white);
   border-radius: 20px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  transition: all 0.3s ease;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  transition: var(--transition-all);
 }
 
 /* Responsive */
@@ -533,19 +532,19 @@ select.form-select option {
 }
 
 /* Form Controls */
-.form-control:focus {
-  border-color: #007bff;
-  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+.form-control:focus, .form-select:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 0.2rem rgba(var(--primary-rgb), 0.25);
 }
 
 .form-check-input:checked {
-  background-color: #007bff;
-  border-color: #007bff;
+  background-color: var(--primary-color);
+  border-color: var(--primary-color);
 }
 </style>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+(function initSupplierTypeModal() {
     // الحصول على عناصر النموذج باستخدام selectors ثابتة
     const form = document.getElementById('supplierTypeForm');
     const nameField = document.querySelector('input[name="name"]');
@@ -858,10 +857,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (iconSelect && iconSelect.value) {
             const currentPreviewIcon = document.querySelector('#selectedIconPreview i')?.className;
             if (currentPreviewIcon !== iconSelect.value) {
-                // Icon mismatch detected, updating preview
                 updatePreview();
             }
         }
     }, 1000);
-});
+})();
 </script>

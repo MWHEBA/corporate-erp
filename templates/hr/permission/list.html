@@ -14,67 +14,6 @@
   <!-- Page Header المركزي -->
   {% include "shared/page_header.html" %}
 
-  <!-- الإحصائيات -->
-  {% if show_stats %}
-  <div class="section-container">
-    <h5 class="section-title"><i class="fas fa-chart-bar me-2"></i>الإحصائيات</h5>
-    <div class="row">
-      <div class="col-md-3 mb-3">
-        <div class="stats-card stats-card-primary">
-          <div class="stats-card-header"></div>
-          <div class="stats-card-body">
-            <div class="stats-card-icon">
-              <i class="fas fa-clock"></i>
-            </div>
-            <div class="stats-card-title">إجمالي الطلبات</div>
-            <div class="stats-card-value">{{ total_permissions|default:"0" }}</div>
-            <div class="stats-card-unit">طلب</div>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-3 mb-3">
-        <div class="stats-card stats-card-warning">
-          <div class="stats-card-header"></div>
-          <div class="stats-card-body">
-            <div class="stats-card-icon">
-              <i class="fas fa-hourglass-half"></i>
-            </div>
-            <div class="stats-card-title">قيد الانتظار</div>
-            <div class="stats-card-value">{{ pending_permissions|default:"0" }}</div>
-            <div class="stats-card-unit">طلب</div>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-3 mb-3">
-        <div class="stats-card stats-card-success">
-          <div class="stats-card-header"></div>
-          <div class="stats-card-body">
-            <div class="stats-card-icon">
-              <i class="fas fa-check-circle"></i>
-            </div>
-            <div class="stats-card-title">معتمدة</div>
-            <div class="stats-card-value">{{ approved_permissions|default:"0" }}</div>
-            <div class="stats-card-unit">طلب</div>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-3 mb-3">
-        <div class="stats-card stats-card-danger">
-          <div class="stats-card-header"></div>
-          <div class="stats-card-body">
-            <div class="stats-card-icon">
-              <i class="fas fa-times-circle"></i>
-            </div>
-            <div class="stats-card-title">مرفوضة</div>
-            <div class="stats-card-value">{{ rejected_permissions|default:"0" }}</div>
-            <div class="stats-card-unit">طلب</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-  {% endif %}
-
   <!-- تصفية وبحث -->
   <div class="section-container">
     <h5 class="section-title"><i class="fas fa-filter me-2"></i>تصفية وبحث</h5>
@@ -112,12 +51,23 @@
             </select>
         </div>
         <div class="col-md-2">
-            <label for="from_date" class="form-label">من تاريخ</label>
-            <input type="text" name="from_date" id="from_date" class="form-control" data-date-picker placeholder="من تاريخ" value="{{ request.GET.from_date }}">
+            <label for="is_extra" class="form-label">نوع الطلب</label>
+            <select name="is_extra" id="is_extra" class="form-select">
+                <option value="">الكل</option>
+                <option value="0" {% if request.GET.is_extra == '0' %}selected{% endif %}>عادي</option>
+                <option value="1" {% if request.GET.is_extra == '1' %}selected{% endif %}>إضافي (يُخصم)</option>
+            </select>
         </div>
         <div class="col-md-2">
-            <label for="to_date" class="form-label">إلى تاريخ</label>
-            <input type="text" name="to_date" id="to_date" class="form-control" data-date-picker placeholder="إلى تاريخ" value="{{ request.GET.to_date }}">
+            <label for="month" class="form-label">الشهر</label>
+            <select name="month" id="month" class="form-select">
+                <option value="">كل الشهور</option>
+                {% for choice in month_choices %}
+                <option value="{{ choice.value }}" {% if month_filter == choice.value %}selected{% endif %}>
+                    {{ choice.label }}
+                </option>
+                {% endfor %}
+            </select>
         </div>
         <div class="col-md-1 d-flex align-items-end">
             <button type="submit" class="btn btn-primary w-100">
@@ -146,6 +96,7 @@
                     <tr>
                         <th class="text-center">الموظف</th>
                         <th class="text-center">نوع الإذن</th>
+                        <th class="text-center">نوع الطلب</th>
                         <th class="text-center">التاريخ</th>
                         <th class="text-center">من</th>
                         <th class="text-center">إلى</th>
@@ -166,9 +117,25 @@
                         <td class="text-center">
                             <span class="badge bg-info">{{ permission.permission_type.name_ar }}</span>
                         </td>
+                        <td class="text-center">
+                            {% if permission.is_extra %}
+                                <span class="badge bg-warning text-dark">
+                                    <i class="fas fa-exclamation-triangle me-1"></i>إضافي
+                                </span>
+                                {% if permission.is_deduction_exempt %}
+                                    <br><span class="badge bg-success mt-1">
+                                        <i class="fas fa-shield-alt me-1"></i>معفي
+                                    </span>
+                                {% elif permission.deduction_hours %}
+                                    <br><small class="text-muted">خصم: {{ permission.deduction_hours }} س</small>
+                                {% endif %}
+                            {% else %}
+                                <span class="badge bg-light text-dark border">عادي</span>
+                            {% endif %}
+                        </td>
                         <td class="text-center">{{ permission.date|date:"Y-m-d" }}</td>
-                        <td class="text-center">{{ permission.start_time|time:"H:i" }}</td>
-                        <td class="text-center">{{ permission.end_time|time:"H:i" }}</td>
+                        <td class="text-center">{{ permission.start_time|time:"h:i A" }}</td>
+                        <td class="text-center">{{ permission.end_time|time:"h:i A" }}</td>
                         <td class="text-center">
                             <strong>{{ permission.duration_hours }}</strong> ساعة
                         </td>
@@ -190,10 +157,12 @@
                                     <i class="fas fa-eye"></i>
                                 </a>
                                 {% if permission.status == 'pending' %}
-                                <a href="{% url 'hr:permission_approve' permission.pk %}" class="btn btn-success" title="اعتماد">
+                                <button type="button" class="btn btn-success" title="اعتماد"
+                                    onclick="approvePermission('{{ permission.pk }}')">
                                     <i class="fas fa-check"></i>
-                                </a>
-                                <button type="button" class="btn btn-danger" title="رفض" data-permission-id="{{ permission.pk }}" onclick="rejectPermission(this.getAttribute('data-permission-id'))">
+                                </button>
+                                <button type="button" class="btn btn-danger" title="رفض"
+                                    onclick="rejectPermission('{{ permission.pk }}')">
                                     <i class="fas fa-times"></i>
                                 </button>
                                 {% endif %}
@@ -225,7 +194,7 @@ $(document).ready(function() {
             order: [[6, 'desc']],
             responsive: true,
             columnDefs: [
-                { targets: [7, 8], orderable: false, className: 'text-center' }
+                { targets: [8, 9], orderable: false, className: 'text-center' }
             ]
         });
         
@@ -242,10 +211,120 @@ $(document).ready(function() {
     }
 });
 
+function approvePermission(permissionId) {
+    Swal.fire({
+        title: 'اعتماد الطلب',
+        text: 'هل أنت متأكد من اعتماد هذا الإذن؟',
+        icon: 'question',
+        input: 'textarea',
+        inputPlaceholder: 'ملاحظات المراجعة (اختياري)...',
+        showCancelButton: true,
+        confirmButtonColor: '#28a745',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'نعم، اعتمد',
+        cancelButtonText: 'إلغاء',
+        showLoaderOnConfirm: true,
+        preConfirm: (notes) => {
+            return fetch(`/hr/permissions/${permissionId}/approve/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: new URLSearchParams({
+                    'review_notes': notes || ''
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(response.statusText)
+                }
+                return response.json()
+            })
+            .catch(error => {
+                Swal.showValidationMessage(`فشل الطلب: ${error}`)
+            })
+        },
+        allowOutsideClick: () => !Swal.isLoading()
+    }).then((result) => {
+        if (result.isConfirmed) {
+            if (result.value.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'تم الاعتماد',
+                    text: result.value.message,
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => {
+                    window.location.reload();
+                });
+            } else {
+                Swal.fire('خطأ', result.value.message, 'error');
+            }
+        }
+    });
+}
+
 function rejectPermission(permissionId) {
-    if (confirm('هل أنت متأكد من رفض هذا الطلب؟')) {
-        window.location.href = '/hr/permissions/' + permissionId + '/reject/';
-    }
+    Swal.fire({
+        title: 'رفض الطلب',
+        text: 'الرجاء إدخال سبب الرفض:',
+        icon: 'warning',
+        input: 'textarea',
+        inputPlaceholder: 'سبب الرفض...',
+        inputAttributes: {
+            'required': 'true'
+        },
+        inputValidator: (value) => {
+            if (!value) {
+                return 'يجب إدخال سبب الرفض'
+            }
+        },
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'نعم، ارفض',
+        cancelButtonText: 'إلغاء',
+        showLoaderOnConfirm: true,
+        preConfirm: (notes) => {
+            return fetch(`/hr/permissions/${permissionId}/reject/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: new URLSearchParams({
+                    'review_notes': notes
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(response.statusText)
+                }
+                return response.json()
+            })
+            .catch(error => {
+                Swal.showValidationMessage(`فشل الطلب: ${error}`)
+            })
+        },
+        allowOutsideClick: () => !Swal.isLoading()
+    }).then((result) => {
+        if (result.isConfirmed) {
+            if (result.value.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'تم الرفض',
+                    text: result.value.message,
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => {
+                    window.location.reload();
+                });
+            } else {
+                Swal.fire('خطأ', result.value.message, 'error');
+            }
+        }
+    });
 }
 </script>
 {% endblock %}

@@ -1,4 +1,4 @@
-"""
+﻿"""
 اختبارات خدمة تحليل الربحية حسب التصنيفات
 """
 import pytest
@@ -69,8 +69,8 @@ class TestCategoryProfitabilityService:
         
         # إنشاء تصنيف مالي
         self.category = FinancialCategory.objects.create(
-            code='tuition',
-            name='الرسوم الدراسية',
+            code='sales',
+            name='مبيعات',
             default_revenue_account=self.revenue_account,
             default_expense_account=self.expense_account
         )
@@ -158,10 +158,10 @@ class TestCategoryProfitabilityService:
     
     def test_get_category_report(self):
         """اختبار الحصول على تقرير تصنيف واحد"""
-        report = CategoryProfitabilityService.get_category_report('tuition')
+        report = CategoryProfitabilityService.get_category_report('sales')
         
         assert report['success'] is True
-        assert report['category']['code'] == 'tuition'
+        assert report['category']['code'] == 'sales'
         assert report['summary']['revenues'] == Decimal('10000.00')
         assert report['summary']['expenses'] == Decimal('6000.00')
         assert report['summary']['profit'] == Decimal('4000.00')
@@ -189,7 +189,7 @@ class TestCategoryProfitabilityService:
         top = CategoryProfitabilityService.get_top_profitable_categories(limit=3)
         
         assert len(top) == 1
-        assert top[0]['code'] == 'tuition'
+        assert top[0]['code'] == 'sales'
         assert top[0]['profit'] == Decimal('4000.00')
     
     def test_get_loss_making_categories(self):

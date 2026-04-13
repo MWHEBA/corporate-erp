@@ -176,9 +176,9 @@ class Command(BaseCommand):
         """تفعيل سير العمل الحرج"""
         
         critical_workflows = [
-            'student_fee_to_journal_entry',
+            'customer_payment_to_journal_entry',
             'stock_movement_to_journal_entry',
-            'fee_payment_to_journal_entry',
+            'purchase_payment_to_journal_entry',
             'admin_direct_edit_prevention',
             'cross_service_validation',
             'audit_logging',
@@ -230,9 +230,9 @@ class Command(BaseCommand):
         ]
         
         critical_workflows = [
-            'student_fee_to_journal_entry',
+            'customer_payment_to_journal_entry',
             'stock_movement_to_journal_entry',
-            'fee_payment_to_journal_entry',
+            'purchase_payment_to_journal_entry',
             'admin_direct_edit_prevention',
             'cross_service_validation',
             'audit_logging',

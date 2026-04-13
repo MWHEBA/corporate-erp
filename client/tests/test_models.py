@@ -1,5 +1,5 @@
 """
-اختبارات شاملة لنماذج العملاء - تغطية 100%
+اختبارات شاملة لنماذج العملاء
 """
 
 from django.test import TestCase, override_settings

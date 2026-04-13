@@ -23,13 +23,10 @@ from .payment_sync import (
 )
 from .bank_reconciliation import BankReconciliation, BankReconciliationItem
 from .categories import FinancialCategory, CategoryBudget, FinancialSubcategory
-# AuditTrail moved to governance app - use governance.models.AuditTrail instead
-# PaymentAuditMixin moved to financial.mixins
+from .audit_trail import AuditTrail, PaymentAuditMixin
 from .invoice_audit_log import InvoiceAuditLog
 from .partner_transactions import PartnerTransaction, PartnerBalance
 from .partner_settings import PartnerSettings, PartnerPermission, PartnerAuditLog
-# Installment models removed - not needed for Corporate ERP
-# from .installment import InstallmentPlan, Installment
 
 # استيراد آمن للنماذج الاختيارية
 try:
@@ -76,8 +73,8 @@ __all__ = [
     "CategoryBudget",
     "FinancialSubcategory",
     # نماذج التدقيق
-    # "AuditTrail",  # Moved to governance.models.AuditTrail
-    # "PaymentAuditMixin",  # Moved to financial.mixins.PaymentAuditMixin
+    "AuditTrail",
+    "PaymentAuditMixin",
     "InvoiceAuditLog",
     # نماذج معاملات الشريك
     "PartnerTransaction",
@@ -90,9 +87,4 @@ __all__ = [
     "ExpenseTransaction",
     "IncomeTransaction",
     "TransactionAttachment",
-    # Installment models removed - not needed for Corporate ERP
-    # "InstallmentPlan", 
-    # "Installment",
-    # ملاحظة: FeeItem و FeePayment تم حذفهما
-    # استخدم students.StudentFee و students.FeePayment بدلاً منهما
 ]

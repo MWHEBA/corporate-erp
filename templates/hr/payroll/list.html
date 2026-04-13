@@ -31,18 +31,18 @@
                             <label class="form-label text-muted small">الشهر</label>
                             <select name="month" class="form-select">
                                 <option value="">جميع الشهور</option>
-                                <option value="01" {% if request.GET.month == '01' %}selected{% endif %}>يناير</option>
-                                <option value="02" {% if request.GET.month == '02' %}selected{% endif %}>فبراير</option>
-                                <option value="03" {% if request.GET.month == '03' %}selected{% endif %}>مارس</option>
-                                <option value="04" {% if request.GET.month == '04' %}selected{% endif %}>أبريل</option>
-                                <option value="05" {% if request.GET.month == '05' %}selected{% endif %}>مايو</option>
-                                <option value="06" {% if request.GET.month == '06' %}selected{% endif %}>يونيو</option>
-                                <option value="07" {% if request.GET.month == '07' %}selected{% endif %}>يوليو</option>
-                                <option value="08" {% if request.GET.month == '08' %}selected{% endif %}>أغسطس</option>
-                                <option value="09" {% if request.GET.month == '09' %}selected{% endif %}>سبتمبر</option>
-                                <option value="10" {% if request.GET.month == '10' %}selected{% endif %}>أكتوبر</option>
-                                <option value="11" {% if request.GET.month == '11' %}selected{% endif %}>نوفمبر</option>
-                                <option value="12" {% if request.GET.month == '12' %}selected{% endif %}>ديسمبر</option>
+                                <option value="01" {% if selected_month == '01' %}selected{% endif %}>يناير</option>
+                                <option value="02" {% if selected_month == '02' %}selected{% endif %}>فبراير</option>
+                                <option value="03" {% if selected_month == '03' %}selected{% endif %}>مارس</option>
+                                <option value="04" {% if selected_month == '04' %}selected{% endif %}>أبريل</option>
+                                <option value="05" {% if selected_month == '05' %}selected{% endif %}>مايو</option>
+                                <option value="06" {% if selected_month == '06' %}selected{% endif %}>يونيو</option>
+                                <option value="07" {% if selected_month == '07' %}selected{% endif %}>يوليو</option>
+                                <option value="08" {% if selected_month == '08' %}selected{% endif %}>أغسطس</option>
+                                <option value="09" {% if selected_month == '09' %}selected{% endif %}>سبتمبر</option>
+                                <option value="10" {% if selected_month == '10' %}selected{% endif %}>أكتوبر</option>
+                                <option value="11" {% if selected_month == '11' %}selected{% endif %}>نوفمبر</option>
+                                <option value="12" {% if selected_month == '12' %}selected{% endif %}>ديسمبر</option>
                             </select>
                         </div>
                         <div class="col-md-2">

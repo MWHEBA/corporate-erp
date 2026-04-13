@@ -1,6 +1,6 @@
-/**
- * Advanced Cache Manager for Student Profile
- * مدير التخزين المؤقت المتقدم لصفحة الطالب
+﻿/**
+ * Advanced Cache Manager
+ * مدير التخزين المؤقت المتقدم
  */
 
 class CacheManager {
@@ -451,14 +451,14 @@ class CacheManager {
     async encrypt(data) {
         // Simple encryption (for demo purposes)
         // In production, use Web Crypto API
-        const key = 'student-profile-cache-key';
+        const key = 'profile-cache-key';
         const encrypted = btoa(JSON.stringify(data) + key);
         return encrypted;
     }
 
     async decrypt(encryptedData) {
         // Simple decryption (for demo purposes)
-        const key = 'student-profile-cache-key';
+        const key = 'profile-cache-key';
         const decrypted = atob(encryptedData);
         return JSON.parse(decrypted.replace(key, ''));
     }
@@ -704,7 +704,7 @@ class CacheManager {
 
 // Initialize cache manager
 document.addEventListener('DOMContentLoaded', function() {
-    if (document.querySelector('.enhanced-student-profile')) {
+    if (document.querySelector('.enhanced-profile')) {
         window.cacheManager = new CacheManager();
         
         // Expose cache stats for debugging

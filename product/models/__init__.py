@@ -7,6 +7,7 @@ from .product_core import Category, Unit, Product, ProductImage, ProductVariant,
 from .stock_management import Warehouse, Stock, StockMovement
 from .supplier_pricing import SupplierProductPrice, PriceHistory
 from .system_utils import SerialNumber
+from .batch_voucher import BatchVoucher, BatchVoucherItem
 
 # النماذج المحسنة الجديدة
 try:
@@ -36,10 +37,6 @@ try:
         LocationMovement,
         LocationTask,
     )
-    from .batch_voucher import (
-        BatchVoucher,
-        BatchVoucherItem,
-    )
 except ImportError:
     # في حالة عدم توفر النماذج الجديدة، استخدم None
     StockTransfer = StockSnapshot = None
@@ -49,7 +46,6 @@ except ImportError:
     ExpiryAlert = ExpiryRule = None
     LocationZone = LocationAisle = LocationShelf = None
     ProductLocation = LocationMovement = LocationTask = None
-    BatchVoucher = BatchVoucherItem = None
 
 # تصدير جميع النماذج (الأساسية والمحسنة)
 __all__ = [
@@ -67,6 +63,8 @@ __all__ = [
     "SerialNumber",
     "SupplierProductPrice",
     "PriceHistory",
+    "BatchVoucher",
+    "BatchVoucherItem",
     # النماذج المحسنة - المخازن
     "StockTransfer",
     "StockSnapshot",
@@ -91,7 +89,4 @@ __all__ = [
     "ProductLocation",
     "LocationMovement",
     "LocationTask",
-    # الأذون الجماعية
-    "BatchVoucher",
-    "BatchVoucherItem",
 ]

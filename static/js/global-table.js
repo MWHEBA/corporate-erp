@@ -82,7 +82,7 @@ if (typeof window.GlobalTableManager === 'undefined') {
      * @returns {Object|null} DataTable instance or null if initialization fails
      * 
      * @example
-     * GlobalTableManager.initializeTable('students-table', {
+     * GlobalTableManager.initializeTable('data-table', {
      *     order: [[1, 'asc']],
      *     columnDefs: [
      *         { targets: 0, width: '5%', orderable: false },

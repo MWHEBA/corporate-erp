@@ -1,11 +1,11 @@
-{% comment %}
+﻿{% comment %}
 ========================================
 مكون بطاقة الإحصائيات الموحد
 Unified Stats Card Component
 ========================================
 
 الاستخدام | Usage:
-{% include "components/stats_card.html" with icon="fas fa-users" title="إجمالي الطلاب" value=150 unit="طالب" variant="primary" %}
+{% include "components/stats_card.html" with icon="fas fa-users" title="إجمالي العناصر" value=150 unit="عنصر" variant="primary" %}
 
 المعاملات | Parameters:
 - icon: أيقونة FontAwesome (مطلوب | Required)
@@ -18,7 +18,7 @@ Unified Stats Card Component
 أمثلة | Examples:
 
 1. بطاقة بسيطة | Simple card:
-{% include "components/stats_card.html" with icon="fas fa-users" title="إجمالي الطلاب" value=150 unit="طالب" variant="primary" %}
+{% include "components/stats_card.html" with icon="fas fa-users" title="إجمالي العناصر" value=150 unit="عنصر" variant="primary" %}
 
 2. بطاقة قابلة للنقر | Clickable card:
 {% include "components/stats_card.html" with icon="fas fa-chart-line" title="المشتريات" value=50000 unit="جنيه" variant="success" url="/purchases/" %}

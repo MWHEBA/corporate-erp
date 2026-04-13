@@ -41,7 +41,6 @@ class InventoryMovement(models.Model):
         ("manual", _("يدوي")),
         ("receipt_voucher", _("إذن استلام")),
         ("issue_voucher", _("إذن صرف")),
-        ("batch_voucher", _("إذن جماعي")),
     )
 
     VOUCHER_TYPES = (
@@ -52,20 +51,27 @@ class InventoryMovement(models.Model):
 
     # أغراض أذون الاستلام
     RECEIPT_PURPOSE_TYPES = (
-        ("donation", _("تبرع/هدية واردة")),
+        ("supplies_gifts", _("سبلايز/هدايا")),
         ("inventory_gain", _("زيادة جرد")),
-        ("other", _("أخرى")),
     )
 
     # أغراض أذون الصرف
     ISSUE_PURPOSE_TYPES = (
+        ("office_supplies", _("مستلزمات إدارية")),
+        ("educational_supplies", _("مستلزمات تعليمية")),
+        ("activity_materials", _("خامات أنشطة")),
+        ("classroom_equipment", _("تجهيزات فصول")),
+        ("maintenance", _("صيانة")),
+        ("cleaning", _("نظافة")),
         ("samples", _("عينات مجانية")),
-        ("marketing", _("تسويق وإعلان")),
+        ("exhibition", _("معرض")),
+        ("advertising", _("إعلانات")),
         ("gifts", _("هدايا")),
+        ("charity", _("تبرع خيري")),
         ("damage", _("تلف")),
         ("expired", _("منتهي الصلاحية")),
         ("theft", _("سرقة/فقدان")),
-        ("other", _("أخرى")),
+        ("inventory_loss", _("نقص جرد")),
     )
 
     # دمج جميع الأغراض
@@ -90,7 +96,7 @@ class InventoryMovement(models.Model):
         _("نوع الحركة"), max_length=20, choices=MOVEMENT_TYPES
     )
     document_type = models.CharField(
-        _("نوع المستند"), max_length=50, choices=DOCUMENT_TYPES, default="manual"
+        _("نوع المستند"), max_length=20, choices=DOCUMENT_TYPES, default="manual"
     )
     document_number = models.CharField(
         _("رقم المستند"), max_length=50, blank=True, null=True
@@ -227,17 +233,6 @@ class InventoryMovement(models.Model):
         help_text=_("اسم الشخص المُصدر (لأذون الصرف)"),
     )
 
-    # ربط بالإذن الجماعي
-    batch_voucher = models.ForeignKey(
-        "BatchVoucher",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="inventory_movements",
-        verbose_name=_("الإذن الجماعي"),
-        help_text=_("الإذن الجماعي الذي أنشأ هذه الحركة (إن وجد)"),
-    )
-
     class Meta:
         verbose_name = _("حركة مخزون")
         verbose_name_plural = _("حركات المخزون")
@@ -254,18 +249,14 @@ class InventoryMovement(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.movement_number:
-            # توليد رقم الحركة تلقائياً (thread-safe)
+            # توليد رقم الحركة تلقائياً
             from .system_utils import SerialNumber
-            from django.db.models import F
 
-            # الحصول على أو إنشاء SerialNumber
-            serial, created = SerialNumber.objects.get_or_create(
+            serial = SerialNumber.objects.get_or_create(
                 document_type="inventory_movement",
                 year=timezone.now().year,
-                defaults={"prefix": "INV", "last_number": 0},
-            )
-            
-            # استخدام F() expression لعمل atomic increment
+                defaults={"prefix": "INV"},
+            )[0]
             next_number = serial.get_next_number()
             self.movement_number = f"{serial.prefix}{next_number:04d}"
 
@@ -283,60 +274,60 @@ class InventoryMovement(models.Model):
         return self.is_approved and not self.is_reversed
 
     def approve(self, user):
-        """
-        اعتماد الحركة وتطبيقها على المخزون
-        """
+        """اعتماد الحركة وتطبيقها على المخزون"""
         if not self.can_approve():
             return False
 
         try:
             from .stock_management import Stock
-            
-            # الحصول على سجل المخزون للحفظ الحالة قبل التغيير
-            stock = Stock.objects.filter(
-                product=self.product,
-                warehouse=self.warehouse
-            ).first()
-            
-            if stock:
-                self.quantity_before = stock.quantity
-                self.average_cost_before = stock.average_cost
-            else:
-                self.quantity_before = Decimal('0')
-                self.average_cost_before = self.product.cost_price or Decimal('0')
 
-            # تطبيق الحركة على المخزون مباشرة
-            if self.movement_type in ["in", "transfer_in", "adjustment_in", "return_in", "found"]:
-                # حركة دخول - زيادة المخزون
-                if stock:
-                    # حساب متوسط التكلفة الجديد
-                    total_cost = (stock.quantity * stock.average_cost) + (self.quantity * self.unit_cost)
-                    new_quantity = stock.quantity + self.quantity
-                    stock.average_cost = total_cost / new_quantity if new_quantity > 0 else self.unit_cost
-                    stock.quantity = new_quantity
+            # الحصول على أو إنشاء سجل المخزون
+            stock, created = Stock.objects.get_or_create(
+                product=self.product,
+                warehouse=self.warehouse,
+                defaults={
+                    "quantity": 0,
+                    "average_cost": self.product.cost_price or Decimal("0.00"),
+                },
+            )
+
+            # حفظ الحالة قبل التغيير
+            self.quantity_before = stock.quantity
+            self.average_cost_before = stock.average_cost
+
+            # تطبيق الحركة حسب النوع
+            if self.movement_type in [
+                "in",
+                "transfer_in",
+                "adjustment_in",
+                "return_in",
+                "found",
+            ]:
+                # حركة وارد - زيادة المخزون
+                if self.movement_type == "in":
+                    # تحديث متوسط التكلفة للوارد الجديد
+                    stock.update_average_cost(self.quantity, self.unit_cost)
+                else:
+                    stock.quantity += self.quantity
+                    stock.last_movement_date = timezone.now()
+                    stock.save()
+
+            elif self.movement_type in [
+                "out",
+                "transfer_out",
+                "adjustment_out",
+                "return_out",
+                "damaged",
+                "expired",
+                "lost",
+            ]:
+                # حركة صادر - تقليل المخزون
+                if stock.quantity >= self.quantity:
+                    stock.quantity -= self.quantity
                     stock.last_movement_date = timezone.now()
                     stock.save()
                 else:
-                    # إنشاء سجل مخزون جديد
-                    stock = Stock.objects.create(
-                        product=self.product,
-                        warehouse=self.warehouse,
-                        quantity=self.quantity,
-                        average_cost=self.unit_cost,
-                        last_movement_date=timezone.now()
-                    )
-                    
-            elif self.movement_type in ["out", "transfer_out", "adjustment_out", "return_out", "damaged", "expired", "lost"]:
-                # حركة خروج - تقليل المخزون
-                if not stock:
-                    raise ValueError(f'المنتج غير موجود في المخزن')
-                    
-                if stock.quantity < self.quantity:
-                    raise ValueError(f'الكمية المتاحة ({stock.quantity}) أقل من المطلوبة ({self.quantity})')
-                
-                stock.quantity -= self.quantity
-                stock.last_movement_date = timezone.now()
-                stock.save()
+                    return False  # لا توجد كمية كافية
 
             # حفظ الحالة بعد التغيير
             stock.refresh_from_db()

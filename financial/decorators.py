@@ -52,8 +52,8 @@ def require_financial_validation(
         
     Usage:
         # مثال بسيط
-        @require_financial_validation(entity_param='student', date_param='payment_date')
-        def process_student_payment(student, amount, payment_date):
+        @require_financial_validation(entity_param='customer', date_param='payment_date')
+        def process_customer_payment(customer, amount, payment_date):
             # معالجة الدفعة
             pass
         
@@ -69,14 +69,14 @@ def require_financial_validation(
             pass
         
         # مثال مع طريقة في class
-        class StudentPaymentView(View):
+        class CustomerPaymentView(View):
             @require_financial_validation(
-                entity_param='student',
+                entity_param='customer',
                 date_param='payment_date',
-                module='students'
+                module='client'
             )
-            def post(self, request, student_id):
-                student = Student.objects.get(id=student_id)
+            def post(self, request, customer_id):
+                customer = Customer.objects.get(id=customer_id)
                 # معالجة الدفعة
                 pass
     """
@@ -198,8 +198,8 @@ def require_chart_of_accounts_only(
         FinancialValidationError: إذا فشل التحقق من الحساب المحاسبي
         
     Usage:
-        @require_chart_of_accounts_only(entity_param='student')
-        def generate_student_report(student):
+        @require_chart_of_accounts_only(entity_param='customer')
+        def generate_customer_report(customer):
             # توليد التقرير
             pass
     """

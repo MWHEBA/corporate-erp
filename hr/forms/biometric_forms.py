@@ -44,7 +44,24 @@ class BiometricDeviceForm(forms.ModelForm):
 
 class BiometricUserMappingForm(forms.ModelForm):
     """نموذج ربط معرف البصمة بالموظف"""
-    
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from hr.models import Employee
+
+        # Get employees who already have an active mapping (exclude current instance when editing)
+        mapped_employee_ids = BiometricUserMapping.objects.filter(is_active=True)
+        if self.instance and self.instance.pk:
+            mapped_employee_ids = mapped_employee_ids.exclude(employee=self.instance.employee)
+        mapped_employee_ids = mapped_employee_ids.values_list('employee_id', flat=True)
+
+        # Filter: active employees only, excluding those with an active mapping
+        self.fields['employee'].queryset = Employee.objects.filter(
+            status='active'
+        ).exclude(
+            id__in=mapped_employee_ids
+        ).order_by('employee_number')
+
     class Meta:
         model = BiometricUserMapping
         fields = ['employee', 'biometric_user_id', 'device', 'is_active', 'notes']

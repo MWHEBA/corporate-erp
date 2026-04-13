@@ -144,7 +144,7 @@ class SalaryComponent(models.Model):
         null=True,
         blank=True,
         verbose_name='النسبة المئوية',
-        help_text='من الراتب الأساسي'
+        help_text='من الأجر الأساسي'
     )
     formula = models.CharField(
         max_length=255,
@@ -157,7 +157,7 @@ class SalaryComponent(models.Model):
     is_basic = models.BooleanField(
         default=False,
         verbose_name='راتب أساسي',
-        help_text='هل هذا هو الراتب الأساسي؟'
+        help_text='هل هذا هو الأجر الأساسي؟'
     )
     is_taxable = models.BooleanField(
         default=True,
@@ -267,7 +267,7 @@ class SalaryComponent(models.Model):
         
         Args:
             context: dict يحتوي على:
-                - basic_salary: الراتب الأساسي
+                - basic_salary: الأجر الأساسي
                 - gross_salary: إجمالي الراتب
                 - worked_days: أيام العمل
                 - etc.

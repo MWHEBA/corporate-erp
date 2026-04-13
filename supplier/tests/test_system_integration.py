@@ -1,4 +1,4 @@
-"""
+﻿"""
 اختبارات التكامل النظامي لوظائف الموردين الأساسية
 System Integration Tests for Core Supplier Functionality
 
@@ -35,9 +35,9 @@ class CoreSupplierFunctionalityTest(TestCase):
         
         # إنشاء أنواع موردين أساسية للشركة
         self.educational_type = SupplierType.objects.create(
-            name='مورد تعليمي',
+            name='مورد متخصص',
             code='educational',
-            description='موردي الكتب والمواد التعليمية',
+            description='موردي المواد والمستلزمات المتخصصة',
             icon='fas fa-book',
             color='#007bff'
         )
@@ -88,7 +88,7 @@ class CoreSupplierFunctionalityTest(TestCase):
         
         # اختبار تصنيف المورد
         self.assertEqual(self.supplier.primary_type.code, 'educational')
-        self.assertEqual(self.supplier.get_supplier_type_display_ar(), 'مورد تعليمي')
+        self.assertEqual(self.supplier.get_supplier_type_display_ar(), 'مورد متخصص')
         
         print("   ✅ نموذج المورد يعمل بشكل صحيح")
     
@@ -149,7 +149,7 @@ class CoreSupplierFunctionalityTest(TestCase):
         
         # اختبار العلاقة بين المورد والنوع الأساسي
         self.assertEqual(self.supplier.primary_type, self.educational_type)
-        self.assertEqual(self.supplier.get_primary_type_display(), 'مورد تعليمي')
+        self.assertEqual(self.supplier.get_primary_type_display(), 'مورد متخصص')
         
         print("   ✅ العلاقات بين النماذج تعمل بشكل صحيح")
     
@@ -184,21 +184,21 @@ class CoreSupplierFunctionalityTest(TestCase):
         
         print("   ✅ التحقق من صحة البيانات يعمل بشكل صحيح")
     
-    def test_supplier_school_specific_fields(self):
+    def test_supplier_company_specific_fields(self):
         """
-        اختبار الحقول الخاصة بالمدارس
-        Test school-specific supplier fields
+        اختبار الحقول الخاصة بالشركات
+        Test company-specific supplier fields
         """
-        print("🧪 اختبار الحقول الخاصة بالمدارس...")
+        print("🧪 اختبار الحقول الخاصة بالشركات...")
         
-        # إنشاء مورد تعليمي
+        # إنشاء مورد متخصص
         edu_supplier = Supplier.objects.create(
             name='مكتبة المعرفة',
             code='EDU001',
             primary_type=self.educational_type
         )
         
-        # اختبار وظائف المورد التعليمي
+        # اختبار وظائف المورد المتخصص
         self.assertTrue(edu_supplier.is_educational_supplier())
         
         # إنشاء مقدم خدمات
@@ -211,7 +211,7 @@ class CoreSupplierFunctionalityTest(TestCase):
         # اختبار وظائف مقدم الخدمات
         self.assertTrue(service_provider.is_service_provider())
         
-        print("   ✅ الحقول الخاصة بالمدارس تعمل بشكل صحيح")
+        print("   ✅ الحقول الخاصة بالشركات تعمل بشكل صحيح")
 
 
 class SupplierAdminInterfaceTest(TestCase):
@@ -457,7 +457,7 @@ class SupplierSystemIntegrationTest(TestCase):
             phone='+201234567890',
             email='workflow@test.com',
             primary_type=supplier_type,
-            educational_specialization='كتب مدرسية'
+            educational_specialization='مواد متخصصة'
         )
         
         # 3. إضافة أنواع متعددة
@@ -482,7 +482,7 @@ class SupplierSystemIntegrationTest(TestCase):
         # 6. اختبار الوظائف المتقدمة
         self.assertTrue(updated_supplier.is_educational_supplier())
         edu_info = updated_supplier.get_educational_info()
-        self.assertEqual(edu_info['specialization'], 'كتب مدرسية')
+        self.assertEqual(edu_info['specialization'], 'مواد متخصصة')
         
         print("   ✅ سير العمل الكامل للموردين يعمل بشكل صحيح")
 
@@ -505,7 +505,7 @@ def run_core_functionality_tests():
         test_case.test_supplier_type_settings_functionality()
         test_case.test_supplier_relationships()
         test_case.test_supplier_validation()
-        test_case.test_supplier_school_specific_fields()
+        test_case.test_supplier_company_specific_fields()
         
         print("✅ جميع اختبارات النماذج الأساسية نجحت")
     except Exception as e:

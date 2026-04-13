@@ -34,11 +34,11 @@ def chart_of_accounts(db):
         defaults={'code': 'ASSET', 'nature': 'debit'}
     )
     
-    # Create main customers account (11030)
+    # Create main customers account (10300)
     main_account, _ = ChartOfAccounts.objects.get_or_create(
-        code='11030',
+        code='10300',
         defaults={
-            'name': 'العملاء',
+            'name': 'مدينو العملاء',
             'account_type': asset_type,
             'is_active': True,
             'parent': None
@@ -164,8 +164,8 @@ class TestCustomerServiceFinancialAccount:
         # Verify account was created by signal
         assert customer.financial_account is not None
         assert customer.financial_account.is_active is True
-        assert customer.financial_account.code.startswith('1103')
-        assert customer.financial_account.parent.code == '11030'
+        assert customer.financial_account.code.startswith('1030')
+        assert customer.financial_account.parent.code == '10300'
         assert customer.name in customer.financial_account.name
 
 

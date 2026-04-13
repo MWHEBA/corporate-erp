@@ -49,7 +49,6 @@ class UnifiedSalaryComponentService:
             **data
         )
         
-        logger.info(f"تم إنشاء بند راتب جديد: {component.name} للموظف {employee.get_full_name_ar()}")
         return component
     
     @transaction.atomic
@@ -73,7 +72,6 @@ class UnifiedSalaryComponentService:
         
         component.save()
         
-        logger.info(f"تم تحديث بند راتب: {component.name}")
         return component
     
     @transaction.atomic
@@ -95,11 +93,9 @@ class UnifiedSalaryComponentService:
                 component.is_active = False
                 component.effective_to = timezone.now().date()
                 component.save()
-                logger.info(f"تم تعطيل بند راتب: {component.name}")
             else:
                 component_name = component.name
                 component.delete()
-                logger.info(f"تم حذف بند راتب نهائياً: {component_name}")
             
             return True
         except Exception as e:
@@ -255,7 +251,6 @@ class UnifiedSalaryComponentService:
             
             copied_components.append(component)
         
-        logger.info(f"تم نسخ {len(copied_components)} بند من العقد {contract.id} للموظف {employee.get_full_name_ar()}")
         return copied_components
     
     @transaction.atomic
@@ -326,7 +321,6 @@ class UnifiedSalaryComponentService:
                 )
                 results['added'] += 1
         
-        logger.info(f"مزامنة العقد {contract.id}: {results}")
         return results
     
     # ==================== الحسابات ====================
@@ -349,7 +343,7 @@ class UnifiedSalaryComponentService:
         # جلب البنود النشطة
         components = self.get_active_components(employee, month, include_inactive)
         
-        # الحصول على الراتب الأساسي
+        # الحصول على الأجر الأساسي
         basic_salary = self._get_basic_salary(employee)
         
         # إعداد السياق للحساب
@@ -517,7 +511,7 @@ class UnifiedSalaryComponentService:
         return code
     
     def _get_basic_salary(self, employee):
-        """الحصول على الراتب الأساسي للموظف"""
+        """الحصول على الأجر الأساسي للموظف"""
         # محاولة الحصول من العقد النشط أولاً
         active_contract = employee.contracts.filter(status='active').first()
         if active_contract and active_contract.basic_salary:

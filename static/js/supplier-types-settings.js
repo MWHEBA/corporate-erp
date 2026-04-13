@@ -274,46 +274,59 @@ function initializeDeleteModal() {
 // فتح مودال الإنشاء
 window.openCreateModal = function() {
     fetch('/supplier/settings/types/create/', {
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest'
-        }
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
     })
     .then(response => response.text())
     .then(html => {
         document.getElementById('modalContent').innerHTML = html;
-        executeModalScripts();
+        // تنفيذ الـ scripts المضمنة في المحتوى
+        document.querySelectorAll('#modalContent script').forEach(oldScript => {
+            const newScript = document.createElement('script');
+            newScript.textContent = oldScript.textContent;
+            document.head.appendChild(newScript);
+            document.head.removeChild(newScript);
+        });
         new bootstrap.Modal(document.getElementById('typeModal')).show();
-    });
+    })
+    .catch(err => { if (typeof toastr !== 'undefined') toastr.error('حدث خطأ في تحميل النموذج'); });
 };
 
 // تعديل نوع
 window.editType = function(id) {
     fetch(`/supplier/settings/types/${id}/edit/`, {
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest'
-        }
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
     })
     .then(response => response.text())
     .then(html => {
         document.getElementById('modalContent').innerHTML = html;
-        executeModalScripts();
+        document.querySelectorAll('#modalContent script').forEach(oldScript => {
+            const newScript = document.createElement('script');
+            newScript.textContent = oldScript.textContent;
+            document.head.appendChild(newScript);
+            document.head.removeChild(newScript);
+        });
         new bootstrap.Modal(document.getElementById('typeModal')).show();
-    });
+    })
+    .catch(err => { if (typeof toastr !== 'undefined') toastr.error('حدث خطأ في تحميل النموذج'); });
 };
 
 // حذف نوع
 window.deleteType = function(id) {
     fetch(`/supplier/settings/types/${id}/delete/`, {
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest'
-        }
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
     })
     .then(response => response.text())
     .then(html => {
         document.getElementById('modalContent').innerHTML = html;
-        executeModalScripts();
+        document.querySelectorAll('#modalContent script').forEach(oldScript => {
+            const newScript = document.createElement('script');
+            newScript.textContent = oldScript.textContent;
+            document.head.appendChild(newScript);
+            document.head.removeChild(newScript);
+        });
         new bootstrap.Modal(document.getElementById('typeModal')).show();
-    });
+    })
+    .catch(err => { if (typeof toastr !== 'undefined') toastr.error('حدث خطأ في تحميل النموذج'); });
 };
 
 

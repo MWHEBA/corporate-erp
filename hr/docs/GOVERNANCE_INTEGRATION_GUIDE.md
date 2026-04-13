@@ -366,7 +366,7 @@ class TestPayrollGateway:
             employee=employee,
             contract=contract,
             code='BASIC',
-            name='الراتب الأساسي',
+            name='الأجر الأساسي',
             component_type='earning',
             amount=Decimal('5000')
         )

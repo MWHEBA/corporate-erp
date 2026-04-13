@@ -11,15 +11,47 @@
     <div class="col-md-8">
         <div class="section-container">
             <h5 class="mb-3"><i class="fas fa-info-circle me-2"></i>معلومات الإذن</h5>
-            
+
             <table class="table table-bordered">
                 <tr>
                     <th class="text-center" width="30%">الموظف</th>
-                    <td class="text-center">{{ permission.employee.get_full_name_ar }}</td>
+                    <td class="text-center">
+                        <strong>{{ permission.employee.get_full_name_ar }}</strong>
+                        <br><small class="text-muted">{{ permission.employee.employee_number }}</small>
+                    </td>
                 </tr>
                 <tr>
                     <th class="text-center">نوع الإذن</th>
                     <td class="text-center"><span class="badge bg-info">{{ permission.permission_type.name_ar }}</span></td>
+                </tr>
+                <tr>
+                    <th class="text-center">نوع الطلب</th>
+                    <td class="text-center">
+                        {% if permission.is_extra %}
+                            <span class="badge bg-warning text-dark">
+                                <i class="fas fa-exclamation-triangle me-1"></i>إذن إضافي
+                            </span>
+                            {% if permission.is_deduction_exempt %}
+                                <span class="badge bg-success ms-2">
+                                    <i class="fas fa-shield-alt me-1"></i>معفي من الخصم
+                                </span>
+                            {% else %}
+                                <span class="badge bg-danger ms-2">
+                                    <i class="fas fa-money-bill-wave me-1"></i>يُخصم من الراتب
+                                </span>
+                            {% endif %}
+                            {% if permission.deduction_hours %}
+                                <br><small class="text-muted mt-1 d-block">
+                                    ساعات الخصم: <strong>{{ permission.deduction_hours }}</strong> ساعة
+                                    {% if permission.is_deduction_exempt %}
+                                        <span class="text-success">(معفي - لن يُخصم)</span>
+                                    {% endif %}
+                                </small>
+                            {% endif %}
+                        {% else %}
+                            <span class="badge bg-light text-dark border">إذن عادي</span>
+                        {% endif %}
+                    </td>
                 </tr>
                 <tr>
                     <th class="text-center">التاريخ</th>
@@ -27,7 +59,7 @@
                 </tr>
                 <tr>
                     <th class="text-center">من - إلى</th>
-                    <td class="text-center">{{ permission.start_time|time:"H:i" }} - {{ permission.end_time|time:"H:i" }}</td>
+                    <td class="text-center">{{ permission.start_time|time:"h:i A" }} - {{ permission.end_time|time:"h:i A" }}</td>
                 </tr>
                 <tr>
                     <th class="text-center">المدة</th>
@@ -36,16 +68,6 @@
                 <tr>
                     <th class="text-center">السبب</th>
                     <td class="text-center">{{ permission.reason }}</td>
-                </tr>
-                <tr>
-                    <th class="text-center">ظرف طارئ</th>
-                    <td class="text-center">
-                        {% if permission.is_emergency %}
-                            <span class="badge bg-warning">نعم</span>
-                        {% else %}
-                            <span class="badge bg-secondary">لا</span>
-                        {% endif %}
-                    </td>
                 </tr>
                 <tr>
                     <th class="text-center">الحالة</th>
@@ -92,6 +114,160 @@
             </table>
         </div>
     </div>
+
+    <div class="col-md-4">
+        {% if permission.status == 'pending' %}
+        <div class="section-container">
+            <h5 class="mb-3"><i class="fas fa-tasks me-2"></i>الإجراءات</h5>
+            <div class="d-grid gap-2">
+                <button type="button" class="btn btn-success" onclick="approvePermission('{{ permission.pk }}')">
+                    <i class="fas fa-check me-2"></i>اعتماد الطلب
+                </button>
+                <button type="button" class="btn btn-danger" onclick="rejectPermission('{{ permission.pk }}')">
+                    <i class="fas fa-times me-2"></i>رفض الطلب
+                </button>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if permission.is_extra and not permission.is_deduction_exempt %}
+        <div class="section-container">
+            <h5 class="mb-3"><i class="fas fa-money-bill-wave me-2"></i>تفاصيل الخصم</h5>
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                هذا إذن إضافي وسيتم خصم <strong>{{ permission.deduction_hours }}</strong> ساعة من راتب الموظف.
+            </div>
+        </div>
+        {% elif permission.is_extra and permission.is_deduction_exempt %}
+        <div class="section-container">
+            <h5 class="mb-3"><i class="fas fa-shield-alt me-2 text-success"></i>معفي من الخصم</h5>
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle me-2"></i>
+                هذا إذن إضافي لكنه <strong>معفي من الخصم المالي</strong>. سيتم تسجيل الإذن بدون خصم من الراتب.
+            </div>
+        </div>
+        {% endif %}
+    </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function approvePermission(permissionId) {
+    Swal.fire({
+        title: 'اعتماد الطلب',
+        text: 'هل أنت متأكد من اعتماد هذا الإذن؟',
+        icon: 'question',
+        input: 'textarea',
+        inputPlaceholder: 'ملاحظات المراجعة (اختياري)...',
+        showCancelButton: true,
+        confirmButtonColor: '#28a745',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'نعم، اعتمد',
+        cancelButtonText: 'إلغاء',
+        showLoaderOnConfirm: true,
+        preConfirm: (notes) => {
+            return fetch(`/hr/permissions/${permissionId}/approve/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: new URLSearchParams({
+                    'review_notes': notes || ''
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(response.statusText)
+                }
+                return response.json()
+            })
+            .catch(error => {
+                Swal.showValidationMessage(`فشل الطلب: ${error}`)
+            })
+        },
+        allowOutsideClick: () => !Swal.isLoading()
+    }).then((result) => {
+        if (result.isConfirmed) {
+            if (result.value.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'تم الاعتماد',
+                    text: result.value.message,
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => {
+                    window.location.reload();
+                });
+            } else {
+                Swal.fire('خطأ', result.value.message, 'error');
+            }
+        }
+    });
+}
+
+function rejectPermission(permissionId) {
+    Swal.fire({
+        title: 'رفض الطلب',
+        text: 'الرجاء إدخال سبب الرفض:',
+        icon: 'warning',
+        input: 'textarea',
+        inputPlaceholder: 'سبب الرفض...',
+        inputAttributes: {
+            'required': 'true'
+        },
+        inputValidator: (value) => {
+            if (!value) {
+                return 'يجب إدخال سبب الرفض'
+            }
+        },
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'نعم، ارفض',
+        cancelButtonText: 'إلغاء',
+        showLoaderOnConfirm: true,
+        preConfirm: (notes) => {
+            return fetch(`/hr/permissions/${permissionId}/reject/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: new URLSearchParams({
+                    'review_notes': notes
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(response.statusText)
+                }
+                return response.json()
+            })
+            .catch(error => {
+                Swal.showValidationMessage(`فشل الطلب: ${error}`)
+            })
+        },
+        allowOutsideClick: () => !Swal.isLoading()
+    }).then((result) => {
+        if (result.isConfirmed) {
+            if (result.value.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'تم الرفض',
+                    text: result.value.message,
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => {
+                    window.location.reload();
+                });
+            } else {
+                Swal.fire('خطأ', result.value.message, 'error');
+            }
+        }
+    });
+}
+</script>
 {% endblock %}

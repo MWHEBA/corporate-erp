@@ -143,6 +143,3 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f'  - الموظفين المحدثين: {updated_count}'))
         self.stdout.write(self.style.SUCCESS(f'{"="*60}\n'))
         
-        logger.info(
-            f'تم تحديث أرصدة الإجازات: {updated_count} من {total_employees} موظف'
-        )

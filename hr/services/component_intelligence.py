@@ -194,11 +194,11 @@ class ComponentIntelligence:
         return max(months, 0)
     
     def analyze_component_patterns(self, employee):
-        """تحليل أنماط بنود الموظف (باستثناء الراتب الأساسي)"""
+        """تحليل أنماط بنود الموظف (باستثناء الأجر الأساسي)"""
         components = SalaryComponent.objects.filter(
             employee=employee,
             is_active=True,
-            is_basic=False  # استبعاد الراتب الأساسي
+            is_basic=False  # استبعاد الأجر الأساسي
         )
         
         patterns = {

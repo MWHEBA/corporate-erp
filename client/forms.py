@@ -64,17 +64,20 @@ class CustomerForm(forms.ModelForm):
         # توليد كود تلقائي للعميل الجديد
         if not self.instance.pk:
             # الحصول على آخر كود
-            last_customer = Customer.objects.order_by('-id').first()
-            if last_customer and last_customer.code.startswith('CUST-'):
+            last_customer = Customer.objects.filter(
+                code__startswith='CUST',
+                code__regex=r'^CUST\d+$'
+            ).order_by('-code').first()
+            if last_customer and last_customer.code:
                 try:
-                    last_number = int(last_customer.code.split('-')[1])
+                    last_number = int(last_customer.code.replace('CUST', ''))
                     new_number = last_number + 1
                 except (ValueError, IndexError):
                     new_number = 1
             else:
                 new_number = 1
             
-            self.initial['code'] = f'CUST-{new_number:04d}'
+            self.initial['code'] = f'CUST{new_number:04d}'
 
 
 
@@ -105,52 +108,39 @@ class CustomerAccountChangeForm(forms.ModelForm):
 
             # الحسابات المؤهلة للعملاء - فقط الحسابات الفرعية من حساب العملاء
             # البحث عن حساب العملاء الرئيسي
-            customers_account = ChartOfAccounts.objects.filter(code="11030").first()
+            customers_account = ChartOfAccounts.objects.filter(code="10300").first()
 
             if customers_account:
                 # جلب جميع الحسابات الفرعية (مستوى واحد واثنين)
                 qualified_accounts = (
                     ChartOfAccounts.objects.filter(
                         models.Q(id=customers_account.id)
-                        | models.Q(parent=customers_account)  # الحساب الرئيسي نفسه
-                        | models.Q(  # الحسابات الفرعية المباشرة
-                            parent__parent=customers_account
-                        )  # الحسابات الفرعية من المستوى الثاني
+                        | models.Q(parent=customers_account)
+                        | models.Q(parent__parent=customers_account)
                     )
                     .filter(is_active=True, is_leaf=True)
                     .distinct()
                     .order_by("code")
                 )
             else:
-                # في حالة عدم وجود حساب العملاء، عرض قائمة فارغة
                 qualified_accounts = ChartOfAccounts.objects.none()
 
             self.fields["financial_account"].queryset = qualified_accounts
-            self.fields[
-                "financial_account"
-            ].empty_label = "اختر الحساب المحاسبي المناسب"
-            self.fields[
-                "financial_account"
-            ].help_text = "الحسابات المتاحة: الحسابات الفرعية من حساب العملاء فقط"
+            self.fields["financial_account"].empty_label = "اختر الحساب المحاسبي المناسب"
+            self.fields["financial_account"].help_text = "الحسابات المتاحة: الحسابات الفرعية من حساب العملاء فقط"
             self.fields["financial_account"].label = "الحساب المحاسبي الجديد"
 
     def clean_financial_account(self):
-        """
-        التحقق من أن الحساب المختار مناسب للعملاء
-        """
         account = self.cleaned_data.get("financial_account")
         if account:
-            # التحقق من أن الحساب من حساب العملاء أو فرعي منه
-            customers_account = ChartOfAccounts.objects.filter(code="11030").first()
+            customers_account = ChartOfAccounts.objects.filter(code="10300").first()
             is_valid = False
 
             if customers_account and account:
                 is_valid = (
                     account.id == customers_account.id
-                    or account.parent == customers_account  # الحساب الرئيسي نفسه
-                    or (  # فرعي مباشر
-                        account.parent and account.parent.parent == customers_account
-                    )  # فرعي من المستوى الثاني
+                    or account.parent == customers_account
+                    or (account.parent and account.parent.parent == customers_account)
                 )
 
             if not is_valid:

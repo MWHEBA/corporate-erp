@@ -77,7 +77,6 @@ class FinancialIntegrationSecurityService:
         )
         
         if is_duplicate:
-            logger.info(f"عملية مكررة تم اكتشافها: {transaction_type}:{idempotency_key}")
             return {
                 'success': True,
                 'is_duplicate': True,
@@ -338,7 +337,7 @@ class FinancialIntegrationSecurityService:
         """
         التحقق من صحة بيانات الرسوم
         """
-        required_fields = ['student_id', 'fee_type_id', 'amount']
+        required_fields = ['customer_id', 'fee_type_id', 'amount']
         
         for field in required_fields:
             if field not in data:
@@ -487,4 +486,3 @@ class FinancialIntegrationSecurityService:
         cache_key = f'audit_trail_{transaction_id}'
         cache.set(cache_key, audit_data, timeout=86400)  # 24 ساعة
         
-        logger.info(f"تم إنشاء مسار تدقيق للمعاملة: {transaction_id}")

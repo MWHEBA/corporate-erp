@@ -543,7 +543,7 @@ class AdvanceInstallmentModelTest(TestCase):
     def test_leave_type_creation(self):
         """اختبار إنشاء نوع إجازة"""
         leave_type = LeaveType.objects.create(
-            name_ar='إجازة سنوية',
+            name_ar='إجازة اعتيادية',
             name_en='Annual Leave',
             code='ANNUAL',
             max_days_per_year=21,

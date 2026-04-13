@@ -247,24 +247,14 @@ class IdempotencyService:
         return cls.generate_key('PAY', payment_type, source_id, amount, event_type)
     
     @classmethod
-    def generate_student_fee_key(cls, student_id: int, fee_type_id: int, 
-                               academic_year_id: int, event_type: str = 'create'):
+    def generate_customer_payment_key(cls, customer_id: int, amount: str,
+                                    payment_date: str, event_type: str = 'create'):
         """
-        Generate standardized idempotency key for student fees.
+        Generate standardized idempotency key for customer payments.
         
-        Format: SF:{student_id}:{fee_type_id}:{academic_year_id}:{event_type}
+        Format: CP:{customer_id}:{amount}:{payment_date}:{event_type}
         """
-        return cls.generate_key('SF', student_id, fee_type_id, academic_year_id, event_type)
-    
-    @classmethod
-    def generate_fee_payment_key(cls, student_fee_id: int, amount: str, 
-                               payment_date: str, event_type: str = 'create'):
-        """
-        Generate standardized idempotency key for fee payments.
-        
-        Format: FP:{student_fee_id}:{amount}:{payment_date}:{event_type}
-        """
-        return cls.generate_key('FP', student_fee_id, amount, payment_date, event_type)
+        return cls.generate_key('CP', customer_id, amount, payment_date, event_type)
     
     @classmethod
     def generate_stock_adjustment_key(cls, product_id: int, warehouse_id: int, 

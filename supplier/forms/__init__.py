@@ -180,26 +180,19 @@ class SupplierAccountChangeForm(forms.ModelForm):
                 qualified_accounts = (
                     ChartOfAccounts.objects.filter(
                         models.Q(id=suppliers_account.id)
-                        | models.Q(parent=suppliers_account)  # الحساب الرئيسي نفسه
-                        | models.Q(  # الحسابات الفرعية المباشرة
-                            parent__parent=suppliers_account
-                        )  # الحسابات الفرعية من المستوى الثاني
+                        | models.Q(parent=suppliers_account)
+                        | models.Q(parent__parent=suppliers_account)
                     )
                     .filter(is_active=True, is_leaf=True)
                     .distinct()
                     .order_by("code")
                 )
             else:
-                # في حالة عدم وجود حساب الموردين، عرض قائمة فارغة
                 qualified_accounts = ChartOfAccounts.objects.none()
 
             self.fields["financial_account"].queryset = qualified_accounts
-            self.fields[
-                "financial_account"
-            ].empty_label = "اختر الحساب المحاسبي المناسب"
-            self.fields[
-                "financial_account"
-            ].help_text = "الحسابات المتاحة: الحسابات الفرعية من حساب الموردين فقط"
+            self.fields["financial_account"].empty_label = "اختر الحساب المحاسبي المناسب"
+            self.fields["financial_account"].help_text = "الحسابات المتاحة: الحسابات الفرعية من حساب الموردين فقط"
             self.fields["financial_account"].label = "الحساب المحاسبي الجديد"
 
     def clean_financial_account(self):

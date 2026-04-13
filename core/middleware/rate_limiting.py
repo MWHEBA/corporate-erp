@@ -76,9 +76,9 @@ class RateLimitingMiddleware(MiddlewareMixin):
             else:
                 return {'requests': 100, 'window': 60}  # 100 GET requests per minute
 
-        # Login attempts
+        # Login attempts - only limit POST (actual login attempts, not page loads)
         elif '/login/' in path and method == 'POST':
-            return {'requests': 5, 'window': 300}  # 5 login attempts per 5 minutes
+            return {'requests': 10, 'window': 300}  # 10 login attempts per 5 minutes
 
         return None
 
@@ -93,8 +93,11 @@ class RateLimitingMiddleware(MiddlewareMixin):
         if current_requests >= rate_limit['requests']:
             return True
         
-        # Increment counter
-        cache.set(cache_key, current_requests + 1, rate_limit['window'])
+        # Increment counter only if not yet rate limited
+        if current_requests == 0:
+            cache.set(cache_key, 1, rate_limit['window'])
+        else:
+            cache.incr(cache_key)
         
         return False
 

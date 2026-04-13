@@ -107,7 +107,7 @@ class TransactionService:
             )
             
             if entry:
-                logger.info(f"Journal entry created successfully: {entry.number}")
+                pass
             else:
                 logger.error("Gateway returned None")
             

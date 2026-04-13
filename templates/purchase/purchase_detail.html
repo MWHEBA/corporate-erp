@@ -107,6 +107,7 @@
     .invoice-party {
         flex: 1;
         padding: var(--spacing-4);
+        padding-inline-end: 5%;
         border-radius: var(--border-radius);
         background-color: var(--gray-50);
         border-left: 4px solid var(--primary-color);
@@ -122,17 +123,25 @@
     }
     
     .party-info {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: var(--spacing-2);
         margin-bottom: var(--spacing-2);
+        padding-bottom: var(--spacing-1);
+        border-bottom: 1px solid var(--gray-100);
     }
     
     .party-label {
         font-weight: 600;
         color: var(--gray-600);
-        margin-bottom: var(--spacing-1);
+        white-space: nowrap;
+        flex-shrink: 0;
     }
     
     .party-value {
         font-size: 1rem;
+        text-align: end;
     }
     
     .invoice-items {
@@ -730,9 +739,11 @@
                                                     <i class="fas fa-trash"></i>
                                                 </button>
                                                 {% elif payment.status == 'posted' %}
-                                                <a href="{% url 'purchase:unpost_payment' payment.id %}" class="btn btn-sm btn-warning">
-                                                    <i class="fas fa-undo me-1"></i>إلغاء الترحيل
+                                                {% if payment.financial_transaction %}
+                                                <a href="{% url 'financial:journal_entries_detail' payment.financial_transaction.id %}" class="btn btn-sm btn-outline-info" target="_blank" title="عرض القيد">
+                                                    <i class="fas fa-book"></i>
                                                 </a>
+                                                {% endif %}
                                                 {% endif %}
                                             </div>
                                         </td>
@@ -742,7 +753,7 @@
                             </table>
                         </div>
                         
-                        {% if purchase.amount_due > 0 %}
+                        {% if purchase.payment_status != 'paid' %}
                         <div class="mt-3 text-end">
                             <a href="{% url 'purchase:purchase_add_payment' purchase.id %}" class="btn btn-success btn-lg">
                                 <i class="fas fa-plus me-1"></i> {% trans "إضافة دفعة جديدة" %}

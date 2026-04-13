@@ -99,7 +99,7 @@
         updateUILabels(data.is_service_provider);
         
         // Update financial category based on supplier type
-        updateFinancialCategory(data.is_service_provider);
+        updateFinancialCategory(data.financial_categories || [], data.is_service_provider);
         
     }
 
@@ -222,40 +222,60 @@
 
     /**
      * Update financial category based on supplier type
+     * - Auto mode: shows badge with auto-selected category, hidden input carries the value
+     * - Manual mode: shows full dropdown (toggled by user)
      */
-    function updateFinancialCategory(isService) {
+    function updateFinancialCategory(categories, isService) {
         const categorySelect = $('#id_financial_category');
-        
-        if (categorySelect.length === 0) {
-            return;
+        const autoValueInput = $('#financial_category_auto_value');
+        const autoBadgeText = $('#auto-category-text');
+
+        // Build new options for the manual dropdown
+        let optionsHtml = '<option value="">اختر التصنيف المالي</option>';
+        if (categories && categories.length > 0) {
+            categories.forEach(function(cat) {
+                optionsHtml += `<option value="${cat.value}">${cat.label}</option>`;
+            });
         }
 
-        // Get the appropriate category code
-        const targetCode = isService ? 'operating_expenses' : 'product_sales';
-        
-        // Find and select the option with matching code
-        categorySelect.find('option').each(function() {
-            const optionText = $(this).text().toLowerCase();
-            const optionValue = $(this).val();
-            
-            // Check if this option matches our target
-            if (optionValue) {
-                // Try to match by checking if the option contains the category name
-                if ((targetCode === 'product_sales' && optionText.includes('مبيعات المنتجات')) ||
-                    (targetCode === 'operating_expenses' && optionText.includes('مصروفات تشغيلية'))) {
-                    categorySelect.val(optionValue);
-                    
-                    // Trigger change event for select2 if initialized
-                    if (categorySelect.hasClass('select2-hidden-accessible')) {
-                        categorySelect.trigger('change.select2');
-                    } else {
-                        categorySelect.trigger('change');
-                    }
-                    
-                    return false; // Break the loop
-                }
+        if (categorySelect.length) {
+            if (categorySelect.hasClass('select2-hidden-accessible')) {
+                categorySelect.select2('destroy');
             }
-        });
+
+            // في وضع النسخ: احفظ القيمة الحالية قبل مسح الـ options
+            const preservedValue = (window._disableCategorySuggestion && window._duplicateData)
+                ? window._duplicateData.financialCategoryId
+                : null;
+
+            categorySelect.html(optionsHtml);
+
+            if (preservedValue) {
+                // أعد تحديد التصنيف الأصلي
+                categorySelect.val(preservedValue);
+            } else if (categories && categories.length >= 1) {
+                categorySelect.val(categories[0].value);
+            }
+
+            categorySelect.select2({
+                placeholder: 'اختر التصنيف المالي',
+                width: '100%',
+                allowClear: true
+            });
+        }
+
+        // Update auto badge and hidden value - فقط لو مش في وضع النسخ
+        if (!window._disableCategorySuggestion) {
+            if (categories && categories.length >= 1) {
+                const autoCategory = categories[0];
+                const cleanLabel = autoCategory.label.replace(/^[📁↳\s]+/, '').trim();
+                autoBadgeText.text(cleanLabel);
+                autoValueInput.val(autoCategory.value);
+            } else {
+                autoBadgeText.text('سيتم تحديده تلقائياً');
+                autoValueInput.val('');
+            }
+        }
     }
 
     /**
@@ -302,6 +322,23 @@
         $('#items-title').text('بنود المشتريات');
         $('#add-btn-text').text('إضافة بند');
         $('#items-icon').attr('class', 'fas fa-boxes me-2');
+
+        // Reset financial category to show all options
+        const categorySelect = $('#id_financial_category');
+        if (categorySelect.length) {
+            if (categorySelect.hasClass('select2-hidden-accessible')) {
+                categorySelect.select2('destroy');
+            }
+            categorySelect.val('').trigger('change');
+            categorySelect.select2({
+                placeholder: 'اختر التصنيف المالي',
+                width: '100%',
+                allowClear: true
+            });
+        }
+        // Reset auto badge
+        $('#auto-category-text').text('سيتم تحديده تلقائياً');
+        $('#financial_category_auto_value').val('');
     }
 
     /**

@@ -141,14 +141,21 @@ class SubcategoryUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateV
 
 @require_POST
 def subcategory_delete(request, pk):
-    """حذف تصنيف فرعي"""
+    """حذف تصنيف فرعي - مع التحقق من عدم وجود حركات مالية"""
+    from ..models.journal_entry import JournalEntryLine
     subcategory = get_object_or_404(FinancialSubcategory, pk=pk)
     category_id = subcategory.parent_category.pk
-    
+
+    # التحقق من وجود حركات مالية مرتبطة
+    has_transactions = JournalEntryLine.objects.filter(financial_subcategory=subcategory).exists()
+    if has_transactions:
+        messages.error(request, f'لا يمكن حذف "{subcategory.name}" لأنه مرتبط بحركات مالية مسجلة.')
+        return redirect('financial:subcategory_list', category_id=category_id)
+
     try:
         subcategory.delete()
         messages.success(request, _('تم حذف التصنيف الفرعي بنجاح'))
     except Exception as e:
         messages.error(request, f'فشل حذف التصنيف الفرعي: {str(e)}')
-    
+
     return redirect('financial:subcategory_list', category_id=category_id)

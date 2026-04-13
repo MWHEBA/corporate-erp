@@ -1,4 +1,4 @@
-"""
+﻿"""
 Views إدارة الورديات
 """
 from .base_imports import *
@@ -16,19 +16,21 @@ __all__ = [
 @login_required
 def shift_list(request):
     """قائمة الورديات"""
-    shifts = Shift.objects.prefetch_related('employees').all().order_by('start_time')
-    
+    all_shifts = Shift.objects.prefetch_related('employees').all().order_by('start_time')
+    academic_shifts = all_shifts.filter(shift_type='academic_year')
+    summer_shifts = all_shifts.filter(shift_type='summer')
+
     # إحصائيات
     stats = {
-        'total_shifts': shifts.count(),
-        'active_shifts': shifts.filter(is_active=True).count(),
-        'morning_shifts': shifts.filter(shift_type='morning').count(),
-        'evening_shifts': shifts.filter(shift_type='evening').count(),
-        'night_shifts': shifts.filter(shift_type='night').count(),
+        'total_shifts': all_shifts.count(),
+        'active_shifts': all_shifts.filter(is_active=True).count(),
+        'academic_year_shifts': academic_shifts.count(),
+        'summer_shifts': summer_shifts.count(),
     }
-    
+
     context = {
-        'shifts': shifts,
+        'academic_shifts': academic_shifts,
+        'summer_shifts': summer_shifts,
         'stats': stats,
         
         # بيانات الهيدر
@@ -109,7 +111,7 @@ def shift_assign_employees(request, pk):
     department_id = request.GET.get('department')
     
     # جلب جميع الموظفين النشطين
-    employees = Employee.objects.filter(status='active').select_related('department', 'job_title')
+    employees = Employee.objects.filter(status='active', is_insurance_only=False).select_related('department', 'job_title')
     
     if department_id:
         employees = employees.filter(department_id=department_id)
@@ -127,6 +129,25 @@ def shift_assign_employees(request, pk):
         'assigned_employee_ids': assigned_employee_ids,
         'departments': departments,
         'selected_department': department_id,
+
+        # بيانات الهيدر الموحد
+        'title': f'تعيين موظفين: {shift.name}',
+        'subtitle': 'اختيار الموظفين المخصصين لهذه الوردية',
+        'icon': 'fas fa-users',
+        'header_buttons': [
+            {
+                'url': reverse('hr:shift_list'),
+                'icon': 'fa-arrow-right',
+                'text': 'رجوع',
+                'class': 'btn-secondary',
+            },
+        ],
+        'breadcrumb_items': [
+            {'title': 'الرئيسية', 'url': reverse('core:dashboard'), 'icon': 'fas fa-home'},
+            {'title': 'الموارد البشرية', 'url': reverse('hr:employee_list'), 'icon': 'fas fa-users-cog'},
+            {'title': 'الورديات', 'url': reverse('hr:shift_list'), 'icon': 'fas fa-business-time'},
+            {'title': 'تعيين موظفين', 'active': True},
+        ],
     }
     return render(request, 'hr/shift/assign.html', context)
 

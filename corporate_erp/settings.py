@@ -129,6 +129,7 @@ INSTALLED_APPS = [
     'sale',    # ✅ Sales management
     'supplier',
     'product.apps.ProductConfig',
+    'printing_pricing',  # نظام تسعير المطبوعات
     'purchase',
     'financial',
     'hr.apps.HrConfig',
@@ -640,6 +641,14 @@ if DEBUG:
                 'formatter': 'verbose',
                 'encoding': 'utf-8',
             },
+            'daftra_file': {
+                'class': 'logging.handlers.RotatingFileHandler',
+                'filename': BASE_DIR / 'logs' / 'daftra_sync.log',
+                'maxBytes': 10 * 1024 * 1024,  # 10 MB
+                'backupCount': 5,
+                'formatter': 'verbose',
+                'encoding': 'utf-8',
+            },
         },
         'root': {
             'handlers': ['file'],
@@ -708,6 +717,15 @@ else:
                 'class': 'logging.StreamHandler',
                 'formatter': 'simple',
                 'level': 'CRITICAL',
+            },
+            # ملف مزامنة دفترة
+            'daftra_file': {
+                'class': 'logging.handlers.RotatingFileHandler',
+                'filename': BASE_DIR / 'logs' / 'daftra_sync.log',
+                'maxBytes': 10 * 1024 * 1024,  # 10 MB
+                'backupCount': 5,
+                'formatter': 'production',
+                'encoding': 'utf-8',
             },
         },
         'root': {
@@ -1307,7 +1325,19 @@ SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 # ============================================================
 
 # Add integration-specific loggers
+_file_handler = 'file' if DEBUG else 'main_file'
 LOGGING['loggers'].update({
+    # Daftra sync logger - ملف منفصل للمزامنة
+    'utils.daftra_sync': {
+        'handlers': [_file_handler, 'console', 'daftra_file'],
+        'level': 'DEBUG',
+        'propagate': False,
+    },
+    'utils.daftra_views': {
+        'handlers': [_file_handler, 'console', 'daftra_file'],
+        'level': 'DEBUG',
+        'propagate': False,
+    },
     'financial.services.integration_security_service': {
         'handlers': ['file', 'console'],
         'level': 'INFO',

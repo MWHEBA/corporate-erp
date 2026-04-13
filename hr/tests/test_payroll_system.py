@@ -53,10 +53,9 @@ class PayrollSystemTest(TestCase):
         # إنشاء وردية
         self.shift = Shift.objects.create(
             name='الوردية العادية',
-            shift_type='morning',
+            shift_type='academic_year',
             start_time=time(8, 0),
             end_time=time(16, 0),
-            work_hours=Decimal('8.0'),
             is_active=True
         )
         
@@ -98,15 +97,15 @@ class PayrollSystemTest(TestCase):
     
     def test_basic_payroll_calculation(self):
         """
-        اختبار حساب الراتب الأساسي
+        اختبار حساب الأجر الأساسي
         Requirements: T044 - حساب الراتب الشهري
         """
-        # إضافة بنود الراتب الأساسية
+        # إضافة بنود الأجر الأساسية
         basic_salary = SalaryComponent.objects.create(
             employee=self.employee,
             contract=self.contract,
             code='BASIC_SALARY',
-            name='الراتب الأساسي',
+            name='الأجر الأساسي',
             component_type='earning',
             calculation_method='fixed',
             amount=Decimal('10000.00'),
@@ -149,7 +148,7 @@ class PayrollSystemTest(TestCase):
         basic_line = PayrollLine.objects.create(
             payroll=payroll,
             code='BASIC_SALARY',
-            name='الراتب الأساسي',
+            name='الأجر الأساسي',
             component_type='earning',
             quantity=Decimal('1'),
             rate=basic_salary.amount,
@@ -195,7 +194,7 @@ class PayrollSystemTest(TestCase):
             employee=self.employee,
             contract=self.contract,
             code='BASIC_SALARY',
-            name='الراتب الأساسي',
+            name='الأجر الأساسي',
             component_type='earning',
             amount=Decimal('8000.00'),
             is_active=True,
@@ -220,7 +219,7 @@ class PayrollSystemTest(TestCase):
         PayrollLine.objects.create(
             payroll=payroll,
             code='BASIC_SALARY',
-            name='الراتب الأساسي',
+            name='الأجر الأساسي',
             component_type='earning',
             quantity=Decimal('1'),
             rate=Decimal('8000.00'),
@@ -236,7 +235,7 @@ class PayrollSystemTest(TestCase):
             component_type='deduction',
             quantity=Decimal('1'),
             rate=Decimal('800.00'),
-            amount=Decimal('800.00'),  # 10% من الراتب الأساسي
+            amount=Decimal('800.00'),  # 10% من الأجر الأساسي
             order=10
         )
         
@@ -247,7 +246,7 @@ class PayrollSystemTest(TestCase):
             component_type='deduction',
             quantity=Decimal('1'),
             rate=Decimal('400.00'),
-            amount=Decimal('400.00'),  # 5% من الراتب الأساسي
+            amount=Decimal('400.00'),  # 5% من الأجر الأساسي
             order=11
         )
         
@@ -282,7 +281,7 @@ class PayrollSystemTest(TestCase):
             employee=self.employee,
             contract=self.contract,
             code='BASIC_SALARY',
-            name='الراتب الأساسي',
+            name='الأجر الأساسي',
             component_type='earning',
             amount=Decimal('9000.00'),
             is_active=True,
@@ -312,7 +311,7 @@ class PayrollSystemTest(TestCase):
         PayrollLine.objects.create(
             payroll=payroll,
             code='BASIC_SALARY',
-            name='الراتب الأساسي',
+            name='الأجر الأساسي',
             component_type='earning',
             quantity=Decimal('1'),
             rate=Decimal('9000.00'),
@@ -389,7 +388,7 @@ class PayrollSystemTest(TestCase):
         PayrollLine.objects.create(
             payroll=payroll,
             code='BASIC_SALARY',
-            name='الراتب الأساسي',
+            name='الأجر الأساسي',
             component_type='earning',
             quantity=Decimal('1'),
             rate=Decimal('8000.00'),
@@ -533,7 +532,7 @@ class PayrollSystemTest(TestCase):
         PayrollLine.objects.create(
             payroll=payroll,
             code='BASIC_SALARY',
-            name='الراتب الأساسي',
+            name='الأجر الأساسي',
             component_type='earning',
             quantity=Decimal('1'),
             rate=Decimal('8000.00'),
@@ -602,7 +601,7 @@ class PayrollSystemTest(TestCase):
         PayrollLine.objects.create(
             payroll=payroll,
             code='BASIC_SALARY',
-            name='الراتب الأساسي',
+            name='الأجر الأساسي',
             component_type='earning',
             quantity=Decimal('1'),
             rate=Decimal('7000.00'),
@@ -626,7 +625,7 @@ class PayrollSystemTest(TestCase):
         self.assertEqual(payroll.status, 'calculated')
         self.assertIsNotNone(payroll.processed_at)
         
-        # اعتماد الراتب
+        # اعتماد الراتب — direct DB write for test setup only (gate tested in AttendanceApprovalGateTest)
         payroll.status = 'approved'
         payroll.approved_by = self.admin_user
         payroll.approved_at = timezone.now()
@@ -705,10 +704,9 @@ class PayrollIntegrationTest(TransactionTestCase):
         
         self.shift = Shift.objects.create(
             name='وردية إدارية',
-            shift_type='morning',
+            shift_type='academic_year',
             start_time=time(9, 0),
             end_time=time(17, 0),
-            work_hours=Decimal('8.0')
         )
         
         # إنشاء عدة موظفين للاختبار
@@ -771,7 +769,7 @@ class PayrollIntegrationTest(TransactionTestCase):
                 employee=employee,
                 contract=contract,
                 code='BASIC_SALARY',
-                name='الراتب الأساسي',
+                name='الأجر الأساسي',
                 component_type='earning',
                 amount=contract.basic_salary,
                 is_active=True,
@@ -794,7 +792,7 @@ class PayrollIntegrationTest(TransactionTestCase):
             PayrollLine.objects.create(
                 payroll=payroll,
                 code='BASIC_SALARY',
-                name='الراتب الأساسي',
+                name='الأجر الأساسي',
                 component_type='earning',
                 quantity=Decimal('1'),
                 rate=contract.basic_salary,
@@ -820,7 +818,7 @@ class PayrollIntegrationTest(TransactionTestCase):
             self.assertEqual(payroll.net_salary, expected_salary)
             self.assertEqual(payroll.status, 'calculated')
         
-        # اعتماد جميع الرواتب
+        # اعتماد جميع الرواتب — direct DB write for test setup only (gate tested in AttendanceApprovalGateTest)
         for payroll in payrolls:
             payroll.status = 'approved'
             payroll.approved_by = self.admin_user
@@ -842,3 +840,206 @@ class PayrollIntegrationTest(TransactionTestCase):
 
 if __name__ == '__main__':
     pytest.main([__file__])
+
+
+class AttendanceApprovalGateTest(TestCase):
+    """
+    Tests for the attendance approval gate that blocks payroll processing.
+    Covers: standard employees, attendance-exempt employees, and bulk processing.
+    """
+
+    def setUp(self):
+        from hr.models import AttendanceSummary
+
+        self.admin_user = User.objects.create_user(
+            username='gate_admin',
+            password='admin123',
+            email='gate_admin@test.com',
+            is_staff=True
+        )
+
+        self.department = Department.objects.create(
+            code='GATE_DEPT', name_ar='قسم الاختبار', is_active=True
+        )
+        self.job_title = JobTitle.objects.create(
+            code='GATE_JOB', title_ar='وظيفة اختبار',
+            department=self.department, is_active=True
+        )
+
+        # Standard employee (biometric)
+        self.employee = Employee.objects.create(
+            employee_number='GATE001',
+            name='موظف اختبار',
+            national_id='29001011234601',
+            birth_date=date(1990, 1, 1),
+            gender='male',
+            marital_status='single',
+            mobile_phone='01234560001',
+            department=self.department,
+            job_title=self.job_title,
+            hire_date=date(2023, 1, 1),
+            status='active',
+            attendance_exempt=False,
+            created_by=self.admin_user
+        )
+
+        # Attendance-exempt employee
+        self.exempt_employee = Employee.objects.create(
+            employee_number='GATE002',
+            name='مدير معفى',
+            national_id='29001011234602',
+            birth_date=date(1985, 1, 1),
+            gender='male',
+            marital_status='married',
+            mobile_phone='01234560002',
+            department=self.department,
+            job_title=self.job_title,
+            hire_date=date(2023, 1, 1),
+            status='active',
+            attendance_exempt=True,
+            created_by=self.admin_user
+        )
+
+        self.payroll_month = date(2025, 1, 1)
+
+        # Create contracts
+        for emp in [self.employee, self.exempt_employee]:
+            Contract.objects.create(
+                contract_number=f'CON-{emp.employee_number}',
+                employee=emp,
+                contract_type='permanent',
+                start_date=emp.hire_date,
+                basic_salary=Decimal('10000.00'),
+                status='active',
+                created_by=self.admin_user
+            )
+            # Create salary component
+            SalaryComponent.objects.create(
+                employee=emp,
+                contract=emp.contracts.first(),
+                code='BASIC_SALARY',
+                name='الأجر الأساسي',
+                component_type='earning',
+                calculation_method='fixed',
+                amount=Decimal('10000.00'),
+                is_basic=True,
+                is_active=True,
+                effective_from=emp.hire_date,
+                order=1
+            )
+
+    def _make_summary(self, employee, approved=False):
+        """Helper: create an AttendanceSummary for the test month."""
+        from hr.models import AttendanceSummary
+        summary = AttendanceSummary.objects.create(
+            employee=employee,
+            month=self.payroll_month,
+            total_working_days=22,
+            present_days=22,
+            is_calculated=True,
+            is_approved=False,
+        )
+        if approved:
+            summary.is_approved = True
+            summary.approved_by = self.admin_user
+            from django.utils import timezone
+            summary.approved_at = timezone.now()
+            summary.save()
+        return summary
+
+    # ── calculate_payroll gate ──────────────────────────────────────────────
+
+    def test_calculate_blocked_when_no_summary(self):
+        """Gate rejects payroll calculation when AttendanceSummary is missing."""
+        from hr.services.payroll_service import PayrollService
+        with self.assertRaises(ValueError) as ctx:
+            PayrollService.calculate_payroll(self.employee, self.payroll_month, self.admin_user)
+        self.assertIn('ملخص الحضور', str(ctx.exception))
+
+    def test_calculate_blocked_when_summary_not_approved(self):
+        """Gate rejects payroll calculation when summary exists but is not approved."""
+        from hr.services.payroll_service import PayrollService
+        self._make_summary(self.employee, approved=False)
+        with self.assertRaises(ValueError) as ctx:
+            PayrollService.calculate_payroll(self.employee, self.payroll_month, self.admin_user)
+        self.assertIn('اعتماد', str(ctx.exception))
+
+    def test_calculate_passes_when_summary_approved(self):
+        """Gate allows payroll calculation when summary is approved."""
+        from hr.services.payroll_service import PayrollService
+        self._make_summary(self.employee, approved=True)
+        payroll = PayrollService.calculate_payroll(self.employee, self.payroll_month, self.admin_user)
+        self.assertEqual(payroll.status, 'calculated')
+        self.assertEqual(payroll.employee, self.employee)
+
+    # ── approve_payroll gate ────────────────────────────────────────────────
+
+    def test_approve_blocked_when_summary_not_approved(self):
+        """Gate rejects payroll approval when attendance summary is not approved."""
+        from hr.services.payroll_service import PayrollService
+        from hr.models import AttendanceSummary
+        # Create approved summary to allow calculation, then revoke approval
+        self._make_summary(self.employee, approved=True)
+        payroll = PayrollService.calculate_payroll(self.employee, self.payroll_month, self.admin_user)
+
+        # Revoke attendance approval directly (bypassing guard for test setup)
+        AttendanceSummary.objects.filter(
+            employee=self.employee, month=self.payroll_month
+        ).update(is_approved=False)
+
+        with self.assertRaises(ValueError) as ctx:
+            PayrollService.approve_payroll(payroll, self.admin_user)
+        self.assertIn('غير معتمد', str(ctx.exception))
+
+    def test_approve_passes_when_summary_approved(self):
+        """Gate allows payroll approval when attendance summary is approved."""
+        from hr.services.payroll_service import PayrollService
+        self._make_summary(self.employee, approved=True)
+        payroll = PayrollService.calculate_payroll(self.employee, self.payroll_month, self.admin_user)
+        approved = PayrollService.approve_payroll(payroll, self.admin_user)
+        self.assertEqual(approved.status, 'approved')
+
+    # ── exempt employee ─────────────────────────────────────────────────────
+
+    def test_exempt_employee_blocked_without_approved_summary(self):
+        """Exempt employees are also blocked if their summary is not approved."""
+        from hr.services.payroll_service import PayrollService
+        with self.assertRaises(ValueError):
+            PayrollService.calculate_payroll(self.exempt_employee, self.payroll_month, self.admin_user)
+
+    def test_exempt_employee_passes_with_approved_summary(self):
+        """Exempt employees pass the gate once their summary is manually approved."""
+        from hr.services.payroll_service import PayrollService
+        self._make_summary(self.exempt_employee, approved=True)
+        payroll = PayrollService.calculate_payroll(self.exempt_employee, self.payroll_month, self.admin_user)
+        self.assertEqual(payroll.status, 'calculated')
+        self.assertTrue(self.exempt_employee.attendance_exempt)
+
+    # ── AttendanceSummary.approve() guards ──────────────────────────────────
+
+    def test_approve_summary_blocked_when_not_calculated(self):
+        """approve() raises ValueError if summary is not yet calculated."""
+        from hr.models import AttendanceSummary
+        summary = AttendanceSummary.objects.create(
+            employee=self.employee,
+            month=date(2025, 2, 1),
+            is_calculated=False,
+        )
+        with self.assertRaises(ValueError) as ctx:
+            summary.approve(self.admin_user)
+        self.assertIn('حساب الملخص', str(ctx.exception))
+
+    def test_approve_summary_blocked_after_payroll_calculated(self):
+        """approve() raises ValueError if payroll already exists for the month."""
+        from hr.services.payroll_service import PayrollService
+        from hr.models import AttendanceSummary
+        summary = self._make_summary(self.employee, approved=True)
+        PayrollService.calculate_payroll(self.employee, self.payroll_month, self.admin_user)
+
+        # Revoke approval directly, then try to re-approve via the method
+        AttendanceSummary.objects.filter(pk=summary.pk).update(is_approved=False)
+        summary.refresh_from_db()
+
+        with self.assertRaises(ValueError) as ctx:
+            summary.approve(self.admin_user)
+        self.assertIn('تم حساب الراتب', str(ctx.exception))

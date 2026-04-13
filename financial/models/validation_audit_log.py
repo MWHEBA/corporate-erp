@@ -22,22 +22,18 @@ class ValidationAuditLog(models.Model):
     )
     
     ENTITY_TYPE_CHOICES = (
-        ('student', _('طالب')),
+        ('customer', _('عميل')),
         ('supplier', _('مورد')),
         ('employee', _('موظف')),
-        ('activity', _('نشاط')),
-        ('transportation_route', _('خط نقل')),
         ('product', _('منتج')),
         ('sale', _('مبيعات')),
         ('purchase', _('مشتريات')),
         ('other', _('أخرى')),
     )
-    
+
     MODULE_CHOICES = (
-        ('students', _('الطلاب')),
         ('financial', _('المالية')),
-        ('activities', _('الأنشطة')),
-        ('transportation', _('النقل')),
+        ('client', _('العملاء')),
         ('product', _('المنتجات')),
         ('sale', _('المبيعات')),
         ('purchase', _('المشتريات')),
@@ -197,13 +193,13 @@ class ValidationAuditLog(models.Model):
         
         Args:
             user: المستخدم الذي حاول المعاملة
-            entity_type: نوع الكيان (student, supplier, etc.)
+            entity_type: نوع الكيان (customer, supplier, etc.)
             entity_id: معرف الكيان
             entity_name: اسم الكيان
             validation_type: نوع التحقق (chart_of_accounts, accounting_period, both)
             failure_reason: السبب التقني للفشل
             error_message: رسالة الخطأ بالعربية
-            module: الوحدة (students, financial, etc.)
+            module: الوحدة (client, financial, etc.)
             transaction_type: نوع المعاملة (اختياري)
             transaction_date: تاريخ المعاملة (اختياري)
             transaction_amount: مبلغ المعاملة (اختياري)

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Image Cropper Manager
  * مدير قص الصور بنسبة 1:1 (مربع)
  */
@@ -306,7 +306,7 @@ class ImageCropperManager {
                 </div>
             </div>
             <span class="image-preview-label">
-                صورة الطالب
+                صورة المستخدم
                 <small class="text-muted">
                     ${sizeText}
                 </small>

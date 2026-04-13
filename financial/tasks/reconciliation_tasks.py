@@ -38,7 +38,6 @@ def run_daily_reconciliation_task(self, reconciliation_date_str=None, reconcilia
         if reconciliation_types is None:
             reconciliation_types = DataReconciliationService.RECONCILIATION_TYPES
         
-        logger.info(f'بدء مهمة المطابقة اليومية لتاريخ: {reconciliation_date}')
         
         # تشغيل المطابقة
         results = DataReconciliationService.run_daily_reconciliation(
@@ -59,7 +58,6 @@ def run_daily_reconciliation_task(self, reconciliation_date_str=None, reconcilia
             'execution_time': results.get('end_time')
         }
         
-        logger.info(f'انتهت مهمة المطابقة اليومية بحالة: {results["status"]}')
         
         return task_result
         
@@ -68,7 +66,6 @@ def run_daily_reconciliation_task(self, reconciliation_date_str=None, reconcilia
         
         # إعادة المحاولة في حالة الخطأ
         if self.request.retries < self.max_retries:
-            logger.info(f'إعادة محاولة المطابقة اليومية ({self.request.retries + 1}/{self.max_retries})')
             raise self.retry(countdown=300, exc=e)  # إعادة المحاولة بعد 5 دقائق
         
         # إرسال تنبيه بالفشل
@@ -152,7 +149,6 @@ def send_reconciliation_report(reconciliation_results):
                 fail_silently=False
             )
             
-            logger.info(f'تم إرسال تقرير المطابقة إلى {len(recipients)} مستلم')
         else:
             logger.warning('لا توجد عناوين بريد إلكتروني لإرسال تقرير المطابقة')
         
@@ -201,7 +197,6 @@ def send_reconciliation_failure_alert(error_message, reconciliation_date_str):
                 fail_silently=False
             )
             
-            logger.info(f'تم إرسال تنبيه فشل المطابقة إلى {len(recipients)} مستلم')
         
         return {
             'success': True,
@@ -223,7 +218,6 @@ def check_integration_health_task(self):
     """
     
     try:
-        logger.info('بدء مهمة فحص صحة التكامل')
         
         # فحص صحة التكامل المالي
         financial_health = FinancialIntegrationSecurityService.get_integration_health_status()
@@ -254,7 +248,6 @@ def check_integration_health_task(self):
         if overall_status in ['critical', 'warning']:
             send_integration_health_alert.delay(health_results)
         
-        logger.info(f'انتهت مهمة فحص صحة التكامل - الحالة: {overall_status}')
         
         return {
             'success': True,
@@ -267,7 +260,6 @@ def check_integration_health_task(self):
         
         # إعادة المحاولة في حالة الخطأ
         if self.request.retries < self.max_retries:
-            logger.info(f'إعادة محاولة فحص صحة التكامل ({self.request.retries + 1}/{self.max_retries})')
             raise self.retry(countdown=600, exc=e)  # إعادة المحاولة بعد 10 دقائق
         
         return {
@@ -333,7 +325,6 @@ def send_integration_health_alert(health_results):
                 fail_silently=False
             )
             
-            logger.info(f'تم إرسال تنبيه حالة التكامل إلى {len(recipients)} مستلم')
         
         return {
             'success': True,
@@ -377,7 +368,6 @@ def cleanup_old_reconciliation_data():
                     cache.delete(cache_key)
                     cleaned_count += 1
         
-        logger.info(f'تم تنظيف {cleaned_count} عنصر من بيانات المطابقة القديمة')
         
         return {
             'success': True,

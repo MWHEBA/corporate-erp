@@ -78,9 +78,6 @@ class LocationService:
 
                     created_zones.append(zone)
 
-                logger.info(
-                    f"تم إنشاء {len(created_zones)} منطقة في المخزن {warehouse.name}"
-                )
                 return created_zones
 
         except Exception as e:
@@ -125,7 +122,6 @@ class LocationService:
                     created_by=user,
                 )
 
-                logger.info(f"تم تعيين موقع جديد: {location}")
                 return location
 
         except Exception as e:
@@ -181,7 +177,6 @@ class LocationService:
                     moved_by=user,
                 )
 
-                logger.info(f"تم نقل {quantity} من {product.name} بين المواقع")
                 return movement
 
         except Exception as e:
@@ -338,7 +333,6 @@ class LocationService:
             if assigned_to:
                 task.assign_to(assigned_to)
 
-            logger.info(f"تم إنشاء مهمة موقع جديدة: {task}")
             return task
 
         except Exception as e:

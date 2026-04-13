@@ -53,7 +53,7 @@ def employee_salary_components(request, employee_id):
     expiring_components = ComponentClassificationService.get_expiring_components().filter(employee=employee)
     renewable_components = [c for c in ComponentClassificationService.get_renewable_components() if c.employee == employee]
 
-    # حساب الإجماليات (الراتب الأساسي بيتحسب من العقد النشط في الـ service)
+    # حساب الإجماليات (الأجر الأساسي بيتحسب من العقد النشط في الـ service)
     salary_summary = SalaryComponentService.calculate_total_salary(employee)
     
     # القوالب المتاحة

@@ -63,6 +63,7 @@ from .transaction_views import (
     journal_entries_unpost,
     transaction_list,
     transaction_detail,
+    manual_journal_entry_create,
     # transaction_create,  # تم حذفه - تحت التطوير
     # transaction_edit,  # تم حذفه - تحت التطوير
     # transaction_delete,  # تم حذفه - تحت التطوير
@@ -80,13 +81,14 @@ from .api_views import (
     balance_sheet,
     trial_balance_report,
     sales_report,
+    purchases_report,
     inventory_report,
     abc_analysis_report,
     data_integrity_check,
     payment_sync_check_pending_api,
     payment_sync_process_pending_api,
-    # audit_trail_list,  # Removed - use governance.views.AuditManagementView
-    # audit_trail_cleanup,  # Removed - use governance audit management
+    audit_trail_list,
+    audit_trail_cleanup,
     payment_sync_operations,
     payment_sync_logs,
     journal_entry_summary_api,

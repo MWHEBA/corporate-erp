@@ -99,7 +99,6 @@ class AdvanceService:
         if advance.is_completed:
             advance.status = 'completed'
             advance.save(update_fields=['status'])
-            logger.info(f"تم إكمال السلفة {advance.id} للموظف {advance.employee.get_full_name_ar()}")
         
         return installment
     
@@ -248,10 +247,86 @@ class AdvanceService:
             status='pending'
         )
         
-        logger.info(
-            f"تم إنشاء سلفة جديدة #{advance.id} للموظف {employee.get_full_name_ar()} "
-            f"- المبلغ: {amount:,.0f} جنيه على {installments_count} قسط"
-        )
         
         return advance
 
+
+    @staticmethod
+    @transaction.atomic
+    def create_disbursement_journal_entry(advance, payment_account, created_by):
+        """
+        إنشاء القيد المحاسبي عند صرف السلفة
+
+        القيد:
+            مدين: 10350 - سلف الموظفين (الأصل المتداول)
+            دائن: حساب الصرف (الخزينة/البنك)
+
+        Args:
+            advance: كائن السلفة (status='paid')
+            payment_account: كائن ChartOfAccounts للخزينة/البنك
+            created_by: المستخدم المنفذ
+
+        Returns:
+            JournalEntry أو None لو فشل
+        """
+        from governance.services.accounting_gateway import AccountingGateway, JournalEntryLineData
+        from financial.models import ChartOfAccounts
+
+        try:
+            advance_account = ChartOfAccounts.objects.filter(
+                code='10350', is_active=True
+            ).first()
+            if not advance_account:
+                logger.error('حساب سلف الموظفين (10350) غير موجود في دليل الحسابات')
+                return None
+
+            lines = [
+                JournalEntryLineData(
+                    account_code=advance_account.code,
+                    debit=advance.amount,
+                    credit=Decimal('0'),
+                    description=f'سلفة {advance.employee.get_full_name_ar()} - {advance.reason[:50]}'
+                ),
+                JournalEntryLineData(
+                    account_code=payment_account.code,
+                    debit=Decimal('0'),
+                    credit=advance.amount,
+                    description=f'صرف سلفة {advance.employee.get_full_name_ar()}'
+                ),
+            ]
+
+            gateway = AccountingGateway()
+            idempotency_key = f'JE:hr:Advance:{advance.id}:disburse'
+
+            financial_category = advance.financial_category
+            if not financial_category:
+                from financial.models import FinancialCategory
+                financial_category = FinancialCategory.objects.filter(
+                    code='salaries', is_active=True
+                ).first()
+
+            entry = gateway.create_journal_entry(
+                source_module='hr',
+                source_model='Advance',
+                source_id=advance.id,
+                lines=lines,
+                idempotency_key=idempotency_key,
+                user=created_by,
+                entry_type='automatic',
+                description=f'صرف سلفة - {advance.employee.get_full_name_ar()} - {advance.amount:,.0f} ج.م',
+                reference=f'ADV-{advance.id}',
+                date=advance.payment_date,
+                financial_category=financial_category,
+            )
+
+            # ربط القيد بالسلفة
+            advance.journal_entry = entry
+            advance.payment_account = payment_account
+            advance.save(update_fields=['journal_entry', 'payment_account'])
+
+            logger.info(f'تم إنشاء القيد المحاسبي {entry.number} لسلفة {advance.id}')
+            return entry
+
+        except Exception as e:
+            logger.error(f'فشل إنشاء القيد المحاسبي لسلفة {advance.id}: {e}', exc_info=True)
+            return None

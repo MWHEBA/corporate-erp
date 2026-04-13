@@ -1,12 +1,12 @@
 {% load static %}
 {% load i18n %}
 
-<div class="modal-header bg-danger text-white">
+<div class="modal-header danger-header">
   <h5 class="modal-title">
     <i class="fas fa-exclamation-triangle"></i>
-    {{ title }}
+    <span>{{ title }}</span>
   </h5>
-  <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+  <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
 </div>
 
 <form id="deleteForm" method="post" action="{% url 'supplier:supplier_type_settings_delete' supplier_type.pk %}">
@@ -119,32 +119,49 @@
 </form>
 
 <style>
+.danger-header {
+  background-color: var(--bg-soft-danger);
+  border-bottom: 1px solid var(--danger-light);
+}
+
+.danger-header .modal-title {
+  color: var(--danger-dark);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
 .type-icon {
   width: 40px;
   height: 40px;
-  border-radius: 50%;
+  border-radius: var(--border-radius-full);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  font-size: 1.2rem;
+  color: var(--white);
+  font-size: var(--font-size-xl);
 }
 
 .alert-warning {
-  border-left: 4px solid #ffc107;
+  border-left: 4px solid var(--warning-color);
+  background-color: var(--bg-soft-warning);
+  color: var(--text-dark);
 }
 
 .alert-danger {
-  border-left: 4px solid #dc3545;
+  border-left: 4px solid var(--danger-color);
+  background-color: var(--bg-soft-danger);
+  color: var(--text-dark);
 }
 
 .list-unstyled li {
-  padding: 0.25rem 0;
+  padding: var(--spacing-xs) 0;
 }
 
 .form-check-input:checked + .form-check-label {
-  color: #dc3545;
-  font-weight: 500;
+  color: var(--danger-color);
+  font-weight: var(--font-weight-medium);
 }
 </style>
 

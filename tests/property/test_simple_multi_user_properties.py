@@ -1,4 +1,4 @@
-"""
+﻿"""
 اختبارات خصائص المستخدمين المتعددين البسيطة - Property-Based Tests
 Simple Multi-User Properties Tests (Database Independent)
 
@@ -325,7 +325,7 @@ class TestSimpleMultiUserProperties:
         # إنشاء نظام متعدد المستخدمين
         system = SimpleMultiUserSystem()
         
-        # إنشاء أولياء أمور وبياناتهم
+        # إنشاء مستخدمين وبياناتهم
         families = []
         
         for p in range(parent_count):

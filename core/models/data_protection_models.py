@@ -167,7 +167,7 @@ class DataRetentionPolicy(models.Model):
     
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True)
-    model_name = models.CharField(max_length=100)  # e.g., 'students.Student'
+    model_name = models.CharField(max_length=100)  # e.g., 'client.Customer'
     
     # Retention settings
     retention_days = models.IntegerField(validators=[MinValueValidator(1)])

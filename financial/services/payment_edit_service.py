@@ -110,7 +110,6 @@ class PaymentEditService:
                         new_data=cls._get_payment_data(payment),
                     )
 
-                    logger.info(f"تم تعديل الدفعة {payment.id} بواسطة {user.username}")
 
                 return result
 
@@ -163,9 +162,6 @@ class PaymentEditService:
                         reason=reason,
                     )
 
-                    logger.info(
-                        f"تم إلغاء ترحيل الدفعة {payment.id} بواسطة {user.username}"
-                    )
 
                 return result
 
@@ -250,7 +246,6 @@ class PaymentEditService:
             log_entry["changes"] = changes
 
         # تسجيل في الـ logger
-        logger.info(f"Payment Change Log: {log_entry}")
         
         # حفظ في ActivityLog للتتبع
         try:

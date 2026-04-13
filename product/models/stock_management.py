@@ -169,7 +169,7 @@ class Stock(models.Model):
     
     @property
     def is_out_of_stock(self):
-        """هل المخزون نفد؟"""
+        """هل المخزون نفذ؟"""
         return self.quantity == 0
     
     @property
@@ -402,31 +402,10 @@ class StockMovement(models.Model):
         return Decimal(str(self.quantity)) * self.unit_cost
 
     def _create_journal_entry(self):
-        """
-        ❌ DEPRECATED - DO NOT USE
+        """إنشاء قيد محاسبي لحركة المخزون عبر Service"""
+        from product.services.stock_accounting_service import StockAccountingService
         
-        إنشاء قيد محاسبي لحركة المخزون
-        
-        هذه الدالة موجودة فقط للتوافق مع الكود القديم.
-        يجب استخدام MovementService بدلاً منها.
-        
-        الطريقة الصحيحة:
-        1. MovementService.process_movement() → ينشئ الحركة والقيد معاً
-        2. AccountingGateway.create_stock_movement_entry() → للحالات الخاصة
-        
-        Governance Principle: Models should not contain business logic
-        """
-        import warnings
-        warnings.warn(
-            "StockMovement._create_journal_entry() is deprecated. "
-            "Use MovementService.process_movement() instead.",
-            DeprecationWarning,
-            stacklevel=2
-        )
-        
-        from governance.services.accounting_gateway import create_stock_movement_entry
-        
-        entry = create_stock_movement_entry(
+        entry = StockAccountingService.create_stock_movement_entry(
             stock_movement=self,
             user=self.created_by
         )
@@ -465,18 +444,16 @@ class StockMovement(models.Model):
         
         super().save(*args, **kwargs)
 
-        # ❌ تم إزالة إنشاء القيد المحاسبي من هنا
-        # القيود المحاسبية يجب أن تُنشأ فقط عبر:
-        # 1. MovementService → AccountingGateway (الطريقة الرسمية)
-        # 2. Signals المحكومة (إذا لزم الأمر)
-        # 
-        # Model.save() مسؤول فقط عن حفظ البيانات، ليس عن Business Logic
-        # هذا يضمن:
-        # - Single Source of Truth
-        # - Proper Governance
-        # - No Duplicate Entries
-        # - Audit Trail
-        # - Idempotency
+        # إنشاء قيد محاسبي تلقائياً (فقط للحركات الجديدة وبدون قيد)
+        # ملاحظة: لا نُنشئ قيود لحركات الشراء والبيع لأن القيود تُنشأ من الفواتير
+        excluded_types = ["purchase", "sale", "purchase_return", "sale_return"]
+        if (
+            is_new
+            and not self.journal_entry
+            and not getattr(self, "_skip_update", False)
+            and self.document_type not in excluded_types
+        ):
+            self._create_journal_entry()
     
     def set_idempotency_key(self, key):
         """

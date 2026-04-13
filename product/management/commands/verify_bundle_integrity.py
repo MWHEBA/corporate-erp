@@ -292,15 +292,15 @@ class Command(BaseCommand):
         issues = []
         
         try:
-            # حساب مجموع أسعار المكونات
+            # حساب مجموع أسعار تكلفة المكونات
             components_total = sum(
-                component.component_product.customer_selling_price * component.required_quantity
+                component.component_product.cost_price * component.required_quantity
                 for component in bundle.components.select_related('component_product').all()
-                if component.component_product and hasattr(component.component_product, 'customer_selling_price')
+                if component.component_product
             )
             
             # مقارنة مع سعر المنتج المجمع
-            bundle_price = getattr(bundle, 'customer_selling_price', 0)
+            bundle_price = bundle.selling_price or 0
             
             if bundle_price > 0 and components_total > 0:
                 price_difference = abs(bundle_price - components_total)
@@ -310,7 +310,7 @@ class Command(BaseCommand):
                     issues.append({
                         'type': 'price_inconsistency',
                         'severity': 'warning',
-                        'message': f'اختلاف كبير في السعر للمنتج المجمع "{bundle.name}": سعر المنتج {bundle_price}, مجموع المكونات {components_total}',
+                        'message': f'اختلاف كبير في السعر للمنتج المجمع "{bundle.name}": سعر المنتج {bundle_price}, مجموع تكلفة المكونات {components_total}',
                         'bundle_id': bundle.id,
                         'bundle_price': bundle_price,
                         'components_total': components_total,

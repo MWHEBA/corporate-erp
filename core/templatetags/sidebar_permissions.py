@@ -104,10 +104,6 @@ def has_module_access(context, module_name):
         #     "sale.view_sale",
         #     "sale.view_salereturn",
         # ],
-        "students": [
-            "students.view_student",
-            "students.view_parent",
-        ],
         "purchases": [
             "purchase.view_purchase",
             "purchase.view_purchasereturn",
@@ -168,8 +164,8 @@ def get_user_role_badge(context):
     # if user.has_perm("sale.add_sale"):  # تم تعطيل المبيعات
     #     return {"text": "مبيعات", "class": "bg-info"}
     
-    if user.has_perm("students.add_student"):
-        return {"text": "طلاب", "class": "bg-info"}
+    if user.has_perm("client.add_customer"):
+        return {"text": "عملاء", "class": "bg-info"}
 
     if user.has_perm("purchase.add_purchase"):
         return {"text": "مشتريات", "class": "bg-primary"}
@@ -220,10 +216,9 @@ def get_sidebar_notifications(context):
             "message": "لا توجد تنبيهات مالية",
         }
 
-    # إشعارات الطلاب والرسوم
-    if user.has_perm("students.view_student"):
-        # يمكن إضافة منطق للحصول على عدد الرسوم المتأخرة
-        notifications["students"] = {
+    # إشعارات العملاء
+    if user.has_perm("client.view_customer"):
+        notifications["clients"] = {
             "count": 0,
             "type": "warning",
             "message": "لا توجد فواتير معلقة",

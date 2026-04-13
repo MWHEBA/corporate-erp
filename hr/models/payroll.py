@@ -39,7 +39,7 @@ class Payroll(models.Model):
     basic_salary = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        verbose_name='الراتب الأساسي'
+        verbose_name='الأجر الأساسي'
     )
     allowances = models.DecimalField(
         max_digits=10,
@@ -184,7 +184,17 @@ class Payroll(models.Model):
         verbose_name='التصنيف المالي',
         help_text='التصنيف المالي للرواتب (يحدد الحساب المحاسبي تلقائياً)'
     )
-    
+
+    financial_subcategory = models.ForeignKey(
+        'financial.FinancialSubcategory',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='payrolls',
+        verbose_name='التصنيف المالي الفرعي',
+        help_text='مركز التكلفة (التصنيف الفرعي) المأخوذ من قسم الموظف'
+    )
+
     # الملاحظات
     notes = models.TextField(blank=True, verbose_name='ملاحظات')
     
@@ -242,15 +252,35 @@ class Payroll(models.Model):
     
     @property
     def total_earnings(self):
-        """إجمالي المستحقات (بدون الراتب الأساسي)"""
+        """إجمالي المستحقات (بدون الأجر الأساسي)"""
         from decimal import Decimal
-        # حساب المستحقات من PayrollLine (بدون الراتب الأساسي)
+        # حساب المستحقات من PayrollLine (بدون الأجر الأساسي)
         earnings_from_lines = self.lines.filter(
             component_type='earning'
         ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
         
         return earnings_from_lines
-    
+
+    @property
+    def correct_net_salary(self):
+        """
+        صافي الراتب الصحيح.
+        INSURABLE_SALARY مستبعد بالفعل من الحسابات في calculate_totals_from_lines،
+        لذلك نرجع net_salary مباشرة بدون خصم إضافي.
+        """
+        from decimal import Decimal
+        return self.net_salary or Decimal('0')
+
+    @property
+    def correct_gross_salary(self):
+        """
+        إجمالي الراتب الصحيح.
+        INSURABLE_SALARY مستبعد بالفعل من الحسابات في calculate_totals_from_lines،
+        لذلك نرجع gross_salary مباشرة بدون خصم إضافي.
+        """
+        from decimal import Decimal
+        return self.gross_salary or Decimal('0')
+
     class Meta:
         verbose_name = 'قسيمة راتب'
         verbose_name_plural = 'قسائم الرواتب'
@@ -368,12 +398,12 @@ class Payroll(models.Model):
         from django.db.models import Sum
         from decimal import Decimal, ROUND_HALF_UP
         
-        # حساب المستحقات من البنود
+        # حساب المستحقات من البنود — استبعاد INSURABLE_SALARY لأنه مرجعية فقط
         earnings_from_lines = self.lines.filter(
             component_type='earning'
-        ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
+        ).exclude(code='INSURABLE_SALARY').aggregate(total=Sum('amount'))['total'] or Decimal('0')
         
-        # في بعض التدفقات الراتب الأساسي مضاف كـ PayrollLine، وفي أخرى مخزن فقط في basic_salary
+        # في بعض التدفقات الأجر الأساسي مضاف كـ PayrollLine، وفي أخرى مخزن فقط في basic_salary
         has_basic_line = self.lines.filter(code='BASIC_SALARY').exists()
         if has_basic_line:
             total_earnings = earnings_from_lines
@@ -390,17 +420,15 @@ class Payroll(models.Model):
             code='ADVANCE_DEDUCTION'
         ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
         
-        # تقريب الكسور لأقرب رقم صحيح
-        total_earnings = total_earnings.quantize(Decimal('1'), rounding=ROUND_HALF_UP)
-        deductions = deductions.quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+        # تقريب الكسور لأقرب رقم صحيح للإجماليات الفرعية فقط
         advance_deduction_line = advance_deduction_line.quantize(Decimal('1'), rounding=ROUND_HALF_UP)
         
         # تحديث الإجماليات (total_earnings هو property فلا نحدثه)
-        self.total_deductions = deductions
-        self.gross_salary = total_earnings
+        self.total_deductions = deductions          # بدون تقريب — الكسور محفوظة
+        self.gross_salary = total_earnings          # بدون تقريب — الكسور محفوظة
         self.advance_deduction = advance_deduction_line  # تحديث حقل السلف
         
-        # حساب صافي الراتب مع تجبير الكسور
+        # صافي الراتب فقط هو اللي يتقرّب لأقرب جنيه صحيح
         net_salary = total_earnings - deductions
         self.net_salary = net_salary.quantize(Decimal('1'), rounding=ROUND_HALF_UP)
         
@@ -429,12 +457,61 @@ class Payroll(models.Model):
         if self.absence_days > 31:
             errors['absence_days'] = 'أيام الغياب لا يمكن أن تتجاوز 31 يوم'
         
-        # التحقق من الراتب الأساسي
+        # التحقق من الأجر الأساسي
         if self.basic_salary <= 0:
-            errors['basic_salary'] = 'الراتب الأساسي يجب أن يكون أكبر من صفر'
+            errors['basic_salary'] = 'الأجر الأساسي يجب أن يكون أكبر من صفر'
         
         if errors:
             raise ValidationError(errors)
+
+
+class PayrollAuditLog(models.Model):
+    """سجل تدقيق قسائم الرواتب - يتتبع كل تعديل ومن قام به ومتى"""
+
+    ACTION_CHOICES = [
+        ('calculated',    'حساب الراتب'),
+        ('recalculated',  'إعادة الحساب'),
+        ('lines_edited',  'تعديل البنود'),
+        ('approved',      'اعتماد'),
+        ('unapproved',    'إلغاء الاعتماد'),
+        ('paid',          'دفع الراتب'),
+        ('cancelled',     'إلغاء'),
+        ('note_added',    'إضافة ملاحظة'),
+    ]
+
+    payroll = models.ForeignKey(
+        'Payroll',
+        on_delete=models.CASCADE,
+        related_name='audit_logs',
+        verbose_name='قسيمة الراتب'
+    )
+    action = models.CharField(
+        max_length=30,
+        choices=ACTION_CHOICES,
+        verbose_name='الإجراء'
+    )
+    performed_by = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='payroll_audit_actions',
+        verbose_name='بواسطة'
+    )
+    timestamp = models.DateTimeField(auto_now_add=True, verbose_name='التوقيت')
+    notes = models.TextField(blank=True, verbose_name='ملاحظات')
+    # snapshot مختصر للحالة بعد التعديل
+    snapshot = models.JSONField(null=True, blank=True, verbose_name='لقطة البيانات')
+
+    class Meta:
+        verbose_name = 'سجل تدقيق راتب'
+        verbose_name_plural = 'سجلات تدقيق الرواتب'
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['payroll', 'timestamp']),
+            models.Index(fields=['performed_by', 'timestamp']),
+        ]
+
+    def __str__(self):
+        return f"{self.get_action_display()} - {self.payroll} - {self.performed_by}"
 
 
 class Advance(models.Model):
@@ -532,6 +609,24 @@ class Advance(models.Model):
     # ملاحظات
     notes = models.TextField(blank=True, verbose_name='ملاحظات')
     
+    # القيد المحاسبي
+    journal_entry = models.ForeignKey(
+        'financial.JournalEntry',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='advances',
+        verbose_name='القيد المحاسبي'
+    )
+    payment_account = models.ForeignKey(
+        'financial.ChartOfAccounts',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='advance_payments',
+        verbose_name='حساب الصرف (الخزينة/البنك)'
+    )
+    
     class Meta:
         verbose_name = 'سلفة'
         verbose_name_plural = 'السلف'
@@ -571,6 +666,11 @@ class Advance(models.Model):
         # التحقق من تاريخ بدء الخصم
         if self.status == 'paid' and not self.deduction_start_month:
             errors['deduction_start_month'] = 'يجب تحديد شهر بدء الخصم عند صرف السلفة'
+
+        # التحقق من أن تاريخ بدء الخصم لا يسبق 26 من الشهر السابق
+        if self.deduction_start_month and not self.pk:
+            from hr.utils import validate_entry_date
+            errors.update(validate_entry_date(self.deduction_start_month, 'deduction_start_month'))
         
         if errors:
             raise ValidationError(errors)

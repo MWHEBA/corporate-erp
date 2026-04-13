@@ -2,7 +2,7 @@
 # عروض دليل الحسابات وإدارة الحسابات وأنواع الحسابات
 
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib import messages
 from django.urls import reverse
 from django.core.paginator import Paginator
@@ -449,6 +449,7 @@ def quick_add_cash_bank_account(request):
 # ============== قائمة الخزن والحسابات النقدية ==============
 
 @login_required
+@permission_required('ادارة_الخزن_والحسابات', raise_exception=True)
 def cash_and_bank_accounts_list(request):
     """عرض قائمة الحسابات النقدية والبنكية فقط (الخزن)"""
     # فلترة الحسابات النقدية والبنكية فقط
@@ -519,7 +520,12 @@ def cash_and_bank_accounts_list(request):
             ).order_by('-journal_entry__date').first()
             
             if last_movement:
-                account.last_movement_date = last_movement.journal_entry.date
+                from django.utils import timezone
+                import datetime
+                d = last_movement.journal_entry.date
+                account.last_movement_date = timezone.make_aware(
+                    datetime.datetime.combine(d, datetime.time.min)
+                ) if isinstance(d, datetime.date) and not isinstance(d, datetime.datetime) else d
             else:
                 account.last_movement_date = None
 
@@ -633,7 +639,7 @@ def chart_of_accounts_list(request):
 
         # جلب الحسابات الرئيسية فقط (عرض شجرة)
         if type_filter == "parents":
-            # في حالة فلتر العملاء، نعرض الحساب الأساسي فقط كـ root
+            # في حالة فلتر أولياء الأمور، نعرض الحساب الأساسي فقط كـ root
             parents_main_account = ChartOfAccounts.objects.filter(code="10300", is_active=True).first()
             if parents_main_account:
                 root_accounts = [parents_main_account]
@@ -2874,7 +2880,7 @@ def payment_list(request):
         payment_headers = [
             {"key": "type_display", "label": "النوع", "sortable": True, "width": "10%"},
             {"key": "invoice_number", "label": "رقم الفاتورة", "sortable": True, "width": "12%", "template": "components/cells/invoice_link.html"},
-            {"key": "party_name", "label": "المورد", "sortable": True, "width": "20%"},
+            {"key": "party_name", "label": "ولي الأمر/المورد", "sortable": True, "width": "20%"},
             {"key": "amount", "label": "المبلغ", "sortable": True, "template": "components/cells/payment_amount.html", "class": "text-end", "width": "12%"},
             {"key": "date", "label": "التاريخ", "sortable": True, "format": "date", "class": "text-center", "width": "12%"},
             {"key": "method", "label": "طريقة الدفع", "sortable": False, "width": "12%"},

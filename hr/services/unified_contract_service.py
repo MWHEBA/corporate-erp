@@ -22,7 +22,6 @@ class UnifiedContractService:
     def create_contract_with_analysis(self, employee, contract_data, user=None):
         """إنشاء عقد جديد مع التحليل الذكي"""
         
-        logger.info(f"إنشاء عقد جديد للموظف {employee.id}")
         
         # تحليل بنود الموظف الحالية
         analysis = self.analyzer.analyze_employee_for_contract(employee)
@@ -48,7 +47,6 @@ class UnifiedContractService:
     def smart_activate_contract(self, contract, user_selections=None, user=None):
         """تفعيل ذكي للعقد مع معالجة البنود"""
         
-        logger.info(f"تفعيل ذكي للعقد {contract.id}")
         
         try:
             # التحقق من حالة العقد
@@ -71,9 +69,23 @@ class UnifiedContractService:
             contract.activation_date = timezone.now().date()
             contract.activated_by = user
             contract.save()
-            
-            # تعطيل البنود القديمة التي لم تعد موجودة في العقد الجديد
+
+            # نسخ بنود العقد (ContractSalaryComponent) إلى بنود الموظف (SalaryComponent)
             from .contract_activation_service import ContractActivationService
+            contract_components = contract.salary_components.order_by('order')
+            employee = contract.employee
+            employee_components = employee.salary_components.filter(is_active=True)
+            copied_count = 0
+            for contract_comp in contract_components:
+                matching = ContractActivationService._find_exact_match(contract_comp, employee_components)
+                if not matching:
+                    new_comp = contract_comp.copy_to_employee_component(employee)
+                    if new_comp:
+                        new_comp.source = 'contract'
+                        new_comp.save()
+                        copied_count += 1
+
+            # تعطيل البنود القديمة التي لم تعد موجودة في العقد الجديد
             deactivated_count = self._deactivate_obsolete_components(contract)
             
             # إضافة تفاصيل التعطيل للنتائج
@@ -169,7 +181,6 @@ class UnifiedContractService:
             contract.save()
             old_contract = contract
             
-            logger.info(f"تم إلغاء تفعيل العقد السابق {contract.id}")
         
         return old_contract
     
@@ -462,13 +473,7 @@ class UnifiedContractService:
     def _log_activation(self, contract, analysis, transfer_results, user):
         """تسجيل عملية التفعيل"""
         
-        logger.info(
-            f"تم تفعيل العقد {contract.id} للموظف {contract.employee.name} "
-            f"بواسطة {user.username if user else 'النظام'}"
-        )
         
-        logger.info(f"تحليل البنود: {analysis['total_components']} بند تم تحليله")
-        logger.info(f"نتائج النقل: {transfer_results['summary']['message']}")
     
     def _deactivate_obsolete_components(self, contract):
         """تعطيل البنود القديمة التي لم تعد موجودة في العقد الجديد"""
@@ -499,5 +504,4 @@ class UnifiedContractService:
                 emp_comp.save()
                 deactivated_count += 1
                 
-        logger.info(f"تم تعطيل {deactivated_count} بند قديم للموظف {employee.name}")
         return deactivated_count

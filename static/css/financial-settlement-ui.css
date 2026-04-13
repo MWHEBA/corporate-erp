@@ -429,59 +429,6 @@
    3. ENHANCED PREVIEW CARDS (بطاقات المعاينة المحسنة)
    ======================================== */
 
-/* Student Info Card */
-.student-info-card {
-    background: linear-gradient(135deg, var(--info-soft) 0%, var(--primary-soft) 100%);
-    border: 2px solid var(--info-color);
-    border-radius: var(--radius-lg);
-    padding: var(--spacing-5);
-    margin-top: var(--spacing-4);
-    display: none;
-    animation: slideDown 0.4s ease-out;
-}
-
-.student-info-card.show {
-    display: block;
-}
-
-.student-info-header {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-3);
-    margin-bottom: var(--spacing-4);
-}
-
-.student-avatar {
-    width: 60px;
-    height: 60px;
-    background: var(--primary-color);
-    color: var(--white);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5rem;
-    font-weight: 700;
-}
-
-.student-info-details h6 {
-    color: var(--primary-dark);
-    font-weight: 700;
-    margin-bottom: var(--spacing-1);
-}
-
-.student-info-details p {
-    color: var(--text-secondary);
-    margin: 0;
-    font-size: 0.875rem;
-}
-
-.student-financial-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: var(--spacing-3);
-}
-
 .financial-metric {
     text-align: center;
     padding: var(--spacing-3);
@@ -1029,10 +976,6 @@
         transform: translateX(-50%);
     }
     
-    .student-financial-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-    
     .toast-container {
         top: var(--spacing-4);
         left: var(--spacing-4);
@@ -1051,10 +994,6 @@
     .form-section-header {
         flex-direction: column;
         text-align: center;
-    }
-    
-    .student-financial-grid {
-        grid-template-columns: 1fr;
     }
     
     .enhanced-alert {

@@ -40,6 +40,9 @@
 
         // عند تغيير المورد، اقترح آخر تصنيف
         vendorField.addEventListener('change', function() {
+            // لو في وضع النسخ، لا تـoverride التصنيف
+            if (window._disableCategorySuggestion) return;
+
             const vendorId = this.value;
             if (!vendorId) return;
 

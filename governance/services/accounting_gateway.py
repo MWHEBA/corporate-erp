@@ -11,16 +11,16 @@ Key Features:
 - Source linkage validation and enforcement
 - Idempotency protection using specific key format: JE:{source_module}:{source_model}:{source_id}:{event_type}
 - Integration with audit trail and governance systems
-- Support for StudentFee, StockMovement, and FeePayment workflows
+- Support for StockMovement, Purchase, Sale, and HR payroll workflows
 
 Usage:
     gateway = AccountingGateway()
     entry = gateway.create_journal_entry(
-        source_module='students',
-        source_model='StudentFee', 
+        source_module='purchase',
+        source_model='PurchasePayment', 
         source_id=123,
         lines=[...],
-        idempotency_key='JE:students:StudentFee:123:create',
+        idempotency_key='JE:purchase:PurchasePayment:123:create',
         user=request.user
     )
 """
@@ -101,9 +101,7 @@ class AccountingGateway:
     
     # Supported source models for journal entries (allowlist)
     ALLOWED_SOURCES = {
-        'students.StudentFee',
-        'students.FeePayment',
-        'students.StudentRefund',  # Added for settlement/refund transactions
+        'client.CustomerPayment',
         'product.StockMovement',
         'purchase.PurchasePayment',
         'hr.Payroll',
@@ -111,25 +109,25 @@ class AccountingGateway:
         'transportation.TransportationFee',
         'finance.ManualAdjustment',
         'financial.PartnerTransaction',
-        'financial.FinancialTransaction',  # Added for TransactionService
-        'financial.BankReconciliation',  # Added for BankReconciliationService
-        'financial.JournalEntry',  # Added for manual/quick entries that reference themselves
-        'courses.CourseEnrollment',  # Added for CourseAccountingService
-        'qr_applications.QRApplication',  # Added for QR application payments
-        'activities.ActivityExpense',  # Added for activity expense tracking
-        'sale.Sale',  # Added for sale invoices
-        'sale.SalePayment',  # Added for sale payments
-        'sale.SaleReturn',  # Added for sale returns
-        'purchase.Purchase',  # Added for purchase invoices
-        'purchase.PurchaseReturn',  # Added for purchase returns
+        'financial.FinancialTransaction',
+        'financial.BankReconciliation',
+        'financial.JournalEntry',
+        'courses.CourseEnrollment',
+        'qr_applications.QRApplication',
+        'activities.ActivityExpense',
+        'sale.Sale',
+        'sale.SalePayment',
+        'sale.SaleReturn',
+        'purchase.Purchase',
+        'purchase.PurchaseReturn',
     }
     
     # High-priority workflows that require strict validation
     HIGH_PRIORITY_WORKFLOWS = {
-        'students.StudentFee',
-        'product.StockMovement', 
-        'students.FeePayment',
-        'hr.Payroll'
+        'client.CustomerPayment',
+        'product.StockMovement',
+        'hr.Payroll',
+        'purchase.PurchasePayment',
     }
     
     def __init__(self):
@@ -153,8 +151,8 @@ class AccountingGateway:
         The format is: JE:{module}:{model}:{id}:{operation}
         
         Args:
-            module: Source module (e.g., 'students', 'transportation', 'product')
-            model: Source model (e.g., 'StudentFee', 'DriverPayment', 'ProductSale')
+            module: Source module (e.g., 'client', 'transportation', 'product')
+            model: Source model (e.g., 'CustomerPayment', 'DriverPayment', 'StockMovement')
             object_id: Object ID (must be positive integer)
             operation: Operation type (e.g., 'create', 'refund', 'reverse', 'payment')
             
@@ -165,14 +163,11 @@ class AccountingGateway:
             ValueError: If parameters are invalid
             
         Examples:
-            >>> AccountingGateway.generate_idempotency_key('students', 'StudentFee', 123, 'create')
-            'JE:students:StudentFee:123:create'
+            >>> AccountingGateway.generate_idempotency_key('purchase', 'PurchasePayment', 123, 'create')
+            'JE:purchase:PurchasePayment:123:create'
             
             >>> AccountingGateway.generate_idempotency_key('transportation', 'DriverPayment', 456, 'payment')
             'JE:transportation:DriverPayment:456:payment'
-            
-            >>> AccountingGateway.generate_idempotency_key('students', 'FeePayment', 789, 'refund')
-            'JE:students:FeePayment:789:refund'
         
         Notes:
             - Keys are deterministic - same inputs always produce same key
@@ -211,13 +206,13 @@ class AccountingGateway:
             True if valid, False otherwise
             
         Examples:
-            >>> AccountingGateway.validate_idempotency_key('JE:students:StudentFee:123:create')
+            >>> AccountingGateway.validate_idempotency_key('JE:client:CustomerPayment:123:create')
             True
             
             >>> AccountingGateway.validate_idempotency_key('invalid-key')
             False
             
-            >>> AccountingGateway.validate_idempotency_key('JE:students:StudentFee:123:create:extra')
+            >>> AccountingGateway.validate_idempotency_key('JE:client:CustomerPayment:123:create:extra')
             False
         """
         if not key or not isinstance(key, str):
@@ -275,8 +270,8 @@ class AccountingGateway:
         operation with proper locking.
         
         Args:
-            source_module: Source module name (e.g., 'students', 'product')
-            source_model: Source model name (e.g., 'StudentFee', 'StockMovement')
+            source_module: Source module name (e.g., 'client', 'product')
+            source_model: Source model name (e.g., 'CustomerPayment', 'StockMovement')
             source_id: ID of the source record
             lines: List of journal entry lines
             idempotency_key: Unique key to prevent duplicate operations
@@ -997,15 +992,13 @@ class AccountingGateway:
         source_key = f"{source_info.module}.{source_info.model}"
         
         prefix_mapping = {
-            'students.StudentFee': 'SF',
-            'students.FeePayment': 'FP',
+            'client.CustomerPayment': 'CP',
             'product.StockMovement': 'SM',
             'purchase.PurchasePayment': 'PP',
             'hr.Payroll': 'PR',
             'hr.PayrollPayment': 'HR',
             'transportation.TransportationFee': 'TF',
             'finance.ManualAdjustment': 'ADJ'
-            # Note: 'sale.SalePayment' removed - Sale module has been replaced
         }
         
         prefix = prefix_mapping.get(source_key, 'JE')
@@ -1149,8 +1142,8 @@ class AccountingGateway:
         high_priority_count = JournalEntry.objects.filter(
             created_by_service='AccountingGateway'
         ).filter(
-            source_module__in=['students', 'product'],
-            source_model__in=['StudentFee', 'StockMovement', 'FeePayment']
+            source_module__in=['client', 'product'],
+            source_model__in=['CustomerPayment', 'StockMovement']
         ).count()
         
         stats['high_priority_entries'] = high_priority_count
@@ -1281,12 +1274,10 @@ class AccountingGateway:
             )
         
         # Enforce additional controls for selected workflows
-        if source_key == 'students.StudentFee':
-            self._enforce_student_fee_period_controls(journal_entry, period)
+        if source_key == 'client.CustomerPayment':
+            self._enforce_customer_payment_period_controls(journal_entry, period)
         elif source_key == 'product.StockMovement':
             self._enforce_stock_movement_period_controls(journal_entry, period)
-        elif source_key == 'students.FeePayment':
-            self._enforce_fee_payment_period_controls(journal_entry, period)
     
     def _enforce_posted_entry_immutability(self, journal_entry: JournalEntry) -> None:
         """
@@ -1316,28 +1307,25 @@ class AccountingGateway:
         
         logger.info(f"Enforced immutability on posted entry {journal_entry.number}")
     
-    def _enforce_student_fee_period_controls(self, journal_entry: JournalEntry, period: AccountingPeriod) -> None:
+    def _enforce_customer_payment_period_controls(self, journal_entry: JournalEntry, period: AccountingPeriod) -> None:
         """
-        Enforce specific period controls for StudentFee workflow.
+        Enforce specific period controls for CustomerPayment workflow.
         
         Args:
-            journal_entry: StudentFee journal entry
+            journal_entry: CustomerPayment journal entry
             period: Accounting period
         """
-        # Sale entries must be posted within the same period as the sale date
         if hasattr(journal_entry, 'source_id') and journal_entry.source_id:
             try:
-                # Import here to avoid circular imports
-                from sale.models import Sale
-                sale = Sale.objects.get(id=journal_entry.source_id)
+                from client.models.payment import CustomerPayment
+                payment = CustomerPayment.objects.get(id=journal_entry.source_id)
                 
-                # Validate sale date is within the posting period
-                if not period.is_date_in_period(sale.created_at.date()):
+                if not period.is_date_in_period(payment.payment_date):
                     logger.warning(
-                        f"Sale {sale.id} created outside posting period {period.name}"
+                        f"CustomerPayment {payment.id} payment date outside posting period {period.name}"
                     )
             except Exception as e:
-                logger.warning(f"Could not validate Sale period controls: {str(e)}")
+                logger.warning(f"Could not validate CustomerPayment period controls: {str(e)}") 
     
     def _enforce_stock_movement_period_controls(self, journal_entry: JournalEntry, period: AccountingPeriod) -> None:
         """
@@ -1370,34 +1358,29 @@ class AccountingGateway:
     
     def _enforce_fee_payment_period_controls(self, journal_entry: JournalEntry, period: AccountingPeriod) -> None:
         """
-        Enforce specific period controls for FeePayment workflow.
+        Enforce specific period controls for SalePayment workflow.
         
         Args:
             journal_entry: Payment journal entry
             period: Accounting period
         """
-        # Payment entries must be posted in the period when payment was received
         if hasattr(journal_entry, 'source_id') and journal_entry.source_id:
             try:
-                # Import here to avoid circular imports
                 from sale.models import SalePayment
                 payment = SalePayment.objects.get(id=journal_entry.source_id)
                 
-                # Validate payment date is within the posting period
                 if not period.is_date_in_period(payment.payment_date):
                     logger.warning(
                         f"Payment {payment.id} payment date outside posting period {period.name}"
                     )
                     
-                # Additional validation for payment timing
-                # Check if payment was posted significantly after payment date
                 days_diff = (journal_entry.date - payment.payment_date).days
                 if days_diff > 1:
                     logger.warning(
-                        f"Payment {fee_payment.id} posted {days_diff} days after payment date"
+                        f"Payment {payment.id} posted {days_diff} days after payment date"
                     )
             except Exception as e:
-                logger.warning(f"Could not validate FeePayment period controls: {str(e)}")
+                logger.warning(f"Could not validate SalePayment period controls: {str(e)}")
     
     def validate_period_lock_compliance(self, period: AccountingPeriod) -> Dict[str, Any]:
         """
@@ -1503,19 +1486,14 @@ class AccountingGateway:
             source_key: Source workflow key
         """
         # Additional validation based on workflow type
-        if source_key == 'students.StudentFee':
-            # StudentFee reversals require special handling
-            logger.info(f"Processing StudentFee reversal for entry {original_entry.number}")
+        if source_key == 'client.CustomerPayment':
+            logger.info(f"Processing CustomerPayment reversal for entry {original_entry.number}")
             
         elif source_key == 'product.StockMovement':
-            # StockMovement reversals affect inventory - extra validation
             logger.info(f"Processing StockMovement reversal for entry {original_entry.number}")
-            # Could add inventory validation here
             
-        elif source_key == 'students.FeePayment':
-            # FeePayment reversals affect cash/bank accounts
-            logger.info(f"Processing FeePayment reversal for entry {original_entry.number}")
-            # Could add cash flow validation here
+        elif source_key == 'purchase.PurchasePayment':
+            logger.info(f"Processing PurchasePayment reversal for entry {original_entry.number}")
         
         # Ensure original entry was created through AccountingGateway
         if original_entry.created_by_service != 'AccountingGateway':
@@ -1652,187 +1630,70 @@ class AccountingGateway:
 
 # Convenience functions for common journal entry patterns
 
-def create_student_fee_entry(
-    student_fee,
+def create_customer_payment_entry(
+    customer_payment,
     user: User,
     idempotency_key: Optional[str] = None
 ) -> JournalEntry:
     """
-    Create journal entry for student fee using AccountingGateway.
-    
+    Create journal entry for customer payment using AccountingGateway.
+
     Args:
-        student_fee: StudentFee instance
+        customer_payment: CustomerPayment instance
         user: User creating the entry
         idempotency_key: Optional idempotency key (auto-generated if not provided)
-        
+
     Returns:
         JournalEntry: Created journal entry
     """
     gateway = AccountingGateway()
-    
+
     if idempotency_key is None:
         idempotency_key = IdempotencyService.generate_journal_entry_key(
-            'students', 'StudentFee', student_fee.id, 'create'
+            'client', 'CustomerPayment', customer_payment.id, 'create'
         )
-    
-    # Prepare journal entry lines for student fee
-    lines = [
-        JournalEntryLineData(
-            account_code='10301',  # Parents Receivable
-            debit=student_fee.total_amount,
-            credit=Decimal('0'),
-            description=f"Student fee - {student_fee.student.name}"
-        ),
-        JournalEntryLineData(
-            account_code='41020',  # Tuition Revenue (or appropriate revenue account)
-            debit=Decimal('0'),
-            credit=student_fee.total_amount,
-            description=f"Revenue - {student_fee.fee_type.name}"
-        )
-    ]
-    
-    return gateway.create_journal_entry(
-        source_module='students',
-        source_model='StudentFee',
-        source_id=student_fee.id,
-        lines=lines,
-        idempotency_key=idempotency_key,
-        user=user,
-        description=f"Student fee entry for {student_fee.student.name}",
-        reference=f"SF-{student_fee.id}"
-    )
 
+    # الحساب النقدي/البنكي من طريقة الدفع
+    cash_account = customer_payment.payment_method  # account code
 
-def create_student_fee_reversal(
-    original_entry: JournalEntry,
-    user: User,
-    reason: str = "Student fee reversal",
-    partial_amount: Optional[Decimal] = None,
-    idempotency_key: Optional[str] = None
-) -> JournalEntry:
-    """
-    Create reversal entry for student fee using AccountingGateway.
-    This is the ONLY way to modify posted student fee entries.
-    
-    Args:
-        original_entry: Original journal entry to reverse
-        user: User creating the reversal
-        reason: Reason for reversal
-        partial_amount: Optional partial amount to reverse
-        idempotency_key: Optional idempotency key
-        
-    Returns:
-        JournalEntry: Created reversal entry
-    """
-    gateway = AccountingGateway()
-    
-    return gateway.create_reversal_entry(
-        original_entry=original_entry,
-        user=user,
-        reason=reason,
-        partial_amount=partial_amount,
-        idempotency_key=idempotency_key
-    )
-
-
-def create_fee_payment_entry(
-    fee_payment,
-    user: User,
-    idempotency_key: Optional[str] = None
-) -> JournalEntry:
-    """
-    Create journal entry for fee payment using AccountingGateway.
-    
-    Args:
-        fee_payment: FeePayment instance
-        user: User creating the entry
-        idempotency_key: Optional idempotency key (auto-generated if not provided)
-        
-    Returns:
-        JournalEntry: Created journal entry
-    """
-    gateway = AccountingGateway()
-    
-    if idempotency_key is None:
-        idempotency_key = IdempotencyService.generate_journal_entry_key(
-            'students', 'FeePayment', fee_payment.id, 'create'
-        )
-    
-    # النظام الجديد: payment_method هو account code مباشرة
-    cash_account = fee_payment.payment_method
-    
-    # التحقق من أن الحساب موجود وصحيح
     try:
         from financial.models import ChartOfAccounts
-        account = ChartOfAccounts.objects.filter(
-            code=cash_account,
-            is_active=True
-        ).first()
-        
+        account = ChartOfAccounts.objects.filter(code=cash_account, is_active=True).first()
         if not account:
             raise ValueError(f"الحساب المحاسبي {cash_account} غير موجود أو غير نشط")
-            
     except Exception as e:
         logger.error(f"فشل في التحقق من الحساب {cash_account}: {str(e)}")
         raise
-    
-    # Prepare journal entry lines for fee payment
+
+    # حساب العميل المحاسبي
+    customer_account = customer_payment.customer.financial_account
+    if not customer_account:
+        raise ValueError(f"العميل {customer_payment.customer.name} ليس له حساب محاسبي")
+
     lines = [
         JournalEntryLineData(
-            account_code=cash_account,  # Cash or Bank account code
-            debit=fee_payment.amount,
+            account_code=cash_account,
+            debit=customer_payment.amount,
             credit=Decimal('0'),
-            description=f"Payment received - {fee_payment.get_payment_method_display()}"
+            description=f"دفعة من العميل - {customer_payment.customer.name}"
         ),
         JournalEntryLineData(
-            account_code='10301',  # Parents Receivable
+            account_code=customer_account.code,
             debit=Decimal('0'),
-            credit=fee_payment.amount,
-            description=f"Payment from {fee_payment.student_fee.student.parent.name}"
+            credit=customer_payment.amount,
+            description=f"تخفيض ذمم العميل - {customer_payment.customer.name}"
         )
     ]
-    
+
     return gateway.create_journal_entry(
-        source_module='students',
-        source_model='FeePayment',
-        source_id=fee_payment.id,
+        source_module='client',
+        source_model='CustomerPayment',
+        source_id=customer_payment.id,
         lines=lines,
         idempotency_key=idempotency_key,
         user=user,
-        description=f"Fee payment from {fee_payment.student_fee.student.parent.name}",
-        reference=fee_payment.reference_number or f"FP-{fee_payment.id}"
-    )
-
-
-def create_fee_payment_reversal(
-    original_entry: JournalEntry,
-    user: User,
-    reason: str = "Fee payment reversal",
-    partial_amount: Optional[Decimal] = None,
-    idempotency_key: Optional[str] = None
-) -> JournalEntry:
-    """
-    Create reversal entry for fee payment using AccountingGateway.
-    This is the ONLY way to modify posted fee payment entries.
-    
-    Args:
-        original_entry: Original journal entry to reverse
-        user: User creating the reversal
-        reason: Reason for reversal
-        partial_amount: Optional partial amount to reverse
-        idempotency_key: Optional idempotency key
-        
-    Returns:
-        JournalEntry: Created reversal entry
-    """
-    gateway = AccountingGateway()
-    
-    return gateway.create_reversal_entry(
-        original_entry=original_entry,
-        user=user,
-        reason=reason,
-        partial_amount=partial_amount,
-        idempotency_key=idempotency_key
+        description=f"دفعة عميل - {customer_payment.customer.name}",
+        reference=customer_payment.reference_number or f"CP-{customer_payment.id}"
     )
 
 
@@ -1903,8 +1764,8 @@ def create_stock_movement_entry(
                 return None
     
     # Get standard account codes
-    inventory_account_code = get_account_code('10400', '10300', 'inventory', required=True)  # المخزون
-    
+    inventory_account_code = get_account_code('10400', '10400', 'inventory', required=True)  # المخزون
+
     # محاولة الحصول على حساب المصروفات من التصنيف المالي للفاتورة
     expense_account_code = None
     if stock_movement.document_number:
@@ -1912,20 +1773,18 @@ def create_stock_movement_entry(
             from purchase.models import Purchase
             purchase = Purchase.objects.filter(number=stock_movement.document_number).first()
             if purchase and purchase.financial_category:
-                # الحصول على حساب المصروفات من التصنيف المالي
                 if purchase.financial_category.default_expense_account:
                     expense_account_code = purchase.financial_category.default_expense_account.code
                     logger.info(f"Using expense account from financial category: {expense_account_code}")
         except Exception as e:
             logger.warning(f"Could not get expense account from financial category: {str(e)}")
-    
-    # إذا لم نجد حساب من التصنيف المالي، نستخدم الحسابات الافتراضية
+
     if not expense_account_code:
-        expense_account_code = get_account_code('50100', '5010', 'cogs', required=True)  # تكلفة البضاعة المباعة
+        expense_account_code = get_account_code('50100', '50100', 'cogs', required=True)  # تكلفة البضاعة المباعة
         logger.info(f"Using default expense account: {expense_account_code}")
-    
-    other_expenses_code = get_account_code('50200', '5020', 'expense', required=True)  # مصروفات أخرى
-    sales_returns_code = get_account_code('41030', '4103', 'sales_return', required=False)  # مردودات المبيعات (optional)
+
+    other_expenses_code = get_account_code('50300', '50300', 'expense', required=True)  # مصروفات إدارية
+    sales_returns_code = get_account_code('41100', '41100', 'sales_return', required=False)  # مرتجعات نقدية
     
     # محاولة الحصول على حساب المورد من الفاتورة (للمشتريات فقط)
     supplier_account_code = None
@@ -1949,22 +1808,22 @@ def create_stock_movement_entry(
             else:
                 logger.warning(f"⚠️ لم يتم العثور على فاتورة مشتريات برقم: {stock_movement.document_number}")
                 # للحركات "in" بدون فاتورة، نستخدم حساب الموردين الرئيسي
-                supplier_account_code = get_account_code('21010', '2101', 'payables', required=False)
+                supplier_account_code = get_account_code('20100', '2010', 'payables', required=False)
                 if not supplier_account_code:
                     logger.warning("⚠️ حساب الموردين الرئيسي غير موجود، سيتم استخدام حساب المصروفات")
         except Purchase.DoesNotExist:
             logger.warning(f"⚠️ فاتورة المشتريات غير موجودة: {stock_movement.document_number}")
             # استخدام حساب الموردين الرئيسي كـ fallback
-            supplier_account_code = get_account_code('21010', '2101', 'payables', required=False)
+            supplier_account_code = get_account_code('20100', '2010', 'payables', required=False)
         except Exception as e:
             logger.error(f"❌ خطأ في الحصول على حساب المورد: {str(e)}")
             # استخدام حساب الموردين الرئيسي كـ fallback
-            supplier_account_code = get_account_code('21010', '2101', 'payables', required=False)
+            supplier_account_code = get_account_code('20100', '2010', 'payables', required=False)
     
     # للحركات "in" بدون document_number، نستخدم حساب الموردين الرئيسي
     elif stock_movement.movement_type == 'in' and not stock_movement.document_number:
         logger.info("ℹ️ حركة مخزون 'in' بدون document_number - استخدام حساب الموردين الرئيسي")
-        supplier_account_code = get_account_code('21010', '2101', 'payables', required=False)
+        supplier_account_code = get_account_code('20100', '2010', 'payables', required=False)
         if not supplier_account_code:
             # إذا لم يكن هناك حساب موردين، نستخدم حساب المصروفات
             logger.warning("⚠️ حساب الموردين غير موجود، سيتم استخدام حساب المصروفات")

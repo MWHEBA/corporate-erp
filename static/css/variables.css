@@ -26,15 +26,15 @@
        ======================================== */
     
     /* اللون الأساسي - الأزرق */
-    --primary-color: #0e3178;
-    --primary-dark: #013e61;
-    --primary-light: #0179b8;
-    --primary-hover: #016ca6;
-    --primary-active: #015078;
-    --primary-focus: rgba(1, 87, 138, 0.25);
-    --primary-rgb: 1, 87, 138;
-    --primary-soft: rgba(1, 87, 138, 0.1);
-    --primary-soft-2: rgba(1, 87, 138, 0.05);
+    --primary-color: #006699;
+    --primary-dark: #004d73;
+    --primary-light: #0088cc;
+    --primary-hover: #0077b3;
+    --primary-active: #005580;
+    --primary-focus: rgba(0, 102, 153, 0.25);
+    --primary-rgb: 0, 102, 153;
+    --primary-soft: rgba(0, 102, 153, 0.1);
+    --primary-soft-2: rgba(0, 102, 153, 0.05);
 
     /* اللون الثانوي - الرمادي */
     --secondary-color: #667788;
@@ -284,7 +284,7 @@
     /* متغيرات الإشعارات */
     --notification-icon-size: 40px;
     --notification-dropdown-width: 360px;
-    --notification-unread-bg: rgba(1, 87, 138, 0.05);
+    --notification-unread-bg: rgba(0, 102, 153, 0.05);
     --notification-hover-bg: var(--gray-100);
     --notification-text-color: var(--gray-700);
     --notification-time-color: var(--gray-500);

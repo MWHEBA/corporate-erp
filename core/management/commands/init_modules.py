@@ -85,6 +85,18 @@ class Command(BaseCommand):
                 'menu_id': 'hrMenu',
                 'required_modules_codes': [],
             },
+            {
+                'code': 'printing_pricing',
+                'name_ar': 'نظام تسعير المطبوعات',
+                'name_en': 'Printing Pricing System',
+                'description': 'إدارة طلبات تسعير المطبوعات وحساب التكاليف',
+                'icon': 'fas fa-print',
+                'module_type': 'optional',
+                'order': 50,
+                'url_namespace': 'printing_pricing',
+                'menu_id': 'printingPricingMenu',
+                'required_modules_codes': [],
+            },
         ]
         
         created_count = 0

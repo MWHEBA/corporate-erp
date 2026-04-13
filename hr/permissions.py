@@ -1,55 +1,80 @@
 """
 Permissions لوحدة الموارد البشرية
-Phase 3: Enhanced with Authority Service integration
+تعتمد على نظام الأدوار والصلاحيات المخصص (RolePermissionBackend)
 """
 from rest_framework import permissions
-from governance.services.authority_service import AuthorityService
 import logging
 
 logger = logging.getLogger(__name__)
 
 
+class IsHRStaff(permissions.BasePermission):
+    """
+    صلاحية الوصول لموارد HR - تعتمد على نظام الأدوار والصلاحيات المخصص
+    تستخدم has_perm() اللي بيمر على RolePermissionBackend تلقائياً
+    """
+    hr_permissions = [
+        'view_employee', 'add_employee', 'change_employee', 'delete_employee',
+        'view_attendance', 'change_attendance',
+        'view_leave', 'add_leave', 'change_leave',
+        'view_payroll', 'change_payroll',
+        'view_advance', 'add_advance', 'change_advance',
+    ]
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser or getattr(request.user, 'is_admin', False):
+            return True
+        # يكفي أي صلاحية HR واحدة للوصول
+        return any(request.user.has_perm(f'hr.{perm}') for perm in self.hr_permissions)
+
+
 class IsHRManager(permissions.BasePermission):
     """
-    صلاحية مدير الموارد البشرية
+    صلاحية مدير الموارد البشرية - للعمليات الحساسة
     """
     def has_permission(self, request, view):
-        return request.user.is_authenticated and (
-            request.user.is_superuser or
-            hasattr(request.user, 'employee') and 
-            request.user.employee.job_title.code in ['HR-MGR', 'HR-DIR']
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser or getattr(request.user, 'is_admin', False):
+            return True
+        return (
+            request.user.has_perm('hr.change_employee') and
+            request.user.has_perm('hr.delete_employee')
         )
 
 
-class IsHRStaff(permissions.BasePermission):
+class CanViewEmployee(permissions.BasePermission):
     """
-    صلاحية موظف الموارد البشرية
+    صلاحية عرض بيانات الموظفين
+    للقراءة: view_employee
+    للكتابة: change_employee أو add_employee
     """
     def has_permission(self, request, view):
-        return request.user.is_authenticated and (
-            request.user.is_superuser or
-            hasattr(request.user, 'employee') and 
-            request.user.employee.department.code == 'HR'
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser or getattr(request.user, 'is_admin', False):
+            return True
+        if request.method in permissions.SAFE_METHODS:
+            return request.user.has_perm('hr.view_employee')
+        return (
+            request.user.has_perm('hr.change_employee') or
+            request.user.has_perm('hr.add_employee')
         )
 
 
 class IsEmployeeOrHR(permissions.BasePermission):
     """
-    صلاحية الموظف نفسه أو موظف HR
+    صلاحية الموظف نفسه أو من عنده view_employee
     """
     def has_object_permission(self, request, view, obj):
-        # السماح للموظف بعرض بياناته
+        if request.user.is_superuser or getattr(request.user, 'is_admin', False):
+            return True
+        # الموظف يشوف بياناته
         if hasattr(request.user, 'employee') and obj == request.user.employee:
             return True
-        
-        # السماح لموظفي HR
-        if request.user.is_superuser:
-            return True
-            
-        if hasattr(request.user, 'employee'):
-            return request.user.employee.department.code == 'HR'
-        
-        return False
+        return request.user.has_perm('hr.view_employee')
 
 
 class CanApproveLeave(permissions.BasePermission):
@@ -57,13 +82,11 @@ class CanApproveLeave(permissions.BasePermission):
     صلاحية اعتماد الإجازات
     """
     def has_permission(self, request, view):
-        return request.user.is_authenticated and (
-            request.user.is_superuser or
-            hasattr(request.user, 'employee') and (
-                request.user.employee.department.code == 'HR' or
-                request.user.employee.is_manager
-            )
-        )
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser or getattr(request.user, 'is_admin', False):
+            return True
+        return request.user.has_perm('hr.can_approve_leaves')
 
 
 class CanProcessPayroll(permissions.BasePermission):
@@ -71,10 +94,13 @@ class CanProcessPayroll(permissions.BasePermission):
     صلاحية معالجة الرواتب
     """
     def has_permission(self, request, view):
-        return request.user.is_authenticated and (
-            request.user.is_superuser or
-            hasattr(request.user, 'employee') and 
-            request.user.employee.job_title.code in ['HR-MGR', 'HR-DIR', 'FIN-MGR']
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser or getattr(request.user, 'is_admin', False):
+            return True
+        return (
+            request.user.has_perm('hr.view_payroll') or
+            request.user.has_perm('hr.change_payroll')
         )
 
 
@@ -83,22 +109,14 @@ class CanViewAttendance(permissions.BasePermission):
     صلاحية عرض الحضور
     """
     def has_permission(self, request, view):
-        # الجميع يمكنهم عرض حضورهم
         return request.user.is_authenticated
-    
+
     def has_object_permission(self, request, view, obj):
-        # الموظف يمكنه عرض حضوره فقط
+        if request.user.is_superuser or getattr(request.user, 'is_admin', False):
+            return True
         if hasattr(request.user, 'employee') and obj.employee == request.user.employee:
             return True
-        
-        # HR يمكنهم عرض الجميع
-        if request.user.is_superuser:
-            return True
-            
-        if hasattr(request.user, 'employee'):
-            return request.user.employee.department.code == 'HR'
-        
-        return False
+        return request.user.has_perm('hr.view_attendance')
 
 
 class CanManageDepartment(permissions.BasePermission):
@@ -106,10 +124,13 @@ class CanManageDepartment(permissions.BasePermission):
     صلاحية إدارة الأقسام
     """
     def has_permission(self, request, view):
-        return request.user.is_authenticated and (
-            request.user.is_superuser or
-            hasattr(request.user, 'employee') and 
-            request.user.employee.job_title.code in ['HR-MGR', 'HR-DIR', 'CEO']
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser or getattr(request.user, 'is_admin', False):
+            return True
+        return (
+            request.user.has_perm('hr.add_department') or
+            request.user.has_perm('hr.change_department')
         )
 
 
@@ -118,96 +139,57 @@ class IsDirectManager(permissions.BasePermission):
     صلاحية المدير المباشر
     """
     def has_object_permission(self, request, view, obj):
-        if request.user.is_superuser:
+        if request.user.is_superuser or getattr(request.user, 'is_admin', False):
             return True
-        
         if hasattr(request.user, 'employee'):
-            # المدير المباشر
             if hasattr(obj, 'direct_manager') and obj.direct_manager == request.user.employee:
                 return True
-            
-            # مدير القسم
             if hasattr(obj, 'department') and obj.department.manager == request.user.employee:
                 return True
-        
         return False
 
 
 class CanRequestAdvance(permissions.BasePermission):
     """
-    صلاحية طلب سلفة
+    صلاحية طلب سلفة - الموظف النشط فقط
     """
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
             return False
-        
-        # يجب أن يكون موظفاً
         if not hasattr(request.user, 'employee'):
             return False
-        
-        # يجب أن يكون نشطاً
         return request.user.employee.status == 'active'
 
 
 class CanTerminateEmployee(permissions.BasePermission):
     """
-    صلاحية إنهاء خدمة الموظفين - مع التحقق من Authority Service
-    Issue #1: Missing API permissions
+    صلاحية إنهاء خدمة الموظفين
     """
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
             return False
-        
-        # Validate through governance Authority Service
-        try:
-            is_authorized = AuthorityService.validate_authority(
-                service_name='EmployeeAPI',
-                model_name='Employee',
-                operation='TERMINATE'
+        if request.user.is_superuser or getattr(request.user, 'is_admin', False):
+            return True
+        if not request.user.has_perm('hr.delete_employee'):
+            logger.warning(
+                f"User {request.user.username} attempted to terminate employee without permission"
             )
-            
-            if not is_authorized:
-                logger.warning(
-                    f"User {request.user.username} attempted to terminate employee without authority"
-                )
-                return False
-            
-            # Additional HR-specific check
-            if request.user.is_superuser:
-                return True
-            
-            if hasattr(request.user, 'employee'):
-                return request.user.employee.job_title.code in ['HR-MGR', 'HR-DIR', 'CEO']
-            
             return False
-            
-        except Exception as e:
-            logger.error(f"Authority validation error: {e}")
-            return False
+        return True
 
 
 class CanViewSensitiveData(permissions.BasePermission):
     """
     صلاحية عرض البيانات الحساسة (الرقم القومي، الهاتف، البريد الشخصي)
-    Issue #4: Exposed sensitive data
     """
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
             return False
-        
-        # Only HR managers and directors can view full sensitive data
-        if request.user.is_superuser:
+        if request.user.is_superuser or getattr(request.user, 'is_admin', False):
             return True
-        
-        if hasattr(request.user, 'employee'):
-            return request.user.employee.job_title.code in ['HR-MGR', 'HR-DIR']
-        
-        return False
-    
+        return request.user.has_perm('hr.view_employee')
+
     def has_object_permission(self, request, view, obj):
-        # Employee can view their own data
         if hasattr(request.user, 'employee') and obj == request.user.employee:
             return True
-        
-        # HR managers can view all
         return self.has_permission(request, view)

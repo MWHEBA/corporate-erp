@@ -397,9 +397,6 @@ class EnhancedBalanceService:
                 },
             )
 
-            logger.info(
-                f"تم إنشاء لقطة رصيد للحساب {account.code} بتاريخ {snapshot_date}"
-            )
             return True
 
         except Exception as e:
@@ -424,7 +421,6 @@ class EnhancedBalanceService:
             ]
         )
 
-        logger.info(f"تم إبطال كاش الحساب {account.code}")
 
     @classmethod
     def _get_account_object(

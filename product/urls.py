@@ -1,6 +1,8 @@
 from django.urls import path
 from .views_modules import inventory_views
-from .views import voucher_views, transfer_views
+from .views import voucher_views
+from .views import transfer_views
+from .views import batch_voucher_views
 from . import views
 
 app_name = "product"
@@ -19,6 +21,7 @@ urlpatterns = [
     path("api/bundles/analytics/", views.bundle_analytics_api, name="bundle_analytics_api"),
     path("api/bundles/charts/", views.bundle_chart_data_api, name="bundle_chart_data_api"),
     path("api/bundles/analytics/report/", views.bundle_analytics_report_api, name="bundle_analytics_report_api"),
+    path("bulk-edit/", views.product_bulk_edit, name="product_bulk_edit"),
     path("create/", views.product_create, name="product_create"),
     path("create/modal/", views.product_create_modal, name="product_create_modal"),
     path("api/generate-sku/", views.generate_sku_ajax, name="generate_sku"),
@@ -42,18 +45,6 @@ urlpatterns = [
         name="delete_product_image_alt",
     ),
     
-    # Bundle Refund URLs - Commented out (views not implemented yet)
-    # path("bundles/<int:bundle_id>/refund/preview/", views.bundle_refund_preview, name="bundle_refund_preview"),
-    # path("bundles/<int:bundle_id>/refund/process/", views.BundleRefundProcessView.as_view(), name="bundle_refund_process"),
-    # path("bundles/<int:bundle_id>/refund/eligibility/", views.bundle_refund_eligibility_check, name="bundle_refund_eligibility"),
-    # path("bundles/refund/form/", views.bundle_refund_form, name="bundle_refund_form"),
-    # path("bundles/<int:bundle_id>/refund/form/", views.bundle_refund_form, name="bundle_refund_form_with_id"),
-    
-    # Student Bundle Refund Integration URLs - Commented out (views not implemented yet)
-    # path("student-refunds/<int:student_refund_id>/bundles/", views.StudentBundleRefundIntegrationView.as_view(), name="student_bundle_refund_integration"),
-    # path("student-refunds/bundles/form/", views.student_bundle_refund_form, name="student_bundle_refund_form"),
-    # path("student-refunds/<int:student_refund_id>/bundles/form/", views.student_bundle_refund_form, name="student_bundle_refund_form_with_id"),
-    
     # التصنيفات
     path("categories/", views.category_list, name="category_list"),
     path("categories/create/", views.category_create, name="category_create"),
@@ -72,9 +63,7 @@ urlpatterns = [
     path("warehouses/create/", views.warehouse_create, name="warehouse_create"),
     path("warehouses/<int:pk>/", views.warehouse_detail, name="warehouse_detail"),
     path("warehouses/<int:pk>/edit/", views.warehouse_edit, name="warehouse_edit"),
-    path(
-        "warehouses/<int:pk>/delete/", views.warehouse_delete, name="warehouse_delete"
-    ),
+    path("warehouses/<int:pk>/toggle-active/", views.warehouse_toggle_active, name="warehouse_toggle_active"),
     # المخزون
     path("stock/", views.stock_list, name="stock_list"),
     path("stock/<int:pk>/", views.stock_detail, name="stock_detail"),
@@ -83,6 +72,7 @@ urlpatterns = [
         "products/stock/<int:pk>/", views.product_stock_view, name="product_stock_view"
     ),
     path("api/stock/", views.get_stock_by_warehouse, name="get_stock_by_warehouse"),
+    path("api/products-for-invoice/", views.get_products_for_invoice, name="get_products_for_invoice"),
     # مسارات حركات المخزون
     path("stock-movements/", views.stock_movement_list, name="stock_movement_list"),
     path(
@@ -146,6 +136,11 @@ urlpatterns = [
     ),
     # التقارير المتقدمة
     path(
+        "reports/abc-analysis/",
+        inventory_views.abc_analysis_report,
+        name="abc_analysis_report",
+    ),
+    path(
         "reports/inventory-turnover/",
         inventory_views.inventory_turnover_report,
         name="inventory_turnover_report",
@@ -168,6 +163,7 @@ urlpatterns = [
     
     # API للأذون
     path("api/product-warehouses/", voucher_views.GetProductWarehousesView.as_view(), name="get_product_warehouses"),
+    path("api/available-products/", voucher_views.GetAvailableProductsView.as_view(), name="get_available_products"),
     
     # أذون الاستلام (Receipt Vouchers)
     path("vouchers/receipt/", voucher_views.ReceiptVoucherListView.as_view(), name="receipt_voucher_list"),
@@ -180,19 +176,19 @@ urlpatterns = [
     path("vouchers/issue/create/", voucher_views.IssueVoucherCreateView.as_view(), name="issue_voucher_create"),
     path("vouchers/issue/<int:pk>/", voucher_views.IssueVoucherDetailView.as_view(), name="issue_voucher_detail"),
     path("vouchers/issue/<int:pk>/approve/", voucher_views.IssueVoucherApproveView.as_view(), name="issue_voucher_approve"),
-    
-    # أذون التحويل المخزني (Transfer Vouchers)
+
+    # أذون التحويل (Transfer Vouchers)
     path("vouchers/transfer/", transfer_views.TransferVoucherListView.as_view(), name="transfer_voucher_list"),
     path("vouchers/transfer/create/", transfer_views.TransferVoucherCreateView.as_view(), name="transfer_voucher_create"),
     path("vouchers/transfer/<int:pk>/", transfer_views.TransferVoucherDetailView.as_view(), name="transfer_voucher_detail"),
     path("vouchers/transfer/<int:pk>/approve/", transfer_views.TransferVoucherApproveView.as_view(), name="transfer_voucher_approve"),
-    
+
     # الأذون الجماعية (Batch Vouchers)
-    path("batch-vouchers/", views.BatchVoucherListView.as_view(), name="batch_voucher_list"),
-    path("batch-vouchers/create/", views.BatchVoucherCreateView.as_view(), name="batch_voucher_create"),
-    path("batch-vouchers/<int:pk>/", views.BatchVoucherDetailView.as_view(), name="batch_voucher_detail"),
-    path("batch-vouchers/<int:pk>/edit/", views.BatchVoucherUpdateView.as_view(), name="batch_voucher_update"),
-    path("batch-vouchers/<int:pk>/approve/", views.BatchVoucherApproveView.as_view(), name="batch_voucher_approve"),
-    path("batch-vouchers/<int:pk>/delete/", views.BatchVoucherDeleteView.as_view(), name="batch_voucher_delete"),
-    path("api/product-cost/", views.GetProductCostView.as_view(), name="get_product_cost"),
+    path("vouchers/batch/", batch_voucher_views.BatchVoucherListView.as_view(), name="batch_voucher_list"),
+    path("vouchers/batch/create/", batch_voucher_views.BatchVoucherCreateView.as_view(), name="batch_voucher_create"),
+    path("vouchers/batch/<int:pk>/", batch_voucher_views.BatchVoucherDetailView.as_view(), name="batch_voucher_detail"),
+    path("vouchers/batch/<int:pk>/update/", batch_voucher_views.BatchVoucherUpdateView.as_view(), name="batch_voucher_update"),
+    path("vouchers/batch/<int:pk>/approve/", batch_voucher_views.BatchVoucherApproveView.as_view(), name="batch_voucher_approve"),
+    path("vouchers/batch/<int:pk>/delete/", batch_voucher_views.BatchVoucherDeleteView.as_view(), name="batch_voucher_delete"),
+    path("api/vouchers/batch/product-cost/", batch_voucher_views.GetProductCostView.as_view(), name="get_product_cost"),
 ]

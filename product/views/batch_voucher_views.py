@@ -68,6 +68,18 @@ class BatchVoucherCreateView(LoginRequiredMixin, PermissionRequiredMixin, Create
     form_class = BatchVoucherForm
     template_name = 'product/batch_vouchers/batch_voucher_form.html'
     permission_required = 'product.add_batchvoucher'
+
+    def get_initial(self):
+        initial = super().get_initial()
+        from product.models.stock_management import Warehouse
+        # أول مخزن اسمه فيه "رئيسي" أو أول مخزن نشط
+        default_warehouse = (
+            Warehouse.objects.filter(is_active=True, name__icontains='رئيس').first()
+            or Warehouse.objects.filter(is_active=True).first()
+        )
+        if default_warehouse:
+            initial['warehouse'] = default_warehouse
+        return initial
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

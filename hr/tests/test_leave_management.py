@@ -98,7 +98,7 @@ class LeaveManagementTest(TestCase):
         # إنشاء أنواع الإجازات
         self.annual_leave = LeaveType.objects.create(
             code='ANNUAL',
-            name_ar='إجازة سنوية',
+            name_ar='إجازة اعتيادية',
             name_en='Annual Leave',
             max_days_per_year=21,
             is_paid=True,
@@ -492,7 +492,7 @@ class LeaveManagementTest(TestCase):
         اختبار خدمة حساب رصيد الإجازات
         Requirements: T045 - تحديث رصيد الإجازات
         """
-        # حساب رصيد الإجازة السنوية
+        # حساب رصيد الإجازة الاعتيادية
         balance_info = LeaveService.calculate_leave_balance(
             self.employee, 
             self.annual_leave
@@ -579,7 +579,7 @@ class LeaveAccrualTest(TestCase):
         # نوع إجازة للاختبار
         self.leave_type = LeaveType.objects.create(
             code='ANNUAL_TEST',
-            name_ar='إجازة سنوية - اختبار',
+            name_ar='إجازة اعتيادية - اختبار',
             max_days_per_year=24,
             is_paid=True,
             requires_approval=True,
@@ -757,7 +757,7 @@ class LeaveIntegrationTest(TransactionTestCase):
         # إنشاء نوع إجازة
         self.leave_type = LeaveType.objects.create(
             code='INTEGRATION_ANNUAL',
-            name_ar='إجازة سنوية - تكامل',
+            name_ar='إجازة اعتيادية - تكامل',
             max_days_per_year=20,
             is_paid=True,
             requires_approval=True,

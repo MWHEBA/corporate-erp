@@ -163,7 +163,8 @@ class PurchaseService:
                     unit_cost=item.unit_price,
                     document_number=purchase.number,
                     notes=f'مشتريات - فاتورة رقم {purchase.number}',
-                    movement_date=purchase.date
+                    movement_date=purchase.date,
+                    warehouse_id=purchase.warehouse_id if purchase.warehouse_id else None
                 )
                 
                 logger.info(f"✅ تم إنشاء حركة مخزون: {movement.id} للبند: {item.product.name}")
@@ -389,7 +390,7 @@ class PurchaseService:
                 if purchase.supplier.financial_account:
                     debit_account_code = purchase.supplier.financial_account.code
                 else:
-                    debit_account_code = '21010'  # حساب الموردين الرئيسي
+                    debit_account_code = '20100'  # حساب الموردين الرئيسي
                     logger.warning(f"استخدام حساب الموردين الرئيسي للمورد {purchase.supplier.name}")
             
             # تحديد حساب الدائن حسب نوع الفاتورة
@@ -401,7 +402,7 @@ class PurchaseService:
                     credit_account_code = '50200'  # مصروفات عامة
             else:
                 # للمنتجات: حساب المخزون
-                credit_account_code = '10300'
+                credit_account_code = '10400'
             
             # إعداد بيانات القيد باستخدام JournalEntryLineData
             lines = [
@@ -463,7 +464,8 @@ class PurchaseService:
                     unit_cost=item.unit_price,
                     document_number=purchase_return.number,
                     notes=f'مرتجع مشتريات - فاتورة {purchase_return.purchase.number}',
-                    movement_date=purchase_return.date
+                    movement_date=purchase_return.date,
+                    warehouse_id=purchase_return.purchase.warehouse_id if purchase_return.purchase.warehouse_id else None
                 )
                 
                 logger.info(f"✅ تم إنشاء حركة مخزون (إرجاع): {movement.id}")

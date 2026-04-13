@@ -2,7 +2,7 @@
 Management command to enable progressive authority boundary enforcement for high-risk models.
 
 This command implements Task 21.2: Enable authority boundary enforcement progressively
-- Activates AuthorityService validation for JournalEntry, Stock, StudentFee, FeePayment
+- Activates AuthorityService validation for JournalEntry, Stock, CustomerPayment
 - Monitors unauthorized access attempts
 - Gradual enforcement with monitoring and alerts
 - Progressive activation with rollback capabilities
@@ -69,17 +69,17 @@ class Command(BaseCommand):
             'risk_level': 'CRITICAL',
             'enforcement_priority': 4
         },
-        'StudentFee': {
-            'app': 'students',
-            'model': 'StudentFee',
-            'authoritative_service': 'FinanceService',
+        'CustomerPayment': {
+            'app': 'client',
+            'model': 'CustomerPayment',
+            'authoritative_service': 'CustomerService',
             'risk_level': 'HIGH',
             'enforcement_priority': 5
         },
-        'FeePayment': {
-            'app': 'students',
-            'model': 'FeePayment',
-            'authoritative_service': 'FinanceService',
+        'Sale': {
+            'app': 'sale',
+            'model': 'Sale',
+            'authoritative_service': 'SaleService',
             'risk_level': 'HIGH',
             'enforcement_priority': 6
         }

@@ -13,9 +13,6 @@ class FinancialConfig(AppConfig):
             # استيراد الإشارات العامة
             from . import signals
             
-            # Phase 2 Migration: استيراد الإشارات المحكومة الجديدة
-            from .signals import governed_fee_signals
-            
         except ImportError as e:
             import logging
             logger = logging.getLogger(__name__)

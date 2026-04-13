@@ -6,7 +6,7 @@ class ExpenseClassifier:
     """
     
     DIRECT_COST_KEYWORDS = [
-        'باص', 'نقل', 'كتب', 'زي', 'نشاط', 'رحلات', 'حفلات', 'تعليم', 'مدرس'
+        'باص', 'نقل', 'كتب', 'زي', 'نشاط', 'رحلات', 'حفلات', 'تعليم'
     ]
     
     GA_KEYWORDS = [
@@ -34,7 +34,7 @@ class ExpenseClassifier:
         return 'general_administrative'  # الافتراضي
     
     @classmethod
-    def get_direct_costs(cls, academic_year=None):
+    def get_direct_costs(cls, period=None):
         """
         الحصول على إجمالي التكاليف المباشرة
         """

@@ -2,6 +2,7 @@
 {% load static %}
 {% load i18n %}
 {% load custom_filters %}
+{% load dict_tags %}
 
 {% block title %}{{ page_title }}{% endblock %}
 
@@ -23,11 +24,11 @@
             <table class="table table-hover" id="departments-table">
                 <thead>
                     <tr>
-                        <th>الكود</th>
-                        <th>الاسم (عربي)</th>
-                        <th>الاسم (إنجليزي)</th>
-                        <th>المدير</th>
-                        <th>عدد الموظفين</th>
+                        <th class="text-center">الكود</th>
+                        <th class="text-center">الاسم (عربي)</th>
+                        <th class="text-center">الاسم (إنجليزي)</th>
+                        <th class="text-center">مركز التكلفة</th>
+                        <th class="text-center">عدد الموظفين</th>
                         <th class="text-center">الحالة</th>
                         <th class="text-center">الإجراءات</th>
                     </tr>
@@ -35,17 +36,31 @@
                 <tbody>
                     {% for department in departments %}
                     <tr>
-                        <td><strong>{{ department.code }}</strong></td>
-                        <td><strong>{{ department.name_ar }}</strong></td>
-                        <td>{{ department.name_en|default:"-" }}</td>
-                        <td>
-                            {% if department.manager %}
-                                {{ department.manager.get_full_name_ar }}
+                        <td class="text-center"><strong>{{ department.code }}</strong></td>
+                        <td class="text-center"><strong>{{ department.name_ar }}</strong></td>
+                        <td class="text-center">{{ department.name_en|default:"-" }}</td>
+                        <td class="text-center">
+                            {% if department.financial_subcategory %}
+                                <span class="badge bg-info">{{ department.financial_subcategory.name }}</span>
                             {% else %}
                                 <span class="text-muted">-</span>
                             {% endif %}
                         </td>
-                        <td><strong>{{ department.employees.count }}</strong> موظف</td>
+                        <td class="text-center">
+                            {% with names=dept_employees|get_item:department.pk %}
+                            {% if names %}
+                                <span class="employee-count-badge"
+                                      data-bs-toggle="tooltip"
+                                      data-bs-placement="top"
+                                      data-bs-html="true"
+                                      title="{% for n in names %}{{ n }}{% if not forloop.last %}<br>{% endif %}{% endfor %}">
+                                    <strong>{{ names|length }}</strong> موظف
+                                </span>
+                            {% else %}
+                                <span class="text-muted">0 موظف</span>
+                            {% endif %}
+                            {% endwith %}
+                        </td>
                         <td class="text-center">
                             {% if department.is_active %}
                                 <span class="badge bg-success">نشط</span>
@@ -79,6 +94,17 @@
 
 {% block extra_js %}
 <script src="{% static 'js/global-table.js' %}"></script>
+<style>
+.employee-count-badge {
+    cursor: pointer;
+    border-bottom: 1px dashed var(--primary-color);
+}
+.tooltip-employees .tooltip-inner {
+    white-space: nowrap;
+    max-width: none;
+    text-align: right;
+}
+</style>
 <script>
 $(document).ready(function() {
     if ($('#departments-table').length) {
@@ -91,6 +117,11 @@ $(document).ready(function() {
             ]
         });
     }
+
+    // تفعيل tooltips أسماء الموظفين
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
+        new bootstrap.Tooltip(el, { trigger: 'hover', customClass: 'tooltip-employees' });
+    });
 });
 </script>
 {% endblock %}

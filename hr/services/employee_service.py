@@ -49,22 +49,25 @@ class EmployeeService:
     def _create_leave_balances(employee):
         """إنشاء أرصدة الإجازات للموظف الجديد"""
         from datetime import date
+        from .leave_accrual_service import LeaveAccrualService
+
         current_year = date.today().year
-        
-        leave_types = LeaveType.objects.filter(is_active=True)
+        leave_types  = LeaveType.objects.filter(is_active=True, category__in=['annual', 'emergency'])
+
         for leave_type in leave_types:
-            balance = LeaveBalance.objects.create(
+            # single source of truth لحساب total_days
+            total_days = LeaveAccrualService.get_entitlement_for_employee(employee, leave_type)
+
+            LeaveBalance.objects.create(
                 employee=employee,
                 leave_type=leave_type,
                 year=current_year,
-                total_days=leave_type.max_days_per_year,
-                accrued_days=0,  # يبدأ بصفر - سيستحق تدريجياً
+                total_days=total_days,
+                accrued_days=total_days,
                 used_days=0,
-                remaining_days=0,  # صفر في البداية
-                accrual_start_date=employee.hire_date  # تاريخ بداية الاستحقاق
+                remaining_days=total_days,
+                accrual_start_date=employee.hire_date,
             )
-            # حساب الاستحقاق الحالي (في حالة الموظف ليس جديد تماماً)
-            balance.update_accrued_days()
     
     @staticmethod
     @transaction.atomic
@@ -76,6 +79,28 @@ class EmployeeService:
         
         return employee
     
+    @staticmethod
+    @transaction.atomic
+    def reinstate_employee(employee, reinstated_by):
+        """
+        إعادة الموظف للخدمة بعد إنهائها
+        
+        Args:
+            employee: الموظف
+            reinstated_by: المستخدم الذي أعاد التفعيل
+        """
+        employee.status = 'active'
+        employee.termination_date = None
+        employee.termination_reason = ''
+        employee.save()
+        
+        # إعادة تفعيل حساب المستخدم
+        if employee.user:
+            employee.user.is_active = True
+            employee.user.save()
+        
+        return employee
+
     @staticmethod
     @transaction.atomic
     def terminate_employee(employee, termination_data, terminated_by):

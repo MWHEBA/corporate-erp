@@ -37,7 +37,7 @@ class PayrollSecurityMonitor:
         elif severity == 'WARNING':
             logger.warning(log_message)
         else:
-            logger.info(log_message)
+            pass
         
         # حفظ في الكاش للمراقبة
         cache_key = f"security_event_{event_type}_{datetime.now().timestamp()}"

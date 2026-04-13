@@ -404,7 +404,13 @@ def import_employees_from_excel(excel_file, user):
             row_data = {}
             for col, header in headers.items():
                 cell_value = ws.cell(row=row_num, column=col).value
-                row_data[header] = str(cell_value).strip() if cell_value else ''
+                if cell_value is None:
+                    row_data[header] = ''
+                elif isinstance(cell_value, (datetime, date)):
+                    # تحويل datetime/date مباشرة لـ string بصيغة YYYY-MM-DD
+                    row_data[header] = cell_value.strftime('%Y-%m-%d') if hasattr(cell_value, 'strftime') else str(cell_value)
+                else:
+                    row_data[header] = str(cell_value).strip()
             
             employee_number = row_data.get('رقم الموظف', '').strip()
             

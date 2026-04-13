@@ -8,9 +8,6 @@
 
 {% block title %}{{ supplier.name }} - {% trans "تفاصيل المورد" %}{% endblock %}
 
-<!-- CSRF Token مخفي للاستخدام في JavaScript -->
-{% csrf_token %}
-
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/shared-components.css' %}">
 <link rel="stylesheet" href="{% static 'css/unified-components.css' %}">
@@ -21,6 +18,7 @@
 
 {% block content %}
 <div class="container-fluid">
+  {% csrf_token %}
   <!-- Page Header المركزي -->
   {% include "shared/page_header.html" %}
 
@@ -71,6 +69,7 @@
         </div>
       </div>
 
+      {% if enabled_modules.printing_pricing %}
       <div class="col-md-4 col-lg-3">
         <div class="stats-card stats-card-warning">
           <div class="stats-card-header"></div>
@@ -78,12 +77,13 @@
             <div class="stats-card-icon">
               <i class="fas fa-tools"></i>
             </div>
-            <div class="stats-card-title">الخدمات المتاحة</div>
-            <div class="stats-card-value">0</div>
+            <div class="stats-card-title">خدمات التسعير</div>
+            <div class="stats-card-value">{{ supplier_services_count|default:"0" }}</div>
             <div class="stats-card-unit">خدمة</div>
           </div>
         </div>
       </div>
+      {% endif %}
     </div>
   </div>
 
@@ -107,6 +107,14 @@
           <span class="badge bg-success rounded-pill">{{ products_count|default:"0" }}</span>
         </button>
       </li>
+      {% if enabled_modules.printing_pricing %}
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="services-tab" data-bs-toggle="tab" data-bs-target="#services-tab-pane" type="button" role="tab" aria-controls="services-tab-pane" aria-selected="false">
+          <i class="fas fa-tags me-2"></i>خدمات التسعير
+          <span class="badge bg-warning text-dark rounded-pill">{{ supplier_services_count|default:"0" }}</span>
+        </button>
+      </li>
+      {% endif %}
       <li class="nav-item" role="presentation">
         <button class="nav-link" id="payments-tab" data-bs-toggle="tab" data-bs-target="#payments-tab-pane" type="button" role="tab" aria-controls="payments-tab-pane" aria-selected="false">
           <i class="fas fa-money-bill-wave me-2"></i>{% trans "المدفوعات" %}
@@ -198,7 +206,7 @@
           </div>
           
           {% if purchases %}
-          {% include "components/data_table.html" with table_id="supplier-purchases-table" headers=purchase_headers data=purchases action_buttons=purchase_action_buttons empty_message="لا توجد فواتير مشتريات متاحة" clickable_rows=purchases_clickable row_click_url="/purchases/0/" show_export=True export_filename="supplier_purchases" %}
+          {% include "components/data_table.html" with table_id="supplier-purchases-table" headers=purchase_headers data=purchases empty_message="لا توجد فواتير مشتريات متاحة" clickable_rows=purchases_clickable row_click_url="/purchases/0/" show_export=True export_filename="supplier_purchases" %}
           {% else %}
           <div class="alert alert-info d-flex align-items-center m-3">
             <i class="fas fa-info-circle fa-2x me-3"></i>
@@ -225,7 +233,7 @@
             </div>
           </div>
           
-          {% include "components/data_table.html" with table_id="supplier-products-table" headers=products_headers data=supplier_products action_buttons=products_action_buttons primary_key=products_primary_key empty_message="لا توجد منتجات مشتراة من هذا المورد" clickable_rows=True row_click_url="/products/0/" show_export=True export_filename="supplier_products" %}
+          {% include "components/data_table.html" with table_id="supplier-products-table" headers=products_headers data=supplier_products primary_key=products_primary_key empty_message="لا توجد منتجات مشتراة من هذا المورد" clickable_rows=True row_click_url="/products/0/" show_export=True export_filename="supplier_products" %}
         </div>
       </div>
 
@@ -264,7 +272,7 @@
           </div>
           
           {% if journal_entries %}
-          {% include "components/data_table.html" with table_id="supplier-journal-table" headers=journal_headers data=journal_entries action_buttons=journal_action_buttons empty_message="لا توجد قيود محاسبية لهذا المورد" clickable_rows=journal_clickable row_click_url="/financial/journal-entries/0/" show_export=True export_filename="supplier_journal_entries" %}
+          {% include "components/data_table.html" with table_id="supplier-journal-table" headers=journal_headers data=journal_entries empty_message="لا توجد قيود محاسبية لهذا المورد" clickable_rows=journal_clickable row_click_url="/financial/journal-entries/0/" show_export=True export_filename="supplier_journal_entries" %}
           {% else %}
           <div class="alert alert-info d-flex align-items-center m-3">
             <i class="fas fa-info-circle fa-2x me-3"></i>
@@ -288,6 +296,58 @@
           {% include "components/data_table.html" with table_id="supplier-statement-table" headers=statement_headers data=transactions empty_message="لا توجد معاملات مسجلة لهذا المورد" show_export=True export_filename="supplier_statement" %}
         </div>
       </div>
+
+      <!-- تاب خدمات التسعير -->
+      {% if enabled_modules.printing_pricing %}
+      <div class="tab-pane fade" id="services-tab-pane" role="tabpanel" aria-labelledby="services-tab" tabindex="0">
+        <div class="section-container">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="section-title mb-0"><i class="fas fa-tags me-2"></i>خدمات التسعير</h5>
+            <a href="{% url 'supplier:supplier_service_add' supplier.pk %}" class="btn btn-primary btn-sm">
+              <i class="fas fa-plus me-1"></i>إضافة خدمة
+            </a>
+          </div>
+
+          {% if supplier_services_table_data %}
+          <!-- فلاتر الخدمات -->
+          <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+            <span class="text-muted small"><i class="fas fa-filter me-1"></i>فلتر:</span>
+
+            <!-- فلتر نوع الخدمة -->
+            <select id="services-type-filter" class="form-select form-select-sm" style="width:auto;">
+              <option value="">كل الأنواع</option>
+              {% for svc in supplier_services %}
+                <option value="{{ svc.service_type.name }}">{{ svc.service_type.name }}</option>
+              {% endfor %}
+            </select>
+
+            <!-- فلتر الحالة -->
+            <select id="services-status-filter" class="form-select form-select-sm" style="width:auto;">
+              <option value="">كل الحالات</option>
+              <option value="نشط">نشط</option>
+              <option value="غير نشط">غير نشط</option>
+            </select>
+
+            <button class="btn btn-sm btn-outline-secondary" id="services-filter-reset">
+              <i class="fas fa-times me-1"></i>إعادة تعيين
+            </button>
+            <span class="badge bg-secondary ms-1" id="services-filter-count"></span>
+          </div>
+
+            {% include "components/data_table.html" with table_id="supplier-services-table" headers=supplier_services_headers data=supplier_services_table_data primary_key="id" empty_message="لا توجد خدمات مسجلة لهذا المورد" show_export=False clickable_rows=True row_click_field="_row_url" %}
+          {% else %}
+            <div class="text-center py-5">
+              <i class="fas fa-tools fa-3x text-muted mb-3"></i>
+              <p class="text-muted mb-3">لا توجد خدمات مسجلة لهذا المورد بعد</p>
+              <a href="{% url 'supplier:supplier_service_add' supplier.pk %}" class="btn btn-primary">
+                <i class="fas fa-plus me-1"></i>إضافة أول خدمة
+              </a>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+
     </div> <!-- End tab-content -->
   </div> <!-- End supplier-tabs -->
 </div> <!-- End container-fluid -->
@@ -475,110 +535,167 @@ function showNotification(message, type = 'info') {
     }
 }
 
-// دالة للحصول على CSRF token بطريقة آمنة
+// دالة حذف الخدمة
+function deleteService(serviceId, serviceName) {
+    Swal.fire({
+        title: 'هل أنت متأكد؟',
+        text: `سيتم حذف الخدمة "${serviceName}" نهائياً`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'نعم، احذف',
+        cancelButtonText: 'إلغاء'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = `/supplier/{{ supplier.pk }}/services/${serviceId}/delete/`;
+            const csrf = document.querySelector('[name=csrfmiddlewaretoken]');
+            if (csrf) {
+                const inp = document.createElement('input');
+                inp.type = 'hidden'; inp.name = 'csrfmiddlewaretoken'; inp.value = csrf.value;
+                form.appendChild(inp);
+            }
+            document.body.appendChild(form);
+            form.submit();
+        }
+    });
+}
+
+// تفعيل تاب الخدمات إذا كان الـ hash في الـ URL
+if (window.location.hash === '#services-tab-pane') {
+    const servicesTab = document.getElementById('services-tab');
+    if (servicesTab) {
+        // إزالة active من جميع التابات
+        document.querySelectorAll('#supplierTabs .nav-link').forEach(t => {
+            t.classList.remove('active');
+            t.setAttribute('aria-selected', 'false');
+        });
+        document.querySelectorAll('#supplierTabsContent .tab-pane, #services-tab-pane').forEach(p => {
+            p.classList.remove('show', 'active');
+        });
+        servicesTab.classList.add('active');
+        servicesTab.setAttribute('aria-selected', 'true');
+        document.getElementById('services-tab-pane').classList.add('show', 'active');
+    }
+}
+
 function getCsrfToken() {
-    // البحث في المودال أولاً
     let csrfInput = document.querySelector('#createAccountModal [name=csrfmiddlewaretoken]');
-    if (csrfInput && csrfInput.value) {
-        return csrfInput.value;
-    }
-    
-    // البحث في الصفحة الرئيسية
+    if (csrfInput && csrfInput.value) return csrfInput.value;
     csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
-    if (csrfInput && csrfInput.value) {
-        return csrfInput.value;
-    }
-    
-    // البحث في الـ meta tag
+    if (csrfInput && csrfInput.value) return csrfInput.value;
     const csrfMeta = document.querySelector('meta[name="csrf-token"]');
-    if (csrfMeta && csrfMeta.content) {
-        return csrfMeta.content;
-    }
-    
-    // البحث في الـ cookies
-    const csrfCookie = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('csrftoken='));
-    if (csrfCookie) {
-        return csrfCookie.split('=')[1];
-    }
-    
+    if (csrfMeta && csrfMeta.content) return csrfMeta.content;
+    const csrfCookie = document.cookie.split('; ').find(row => row.startsWith('csrftoken='));
+    if (csrfCookie) return csrfCookie.split('=')[1];
     return null;
 }
 
-// فتح مودال إنشاء حساب محاسبي
 function openCreateAccountModal(supplierId) {
     fetch(`/supplier/${supplierId}/create-account/`, {
         method: 'GET',
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest',
-        }
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
     })
-    .then(response => response.json())
+    .then(r => r.json())
     .then(data => {
         if (data.html) {
-            // إنشاء المودال إذا لم يكن موجوداً
             let modal = document.getElementById('createAccountModal');
             if (!modal) {
                 modal = document.createElement('div');
                 modal.className = 'modal fade';
                 modal.id = 'createAccountModal';
                 modal.setAttribute('tabindex', '-1');
-                modal.innerHTML = `
-                    <div class="modal-dialog">
-                        <div class="modal-content" id="createAccountModalContent">
-                        </div>
-                    </div>
-                `;
+                modal.innerHTML = '<div class="modal-dialog"><div class="modal-content" id="createAccountModalContent"></div></div>';
                 document.body.appendChild(modal);
             }
-            
             document.getElementById('createAccountModalContent').innerHTML = data.html;
             new bootstrap.Modal(document.getElementById('createAccountModal')).show();
         }
     })
-    .catch(error => {
-        console.error('Error:', error);
-        if (typeof toastr !== 'undefined') { toastr.error('حدث خطأ في تحميل المودال'); };
-    });
+    .catch(() => { if (typeof toastr !== 'undefined') toastr.error('حدث خطأ في تحميل المودال'); });
 }
 
-// إنشاء حساب محاسبي للمورد
 function createSupplierAccount(supplierId) {
     const modal = bootstrap.Modal.getInstance(document.getElementById('createAccountModal'));
-    
-    // الحصول على CSRF token بطريقة آمنة
     const csrfToken = getCsrfToken();
     if (!csrfToken) {
-        if (typeof toastr !== 'undefined') { toastr.error('خطأ: لم يتم العثور على رمز الأمان'); };
+        if (typeof toastr !== 'undefined') toastr.error('خطأ: لم يتم العثور على رمز الأمان');
         return;
     }
-    
     fetch(`/supplier/${supplierId}/create-account/`, {
         method: 'POST',
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-CSRFToken': csrfToken
-        }
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': csrfToken }
     })
-    .then(response => response.json())
+    .then(r => r.json())
     .then(data => {
         if (data.success) {
             modal.hide();
-            if (typeof toastr !== 'undefined') { toastr.success(data.message); };
-            
-            // إعادة تحميل الصفحة بعد ثانيتين
-            setTimeout(() => {
-                location.reload();
-            }, 2000);
+            if (typeof toastr !== 'undefined') toastr.success(data.message);
+            setTimeout(() => location.reload(), 2000);
         } else {
-            if (typeof toastr !== 'undefined') { toastr.error(data.message); };
+            if (typeof toastr !== 'undefined') toastr.error(data.message);
         }
     })
-    .catch(error => {
-        console.error('Error:', error);
-        if (typeof toastr !== 'undefined') { toastr.error('حدث خطأ أثناء إنشاء الحساب'); };
-    });
+    .catch(() => { if (typeof toastr !== 'undefined') toastr.error('حدث خطأ أثناء إنشاء الحساب'); });
 }
+
+// ── فلتر خدمات التسعير ──────────────────────────────────────────────
+(function() {
+    function applyServicesFilter() {
+        const typeVal   = document.getElementById('services-type-filter')?.value.trim().toLowerCase() || '';
+        const statusVal = document.getElementById('services-status-filter')?.value.trim().toLowerCase() || '';
+        const table     = document.getElementById('supplier-services-table');
+        if (!table) return;
+
+        const rows    = table.querySelectorAll('tbody tr');
+        let visible   = 0;
+
+        rows.forEach(row => {
+            // عمود نوع الخدمة (index 0) وعمود الحالة (index 5)
+            const typeCell   = row.cells[0]?.innerText.trim().toLowerCase() || '';
+            const statusCell = row.cells[5]?.innerText.trim().toLowerCase() || '';
+
+            const typeMatch   = !typeVal   || typeCell.includes(typeVal);
+            const statusMatch = !statusVal || statusCell.includes(statusVal);
+
+            if (typeMatch && statusMatch) {
+                row.style.display = '';
+                visible++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        const countBadge = document.getElementById('services-filter-count');
+        if (countBadge) {
+            countBadge.textContent = (typeVal || statusVal) ? `${visible} نتيجة` : '';
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // إزالة التكرار من قائمة الأنواع
+        const typeSelect = document.getElementById('services-type-filter');
+        if (typeSelect) {
+            const seen = new Set();
+            [...typeSelect.options].forEach(opt => {
+                if (opt.value && seen.has(opt.value)) {
+                    opt.remove();
+                } else {
+                    seen.add(opt.value);
+                }
+            });
+        }
+
+        document.getElementById('services-type-filter')?.addEventListener('change', applyServicesFilter);
+        document.getElementById('services-status-filter')?.addEventListener('change', applyServicesFilter);
+        document.getElementById('services-filter-reset')?.addEventListener('click', function() {
+            document.getElementById('services-type-filter').value = '';
+            document.getElementById('services-status-filter').value = '';
+            applyServicesFilter();
+        });
+    });
+})();
 </script>
 {% endblock %}

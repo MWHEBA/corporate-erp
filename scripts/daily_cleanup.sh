@@ -53,5 +53,5 @@ echo "" >> "$LOG_FILE"
 
 # إرسال تقرير بالبريد الإلكتروني (اختياري)
 if [ "$2" = "--email" ]; then
-    tail -50 "$LOG_FILE" | mail -s "Daily Cleanup Report - $(date +%Y-%m-%d)" admin@yourschool.com
+    tail -50 "$LOG_FILE" | mail -s "Daily Cleanup Report - $(date +%Y-%m-%d)" admin@company.com
 fi

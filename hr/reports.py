@@ -30,10 +30,12 @@ def attendance_report(request):
     except:
         month_date = date.today().replace(day=1)
     
-    # جلب الحضور
+    # جلب الحضور بالفترة الفعلية للدورة
+    from hr.utils.payroll_helpers import get_payroll_period
+    period_start, period_end, _ = get_payroll_period(month_date)
     attendances = Attendance.objects.filter(
-        date__year=month_date.year,
-        date__month=month_date.month
+        date__gte=period_start,
+        date__lte=period_end,
     ).select_related('employee', 'shift')
     
     if department_id:
@@ -122,19 +124,25 @@ def payroll_report(request):
     
     if department_id:
         payrolls = payrolls.filter(employee__department_id=department_id)
-    
-    # حساب الإحصائيات
+
+    # إضافة correct values لكل payroll — استخدام property من الـ model
+    payrolls_list = list(payrolls)
+    for p in payrolls_list:
+        p._correct_gross = p.correct_gross_salary
+        p._correct_net = p.correct_net_salary
+
+    from decimal import Decimal as _DecR
     stats = {
         'total_employees': payrolls.count(),
-        'total_gross': sum(p.gross_salary for p in payrolls),
-        'total_deductions': sum(p.total_deductions for p in payrolls),
-        'total_net': sum(p.net_salary for p in payrolls),
+        'total_gross': sum(p._correct_gross for p in payrolls_list),
+        'total_deductions': sum(p.total_deductions or _DecR('0') for p in payrolls_list),
+        'total_net': sum(p._correct_net for p in payrolls_list),
         'approved': payrolls.filter(status='approved').count(),
         'pending': payrolls.filter(status='calculated').count(),
     }
-    
+
     context = {
-        'payrolls': payrolls,
+        'payrolls': payrolls_list,
         'stats': stats,
         'month': month_date,
         'month_str': month_str,
@@ -171,7 +179,6 @@ def employee_report(request):
         'by_employment_type': {
             'full_time': employees.filter(employment_type='full_time').count(),
             'part_time': employees.filter(employment_type='part_time').count(),
-            'contract': employees.filter(employment_type='contract').count(),
         },
     }
     
@@ -221,8 +228,14 @@ def export_attendance_excel(attendances, month, stats):
         ws.cell(row=row, column=1, value=attendance.employee.get_full_name_ar())
         ws.cell(row=row, column=2, value=attendance.date.strftime('%Y-%m-%d'))
         ws.cell(row=row, column=3, value=attendance.shift.name)
-        ws.cell(row=row, column=4, value=attendance.check_in.strftime('%H:%M') if attendance.check_in else '')
-        ws.cell(row=row, column=5, value=attendance.check_out.strftime('%H:%M') if attendance.check_out else '')
+        
+        if attendance.status in ['absent', 'on_leave']:
+            ws.cell(row=row, column=4, value='-')
+            ws.cell(row=row, column=5, value='-')
+        else:
+            ws.cell(row=row, column=4, value=attendance.check_in.strftime('%H:%M') if attendance.check_in else '')
+            ws.cell(row=row, column=5, value=attendance.check_out.strftime('%H:%M') if attendance.check_out else '')
+            
         ws.cell(row=row, column=6, value=str(attendance.work_hours))
         ws.cell(row=row, column=7, value=f"{attendance.late_minutes} دقيقة" if attendance.late_minutes > 0 else '')
         ws.cell(row=row, column=8, value=attendance.get_status_display())
@@ -280,7 +293,7 @@ def export_payroll_excel(payrolls, month, stats):
     ws.merge_cells('A1:H1')
     
     # العناوين
-    headers = ['الموظف', 'الراتب الأساسي', 'البدلات', 'الإضافات', 'الخصومات', 'الإجمالي', 'الصافي', 'الحالة']
+    headers = ['الموظف', 'الأجر الأساسي', 'البدلات', 'الإضافات', 'الخصومات', 'الإجمالي', 'الصافي', 'الحالة']
     for col, header in enumerate(headers, 1):
         cell = ws.cell(row=3, column=col, value=header)
         cell.font = Font(bold=True)
@@ -293,8 +306,8 @@ def export_payroll_excel(payrolls, month, stats):
         ws.cell(row=row, column=3, value=float(payroll.allowances))
         ws.cell(row=row, column=4, value=float(payroll.total_additions))
         ws.cell(row=row, column=5, value=float(payroll.total_deductions))
-        ws.cell(row=row, column=6, value=float(payroll.gross_salary))
-        ws.cell(row=row, column=7, value=float(payroll.net_salary))
+        ws.cell(row=row, column=6, value=float(payroll._correct_gross))
+        ws.cell(row=row, column=7, value=float(payroll._correct_net))
         ws.cell(row=row, column=8, value=payroll.get_status_display())
     
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')

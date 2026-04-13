@@ -27,13 +27,13 @@ class Command(BaseCommand):
         parser.add_argument(
             '--source-module',
             type=str,
-            help='Source module name (e.g., students)'
+            help='Source module name (e.g., client)'
         )
         
         parser.add_argument(
             '--source-model',
             type=str,
-            help='Source model name (e.g., StudentFee)'
+            help='Source model name (e.g., CustomerPayment)'
         )
         
         parser.add_argument(
@@ -210,14 +210,14 @@ class Command(BaseCommand):
             self.stdout.write("1. Backfill single entry:")
             self.stdout.write("   python manage.py backfill_source_linkage \\")
             self.stdout.write("     --entry-id 123 \\")
-            self.stdout.write("     --source-module students \\")
-            self.stdout.write("     --source-model StudentFee \\")
+            self.stdout.write("     --source-module client \\")
+            self.stdout.write("     --source-model CustomerPayment \\")
             self.stdout.write("     --source-id 456")
             self.stdout.write("")
             self.stdout.write("2. Dry run validation:")
             self.stdout.write("   python manage.py backfill_source_linkage \\")
-            self.stdout.write("     --entry-id 123 --source-module students \\")
-            self.stdout.write("     --source-model StudentFee --source-id 456 --dry-run")
+            self.stdout.write("     --entry-id 123 --source-module client \\")
+            self.stdout.write("     --source-model CustomerPayment --source-id 456 --dry-run")
             self.stdout.write("")
             self.stdout.write("3. Batch backfill from file:")
             self.stdout.write("   python manage.py backfill_source_linkage \\")
@@ -228,8 +228,8 @@ class Command(BaseCommand):
             self.stdout.write('  "backfill_operations": [')
             self.stdout.write("    {")
             self.stdout.write('      "entry_id": 123,')
-            self.stdout.write('      "source_module": "students",')
-            self.stdout.write('      "source_model": "StudentFee",')
+            self.stdout.write('      "source_module": "client",')
+            self.stdout.write('      "source_model": "CustomerPayment",')
             self.stdout.write('      "source_id": 456')
             self.stdout.write("    }")
             self.stdout.write("  ]")

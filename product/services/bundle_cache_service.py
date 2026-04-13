@@ -167,7 +167,6 @@ class BundleCacheService:
             # نحتاج لحذف جميع مفاتيح التوفر المتعلقة بهذا المنتج
             cls._invalidate_availability_cache(bundle_id)
             
-            logger.info(f"تم إبطال التخزين المؤقت للمنتج المجمع {bundle_id}")
             return True
             
         except Exception as e:
@@ -191,7 +190,6 @@ class BundleCacheService:
                 cls.invalidate_bundle_cache(bundle_id)
                 affected_bundles.append(bundle_id)
             
-            logger.info(f"تم إبطال التخزين المؤقت لـ {len(affected_bundles)} منتج مجمع بسبب تغيير المكون {component_id}")
             return True
             
         except Exception as e:
@@ -228,7 +226,6 @@ class BundleCacheService:
                     logger.warning(f"فشل في تدفئة التخزين المؤقت للمنتج المجمع {bundle.id}: {str(e)}")
                     continue
             
-            logger.info(f"تم تدفئة التخزين المؤقت لـ {warmed_count} منتج مجمع")
             return True
             
         except Exception as e:
@@ -309,7 +306,6 @@ class BundleCacheService:
                 cache.delete(f'cache_hits:{cache_type}')
                 cache.delete(f'cache_misses:{cache_type}')
             
-            logger.info("تم مسح جميع التخزين المؤقت للمنتجات المجمعة")
             return True
             
         except Exception as e:
@@ -403,7 +399,6 @@ class BundleCacheWarmer:
                 }
                 BundleCacheService.set_bundle_availability(bundle_id, quantity, availability_data)
             
-            logger.info(f"تم تدفئة التخزين المؤقت للمنتج المجمع {bundle_id}")
             return True
             
         except Exception as e:

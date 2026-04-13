@@ -380,14 +380,20 @@ class MonitoringService:
         while self._monitoring_active:
             try:
                 # Perform periodic health checks
-                components = [
-                    'accounting_gateway', 'movement_service', 'signal_router',
-                    'admin_lockdown', 'authority_service', 'audit_trail',
-                    'idempotency_service', 'governance_switchboard'
-                ]
+                # Map short component names to their COMPONENT_FLAGS keys
+                component_flag_map = {
+                    'accounting_gateway': 'accounting_gateway_enforcement',
+                    'movement_service': 'movement_service_enforcement',
+                    'signal_router': 'signal_router_governance',
+                    'admin_lockdown': 'admin_lockdown_enforcement',
+                    'authority_service': 'authority_boundary_enforcement',
+                    'audit_trail': 'audit_trail_enforcement',
+                    'idempotency_service': 'idempotency_enforcement',
+                    'governance_switchboard': None,  # switchboard itself has no flag
+                }
                 
-                for component in components:
-                    if governance_switchboard.is_component_enabled(component.replace('_', '_')):
+                for component, flag_key in component_flag_map.items():
+                    if flag_key is None or governance_switchboard.is_component_enabled(flag_key):
                         self.perform_health_check(component)
                 
                 # Check for stale health checks
@@ -515,6 +521,71 @@ class MonitoringService:
                 details={'error': str(e)}
             )
     
+    def _check_signal_router_health(self) -> HealthCheck:
+        """Check SignalRouter health"""
+        enabled = governance_switchboard.is_component_enabled('signal_router_governance')
+        return HealthCheck(
+            component='signal_router',
+            check_name='component_status',
+            status='healthy' if enabled else 'warning',
+            message='SignalRouter governance is ' + ('enabled' if enabled else 'disabled'),
+            last_check=timezone.now(),
+            response_time_ms=0.0,
+            details={'enabled': enabled}
+        )
+
+    def _check_admin_lockdown_health(self) -> HealthCheck:
+        """Check Admin Lockdown health"""
+        enabled = governance_switchboard.is_component_enabled('admin_lockdown_enforcement')
+        return HealthCheck(
+            component='admin_lockdown',
+            check_name='component_status',
+            status='healthy' if enabled else 'warning',
+            message='Admin lockdown is ' + ('enabled' if enabled else 'disabled'),
+            last_check=timezone.now(),
+            response_time_ms=0.0,
+            details={'enabled': enabled}
+        )
+
+    def _check_authority_service_health(self) -> HealthCheck:
+        """Check AuthorityService health"""
+        enabled = governance_switchboard.is_component_enabled('authority_boundary_enforcement')
+        return HealthCheck(
+            component='authority_service',
+            check_name='component_status',
+            status='healthy' if enabled else 'warning',
+            message='Authority boundary enforcement is ' + ('enabled' if enabled else 'disabled'),
+            last_check=timezone.now(),
+            response_time_ms=0.0,
+            details={'enabled': enabled}
+        )
+
+    def _check_audit_trail_health(self) -> HealthCheck:
+        """Check Audit Trail health"""
+        enabled = governance_switchboard.is_component_enabled('audit_trail_enforcement')
+        return HealthCheck(
+            component='audit_trail',
+            check_name='component_status',
+            status='healthy' if enabled else 'warning',
+            message='Audit trail enforcement is ' + ('enabled' if enabled else 'disabled'),
+            last_check=timezone.now(),
+            response_time_ms=0.0,
+            details={'enabled': enabled}
+        )
+
+    def _check_idempotency_service_health(self) -> HealthCheck:
+        """Check Idempotency Service health"""
+        enabled = governance_switchboard.is_component_enabled('idempotency_enforcement')
+        return HealthCheck(
+            component='idempotency_service',
+            check_name='component_status',
+            status='healthy' if enabled else 'warning',
+            message='Idempotency enforcement is ' + ('enabled' if enabled else 'disabled'),
+            last_check=timezone.now(),
+            response_time_ms=0.0,
+            details={'enabled': enabled}
+        )
+
     def _check_switchboard_health(self) -> HealthCheck:
         """Check Governance Switchboard health"""
         try:

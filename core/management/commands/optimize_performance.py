@@ -155,14 +155,14 @@ class Command(BaseCommand):
         try:
             # Import here to avoid circular imports
             from core.utils.performance_cache import (
-                get_active_students_count,
-                get_pending_fees_summary,
+                get_active_customers_count,
+                get_pending_payments_summary,
                 get_dashboard_statistics
             )
             
             # Warm up common cached queries
-            get_active_students_count()
-            get_pending_fees_summary()
+            get_active_customers_count()
+            get_pending_payments_summary()
             get_dashboard_statistics()
             
             self.stdout.write('  ✅ Cache warmed up with common queries')

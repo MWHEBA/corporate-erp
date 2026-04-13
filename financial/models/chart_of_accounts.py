@@ -85,11 +85,11 @@ class ChartOfAccounts(models.Model):
     """
 
     code_validator = RegexValidator(
-        regex=r"^\d{4,8}$", message=_("كود الحساب يجب أن يكون من 4 إلى 8 أرقام")
+        regex=r"^\d{4,20}$", message=_("كود الحساب يجب أن يكون من 4 إلى 20 رقم")
     )
 
     code = models.CharField(
-        _("كود الحساب"), max_length=8, unique=True, validators=[code_validator]
+        _("كود الحساب"), max_length=50, unique=True, validators=[code_validator]
     )
     name = models.CharField(_("اسم الحساب"), max_length=200)
     name_en = models.CharField(
@@ -648,8 +648,8 @@ class ChartOfAccounts(models.Model):
             
         try:
             with transaction.atomic():
-                # قفل الحساب للتحديث الآمن
-                account = ChartOfAccounts.objects.select_for_update().get(id=self.id)
+                # إعادة تحميل الحساب للتحديث الآمن
+                account = ChartOfAccounts.objects.get(id=self.id)
                 
                 # حساب الرصيد الحالي
                 current_balance = account.get_balance_optimized(use_cache=False)

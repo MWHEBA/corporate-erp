@@ -27,6 +27,7 @@ __all__ = [
     'api_biometric_stats',
     'api_cleanup_old_logs',
     'api_process_all_biometric_logs',
+    'api_reset_month_processing',
 ]
 
 
@@ -193,6 +194,12 @@ def biometric_dashboard(request):
                 'text': 'الأجهزة',
                 'class': 'btn-outline-info',
             },
+            {
+                'onclick': 'resetCurrentMonthProcessing()',
+                'icon': 'fa-redo',
+                'text': 'إعادة تعيين الشهر الحالي',
+                'class': 'btn-outline-warning',
+            },
         ],
         'breadcrumb_items': [
             {'title': 'الرئيسية', 'url': reverse('core:dashboard'), 'icon': 'fas fa-home'},
@@ -301,7 +308,7 @@ def biometric_mapping_list(request):
         'breadcrumb_items': [
             {'title': 'الرئيسية', 'url': reverse('core:dashboard'), 'icon': 'fas fa-home'},
             {'title': 'الموارد البشرية', 'url': reverse('hr:employee_list'), 'icon': 'fas fa-users'},
-            {'title': 'ماكينات البصمة', 'url': reverse('hr:biometric_device_list'), 'icon': 'fas fa-fingerprint'},
+            {'title': 'لوحة تحكم البصمة', 'url': reverse('hr:biometric_dashboard'), 'icon': 'fas fa-fingerprint'},
             {'title': 'ربط معرفات البصمة', 'active': True},
         ],
     }
@@ -341,6 +348,7 @@ def biometric_mapping_create(request):
         'breadcrumb_items': [
             {'title': 'الرئيسية', 'url': reverse('core:dashboard'), 'icon': 'fas fa-home'},
             {'title': 'الموارد البشرية', 'url': reverse('hr:employee_list'), 'icon': 'fas fa-users'},
+            {'title': 'لوحة تحكم البصمة', 'url': reverse('hr:biometric_dashboard'), 'icon': 'fas fa-fingerprint'},
             {'title': 'ربط معرفات البصمة', 'url': reverse('hr:biometric_mapping_list'), 'icon': 'fas fa-link'},
             {'title': 'إضافة', 'active': True},
         ],
@@ -384,6 +392,7 @@ def biometric_mapping_update(request, pk):
         'breadcrumb_items': [
             {'title': 'الرئيسية', 'url': reverse('core:dashboard'), 'icon': 'fas fa-home'},
             {'title': 'الموارد البشرية', 'url': reverse('hr:employee_list'), 'icon': 'fas fa-users'},
+            {'title': 'لوحة تحكم البصمة', 'url': reverse('hr:biometric_dashboard'), 'icon': 'fas fa-fingerprint'},
             {'title': 'ربط معرفات البصمة', 'url': reverse('hr:biometric_mapping_list'), 'icon': 'fas fa-link'},
             {'title': 'تعديل', 'active': True},
         ],
@@ -790,6 +799,7 @@ def api_process_all_biometric_logs(request):
     """
     try:
         from ..utils.biometric_utils import bulk_process_logs
+        from ..services.attendance_service import AttendanceService
         
         # معالجة جميع السجلات غير المعالجة
         result = bulk_process_logs(
@@ -799,10 +809,25 @@ def api_process_all_biometric_logs(request):
             dry_run=False
         )
         
+        # توليد سجلات الغياب للأيام التي ليس بها بصمات (حتى الأمس لتجنب غياب اليوم الحالي قبل نهايته)
+        try:
+            today = timezone.now().date()
+            yesterday = today - timedelta(days=1)
+            # You can decide how far back to generate, let's say a week or from start of current month
+            start_date = today.replace(day=1)
+            if start_date <= yesterday:
+                created_absent = AttendanceService.generate_missing_attendances(start_date, yesterday)
+                if created_absent > 0:
+                    result['created'] = result.get('created', 0) + created_absent
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error generating absent records during biometric process: {e}")
+        
         # Build success message
         message_parts = []
         if result.get('created', 0) > 0:
-            message_parts.append(f'{result["created"]} سجل حضور جديد')
+            message_parts.append(f'{result["created"]} سجل حضور/غياب جديد')
         if result.get('updated', 0) > 0:
             message_parts.append(f'{result["updated"]} سجل محدث')
         if result.get('processed', 0) > 0:
@@ -828,4 +853,72 @@ def api_process_all_biometric_logs(request):
             'success': False,
             'error': str(e),
             'traceback': traceback.format_exc()
+        }, status=500)
+
+
+@api_view(['POST'])
+@login_required
+def api_reset_month_processing(request):
+    """
+    إعادة تعيين علامات المعالجة لسجلات بصمة الشهر الحالي.
+    يسمح بإعادة المعالجة من الصفر للشهر الحالي.
+
+    POST /hr/api/biometric/logs/reset-month/
+    Body: { "month": "2026-03" } (optional, default: current month)
+    """
+    from django.db import transaction
+    import calendar
+
+    try:
+        month_str = request.data.get('month')
+        if month_str:
+            year, month = map(int, month_str.split('-'))
+        else:
+            today = timezone.now().date()
+            year, month = today.year, today.month
+
+        # أول وآخر يوم في الشهر
+        import datetime as dt
+        first_day = dt.date(year, month, 1)
+        last_day = dt.date(year, month, calendar.monthrange(year, month)[1])
+
+        logs_qs = BiometricLog.objects.filter(
+            timestamp__date__gte=first_day,
+            timestamp__date__lte=last_day,
+            is_processed=True
+        )
+
+        count = logs_qs.count()
+
+        if count == 0:
+            return JsonResponse({
+                'success': True,
+                'message': 'لا توجد سجلات معالجة في هذا الشهر',
+                'reset_count': 0
+            })
+
+        with transaction.atomic():
+            # فك ربط السجلات بسجلات الحضور وإعادة تعيين علامة المعالجة
+            reset_count = logs_qs.update(
+                is_processed=False,
+                processed_at=None,
+                attendance=None
+            )
+
+        return JsonResponse({
+            'success': True,
+            'message': f'تم إعادة تعيين {reset_count} سجل بصمة للشهر {year}/{month:02d} - يمكنك الآن إعادة المعالجة',
+            'reset_count': reset_count,
+            'month': f'{year}-{month:02d}'
+        })
+
+    except (ValueError, AttributeError):
+        return JsonResponse({
+            'success': False,
+            'error': 'صيغة الشهر غير صحيحة، استخدم YYYY-MM'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
         }, status=500)

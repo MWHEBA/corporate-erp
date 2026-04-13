@@ -25,12 +25,12 @@
         <div class="col-6">
             <div class="border rounded p-2">
                 <div class="fw-bold text-primary">{{ payroll.basic_salary|remove_trailing_zeros }}</div>
-                <small class="text-muted">الراتب الأساسي</small>
+                <small class="text-muted">الأجر الأساسي</small>
             </div>
         </div>
         <div class="col-6">
             <div class="border rounded p-2">
-                <div class="fw-bold text-success">{{ payroll.net_salary|remove_trailing_zeros }}</div>
+                <div class="fw-bold text-success">{{ correct_net_salary|remove_trailing_zeros }}</div>
                 <small class="text-muted">صافي الراتب</small>
             </div>
         </div>

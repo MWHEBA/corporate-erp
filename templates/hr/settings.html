@@ -335,7 +335,7 @@
         <!-- إعدادات الإجازات -->
         <div class="setting-card">
             <div class="setting-card-header">
-                <div class="setting-icon" style="background: #6f42c1; color: white;">
+                <div class="setting-icon" style="background: var(--bs-purple, #6f42c1); color: white;">
                     <i class="fas fa-sliders-h"></i>
                 </div>
                 <div class="setting-title">
@@ -345,18 +345,18 @@
             </div>
             <div class="setting-stats">
                 <div class="stat-item">
-                    <span class="stat-value">{{ leave_settings.probation_months }}</span>
-                    <span class="stat-label">شهر تجريبي</span>
+                    <span class="stat-value">{{ leave_settings.annual_full_days }}</span>
+                    <span class="stat-label">اعتيادي</span>
                 </div>
                 <div class="stat-item">
-                    <span class="stat-value">{{ leave_settings.partial_percentage }}%</span>
-                    <span class="stat-label">استحقاق جزئي</span>
+                    <span class="stat-value">{{ leave_settings.emergency_full_days }}</span>
+                    <span class="stat-label">عارضة</span>
                 </div>
             </div>
             <div class="setting-actions">
-                <button type="button" class="setting-btn setting-btn-primary" data-bs-toggle="modal" data-bs-target="#leaveSettingsModal">
+                <a href="{% url 'hr:leave_policy_settings' %}" class="setting-btn setting-btn-primary">
                     <i class="fas fa-cog me-1"></i>تعديل الإعدادات
-                </button>
+                </a>
             </div>
         </div>
         
@@ -446,160 +446,363 @@
                 </a>
             </div>
         </div>
+
+        <!-- إعدادات رمضان -->
+        <div class="setting-card">
+            <div class="setting-card-header">
+                <div class="setting-icon" style="background: #1a6b3c; color: white;">
+                    <i class="fas fa-moon"></i>
+                </div>
+                <div class="setting-title">
+                    <h3>إعدادات رمضان</h3>
+                    <p>تواريخ رمضان لكل سنة هجرية</p>
+                </div>
+            </div>
+            <div class="setting-stats">
+                <div class="stat-item">
+                    <span class="stat-value"><i class="fas fa-calendar-alt"></i></span>
+                    <span class="stat-label">أوقات مختلفة</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value"><i class="fas fa-clock"></i></span>
+                    <span class="stat-label">لكل وردية</span>
+                </div>
+            </div>
+            <div class="setting-actions">
+                <a href="{% url 'hr:ramadan_settings_list' %}" class="setting-btn setting-btn-primary">
+                    <i class="fas fa-list me-1"></i>إدارة رمضان
+                </a>
+                <a href="{% url 'hr:ramadan_settings_create' %}" class="setting-btn setting-btn-outline">
+                    <i class="fas fa-plus me-1"></i>إضافة
+                </a>
+            </div>
+        </div>
+
+        <!-- جدول الجزاءات -->
+        <div class="setting-card">
+            <div class="setting-card-header">
+                <div class="setting-icon" style="background: #7c3aed; color: white;">
+                    <i class="fas fa-gavel"></i>
+                </div>
+                <div class="setting-title">
+                    <h3>جدول الجزاءات</h3>
+                    <p>نطاقات التأخير وقيمة الجزاء</p>
+                </div>
+            </div>
+            <div class="setting-stats">
+                <div class="stat-item">
+                    <span class="stat-value"><i class="fas fa-layer-group"></i></span>
+                    <span class="stat-label">نطاقات ديناميكية</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value"><i class="fas fa-coins"></i></span>
+                    <span class="stat-label">بالأيام</span>
+                </div>
+            </div>
+            <div class="setting-actions">
+                <a href="{% url 'hr:penalty_list' %}" class="setting-btn setting-btn-primary">
+                    <i class="fas fa-list me-1"></i>إدارة الجزاءات
+                </a>
+                <a href="{% url 'hr:penalty_create' %}" class="setting-btn setting-btn-outline">
+                    <i class="fas fa-plus me-1"></i>إضافة
+                </a>
+            </div>
+        </div>
+
+        <!-- إعدادات الحضور -->
+        <div class="setting-card">
+            <div class="setting-card-header">
+                <div class="setting-icon" style="background: #0891b2; color: white;">
+                    <i class="fas fa-user-clock"></i>
+                </div>
+                <div class="setting-title">
+                    <h3>إعدادات الحضور</h3>
+                    <p>أيام الإجازة والسماح والعمل الإضافي</p>
+                </div>
+            </div>
+            <div class="setting-stats">
+                <div class="stat-item">
+                    <span class="stat-value">{{ attendance_settings.monthly_grace_minutes }}</span>
+                    <span class="stat-label">دقيقة سماح</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value">{% if attendance_settings.overtime_enabled %}مفعل{% else %}معطل{% endif %}</span>
+                    <span class="stat-label">عمل إضافي</span>
+                </div>
+            </div>
+            <div class="setting-actions">
+                <button type="button" class="setting-btn setting-btn-primary" data-bs-toggle="modal" data-bs-target="#attendanceSettingsModal">
+                    <i class="fas fa-cog me-1"></i>تعديل الإعدادات
+                </button>
+            </div>
+        </div>
+
+        <!-- إعدادات الأذونات -->
+        <div class="setting-card">
+            <div class="setting-card-header">
+                <div class="setting-icon" style="background: #e67e22; color: white;">
+                    <i class="fas fa-business-time"></i>
+                </div>
+                <div class="setting-title">
+                    <h3>إعدادات الأذونات</h3>
+                    <p>الحد الأقصى للأذونات الشهرية</p>
+                </div>
+            </div>
+            <div class="setting-stats">
+                <div class="stat-item">
+                    <span class="stat-value">{{ permission_settings.max_count_monthly }}</span>
+                    <span class="stat-label">إذن/شهر</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value">{{ permission_settings.max_hours_monthly }}</span>
+                    <span class="stat-label">ساعة/شهر</span>
+                </div>
+            </div>
+            <div class="setting-actions">
+                <button type="button" class="setting-btn setting-btn-primary" data-bs-toggle="modal" data-bs-target="#permissionSettingsModal">
+                    <i class="fas fa-cog me-1"></i>تعديل الإعدادات
+                </button>
+            </div>
+        </div>
+
+        <!-- إعدادات التأمينات -->
+        <div class="setting-card">
+            <div class="setting-card-header">
+                <div class="setting-icon" style="background: var(--success-color); color: white;">
+                    <i class="fas fa-shield-alt"></i>
+                </div>
+                <div class="setting-title">
+                    <h3>إعدادات التأمينات</h3>
+                    <p>نسب التأمينات الاجتماعية</p>
+                </div>
+            </div>
+            <div class="setting-stats">
+                <div class="stat-item">
+                    <span class="stat-value">{{ insurance_settings.employee_share }}%</span>
+                    <span class="stat-label">نصيب الموظف</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value">{{ insurance_settings.employer_share }}%</span>
+                    <span class="stat-label">نصيب الشركة</span>
+                </div>
+            </div>
+            <div class="setting-actions">
+                <button type="button" class="setting-btn setting-btn-primary" data-bs-toggle="modal" data-bs-target="#insuranceSettingsModal">
+                    <i class="fas fa-cog me-1"></i>تعديل الإعدادات
+                </button>
+            </div>
+        </div>
+
     </div>
 </div>
 </div>
 
-<!-- Modal إعدادات الإجازات -->
-<div class="modal fade" id="leaveSettingsModal" tabindex="-1" aria-labelledby="leaveSettingsModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+<!-- Modal إعدادات الحضور -->
+<div class="modal fade" id="attendanceSettingsModal" tabindex="-1" aria-labelledby="attendanceSettingsModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
         <div class="modal-content">
             <form method="post" action="{% url 'hr:hr_settings' %}">
                 {% csrf_token %}
+                <input type="hidden" name="action" value="attendance_settings">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="leaveSettingsModalLabel">
-                        <i class="fas fa-sliders-h me-2"></i>إعدادات استحقاق الإجازات
+                    <h5 class="modal-title" id="attendanceSettingsModalLabel">
+                        <i class="fas fa-user-clock me-2"></i>إعدادات الحضور والانصراف
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+
+                    <!-- أيام الإجازة الأسبوعية -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0"><i class="fas fa-calendar-week me-2"></i>أيام الإجازة الأسبوعية</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                {% with off_days=attendance_settings.weekly_off_days %}
+                                <div class="col-md-4 mb-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="hr_weekly_off_days" value="0" id="day_mon" {% if 0 in off_days %}checked{% endif %}>
+                                        <label class="form-check-label" for="day_mon">الاثنين</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="hr_weekly_off_days" value="1" id="day_tue" {% if 1 in off_days %}checked{% endif %}>
+                                        <label class="form-check-label" for="day_tue">الثلاثاء</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="hr_weekly_off_days" value="2" id="day_wed" {% if 2 in off_days %}checked{% endif %}>
+                                        <label class="form-check-label" for="day_wed">الأربعاء</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="hr_weekly_off_days" value="3" id="day_thu" {% if 3 in off_days %}checked{% endif %}>
+                                        <label class="form-check-label" for="day_thu">الخميس</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="hr_weekly_off_days" value="4" id="day_fri" {% if 4 in off_days %}checked{% endif %}>
+                                        <label class="form-check-label" for="day_fri">الجمعة</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="hr_weekly_off_days" value="5" id="day_sat" {% if 5 in off_days %}checked{% endif %}>
+                                        <label class="form-check-label" for="day_sat">السبت</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="hr_weekly_off_days" value="6" id="day_sun" {% if 6 in off_days %}checked{% endif %}>
+                                        <label class="form-check-label" for="day_sun">الأحد</label>
+                                    </div>
+                                </div>
+                                {% endwith %}
+                            </div>
+                            <small class="text-muted">الأيام المحددة لن تُحسب ضمن أيام العمل في الملخص الشهري</small>
+                        </div>
+                    </div>
+
+                    <!-- دقائق السماح الشهري -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0"><i class="fas fa-stopwatch me-2"></i>السماح الشهري</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="col-md-6">
+                                <label class="form-label">دقائق السماح الشهرية</label>
+                                <input type="number" name="hr_monthly_grace_minutes" class="form-control"
+                                       value="{{ attendance_settings.monthly_grace_minutes }}" min="0" max="999">
+                                <small class="text-muted">تُخصم من إجمالي الدقائق القابلة للجزاء قبل تطبيق جدول الجزاءات. سياسة موحدة لجميع الموظفين.</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- العمل الإضافي -->
+                    <div class="card">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0"><i class="fas fa-business-time me-2"></i>العمل الإضافي</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="hr_overtime_enabled"
+                                       id="overtimeEnabled" {% if attendance_settings.overtime_enabled %}checked{% endif %}>
+                                <label class="form-check-label" for="overtimeEnabled">
+                                    تفعيل حساب العمل الإضافي في الملخص الشهري
+                                </label>
+                            </div>
+                            <small class="text-muted d-block mt-1">عند التعطيل يُصفَّر مبلغ العمل الإضافي بغض النظر عن الساعات المسجلة</small>
+                        </div>
+                    </div>
+
+                    <!-- دورة الرواتب -->
+                    <div class="card mt-3">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0"><i class="fas fa-calendar-alt me-2"></i>دورة الرواتب</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="col-md-6">
+                                <label class="form-label">يوم بداية دورة الرواتب</label>
+                                <input type="number" name="payroll_cycle_start_day" class="form-control"
+                                       value="{{ attendance_settings.payroll_cycle_start_day }}" min="1" max="28">
+                                <small class="text-muted">
+                                    1 = من أول الشهر (افتراضي) — مثال: 26 = الدورة من 26 الشهر السابق حتى 25 الشهر الحالي.
+                                    القيمة بين 1 و 28.
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">حفظ الإعدادات</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal إعدادات الأذونات -->
+<div class="modal fade" id="permissionSettingsModal" tabindex="-1" aria-labelledby="permissionSettingsModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{% url 'hr:hr_settings' %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="permission_settings">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="permissionSettingsModalLabel">
+                        <i class="fas fa-business-time me-2"></i>إعدادات الأذونات الشهرية
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <div class="alert alert-info">
                         <i class="fas fa-info-circle me-2"></i>
-                        <strong>ملاحظة:</strong> هذه الإعدادات تتحكم في كيفية استحقاق الموظفين لأرصدة الإجازات بناءً على مدة خدمتهم.
+                        تحدد هذه الإعدادات الحد الأقصى للأذونات الشهرية المسموح بها للموظف. (إعدادات رمضان لها شاشة منفصلة ويمكن إدارتها من <a href="{% url 'hr:ramadan_settings_list' %}">هنا</a>).
                     </div>
                     
-                    <!-- قسم الاستحقاق التدريجي -->
-                    <div class="card mb-3">
-                        <div class="card-header bg-light">
-                            <h6 class="mb-0"><i class="fas fa-chart-line me-2"></i>الاستحقاق التدريجي</h6>
-                        </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label">الفترة التجريبية (بالأشهر)</label>
-                                    <input type="number" name="leave_accrual_probation_months" class="form-control" 
-                                           value="{{ leave_settings.probation_months }}" min="0" max="12" required>
-                                    <small class="text-muted">الموظف لا يستحق إجازات خلال هذه الفترة (0%)</small>
-                                </div>
-                                
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label">فترة الاستحقاق الكامل (بالأشهر)</label>
-                                    <input type="number" name="leave_accrual_full_months" class="form-control" 
-                                           value="{{ leave_settings.full_months }}" min="0" max="24" required>
-                                    <small class="text-muted">بعد هذه الفترة يستحق الموظف 100%</small>
-                                </div>
-                                
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label">نسبة الاستحقاق الجزئي (%)</label>
-                                    <input type="number" name="leave_accrual_partial_percentage" class="form-control" 
-                                           value="{{ leave_settings.partial_percentage }}" min="0" max="100" required>
-                                    <small class="text-muted">النسبة بين الفترة التجريبية والكاملة</small>
-                                </div>
-                            </div>
-                            
-                            <!-- مثال توضيحي -->
-                            <div class="alert alert-success mt-3">
-                                <strong><i class="fas fa-lightbulb me-2"></i>مثال:</strong>
-                                <ul class="mb-0 mt-2">
-                                    <li>من 0 إلى {{ leave_settings.probation_months }} شهور: <strong>0%</strong> (لا يستحق شيء)</li>
-                                    <li>من {{ leave_settings.probation_months }} إلى {{ leave_settings.full_months }} شهور: <strong>{{ leave_settings.partial_percentage }}%</strong> من الرصيد</li>
-                                    <li>بعد {{ leave_settings.full_months }} شهور: <strong>100%</strong> من الرصيد</li>
-                                </ul>
-                            </div>
-                        </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">الحد الأقصى لعدد الأذونات (شهرياً)</label>
+                        <input type="number" name="hr_permission_max_count_monthly" class="form-control" 
+                               value="{{ permission_settings.max_count_monthly }}" min="0" required>
+                        <small class="text-muted">عدد المرات المسموح بها في الشهر خلال الأيام العادية</small>
                     </div>
                     
-                    <!-- قسم الإعدادات العامة -->
-                    <div class="card mb-3">
-                        <div class="card-header bg-light">
-                            <h6 class="mb-0"><i class="fas fa-cog me-2"></i>الإعدادات العامة</h6>
-                        </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-12 mb-3">
-                                    <div class="form-check form-switch">
-                                        <input class="form-check-input" type="checkbox" name="leave_auto_create_balances" 
-                                               id="autoCreateBalances" value="true" 
-                                               {% if leave_settings.auto_create %}checked{% endif %}>
-                                        <label class="form-check-label" for="autoCreateBalances">
-                                            إنشاء أرصدة الإجازات تلقائياً عند إضافة موظف جديد
-                                        </label>
-                                    </div>
-                                    <small class="text-muted d-block mt-1">عند التفعيل، سيتم إنشاء أرصدة إجازات تلقائياً للموظفين الجدد</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- قسم ترحيل الإجازات -->
-                    <div class="card mb-3">
-                        <div class="card-header bg-light">
-                            <h6 class="mb-0"><i class="fas fa-calendar-plus me-2"></i>ترحيل الإجازات</h6>
-                        </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <div class="form-check form-switch">
-                                        <input class="form-check-input" type="checkbox" name="leave_rollover_enabled" 
-                                               id="rolloverEnabled" value="true" 
-                                               {% if leave_settings.rollover_enabled %}checked{% endif %}>
-                                        <label class="form-check-label" for="rolloverEnabled">
-                                            السماح بترحيل الإجازات غير المستخدمة
-                                        </label>
-                                    </div>
-                                    <small class="text-muted d-block mt-1">ترحيل الإجازات المتبقية للسنة التالية</small>
-                                </div>
-                                
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">الحد الأقصى للأيام المرحلة</label>
-                                    <input type="number" name="leave_rollover_max_days" class="form-control" 
-                                           value="{{ leave_settings.rollover_max_days }}" min="0" max="30">
-                                    <small class="text-muted">عدد الأيام القصوى التي يمكن ترحيلها</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- قسم عدد أيام الإجازات -->
-                    <div class="card">
-                        <div class="card-header bg-light">
-                            <h6 class="mb-0"><i class="fas fa-calendar-day me-2"></i>عدد أيام الإجازات السنوية</h6>
-                        </div>
-                        <div class="card-body">
-                            <div class="alert alert-info mb-3">
-                                <i class="fas fa-info-circle me-2"></i>
-                                <strong>ملاحظة:</strong> هذه الأرقام تمثل الحد الأقصى السنوي لكل نوع إجازة. سيتم تطبيق نسبة الاستحقاق التدريجي عليها.
-                            </div>
-                            
-                            <div class="row">
-                                {% for leave_type in leave_types %}
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label">
-                                        <i class="fas fa-calendar-check me-1 text-primary"></i>
-                                        {{ leave_type.name_ar }}
-                                    </label>
-                                    <input type="number" name="leave_type_{{ leave_type.id }}_days" 
-                                           class="form-control" 
-                                           value="{{ leave_type.max_days_per_year }}" 
-                                           min="0" max="365" required>
-                                    <small class="text-muted">أيام في السنة</small>
-                                </div>
-                                {% endfor %}
-                            </div>
-                            
-                            <div class="alert alert-warning mt-3 mb-0">
-                                <i class="fas fa-exclamation-triangle me-2"></i>
-                                <strong>تنبيه:</strong> تغيير هذه القيم لن يؤثر على الأرصدة الموجودة حالياً. لتطبيق التغييرات على الأرصدة، استخدم أمر "تحديث الأرصدة" من صفحة أرصدة الإجازات.
-                            </div>
-                        </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">الحد الأقصى لساعات الأذونات (شهرياً)</label>
+                        <input type="number" name="hr_permission_max_hours_monthly" class="form-control" 
+                               value="{{ permission_settings.max_hours_monthly }}" min="0" step="0.5" required>
+                        <small class="text-muted">إجمالي عدد الساعات المسموح بها في الشهر خلال الأيام العادية</small>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                        <i class="fas fa-times me-2"></i>إلغاء
-                    </button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">حفظ الإعدادات</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal إعدادات التأمينات -->
+<div class="modal fade" id="insuranceSettingsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{% url 'hr:hr_settings' %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="insurance_settings">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-shield-alt me-2"></i>إعدادات التأمينات الاجتماعية
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">نصيب الموظف (%)</label>
+                        <input type="number" name="hr_insurance_employee_share" class="form-control"
+                               value="{{ insurance_settings.employee_share }}" min="0" max="100" step="0.01" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">نصيب الشركة (%)</label>
+                        <input type="number" name="hr_insurance_employer_share" class="form-control"
+                               value="{{ insurance_settings.employer_share }}" min="0" max="100" step="0.01" required>
+                    </div>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        هذه النسب تُستخدم لحساب إجمالي التأمين لموظفي التأمين فقط.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
                     <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save me-2"></i>حفظ الإعدادات
+                        <i class="fas fa-save me-1"></i>حفظ
                     </button>
                 </div>
             </form>

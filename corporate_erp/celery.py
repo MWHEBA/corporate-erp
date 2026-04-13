@@ -22,10 +22,10 @@ app.autodiscover_tasks()
 app.conf.update(
     # Task routing
     task_routes={
-        'students.tasks.send_settlement_notification': {'queue': 'notifications'},
-        'students.tasks.generate_settlement_report': {'queue': 'reports'},
-        'students.tasks.process_accounting_integration': {'queue': 'accounting'},
-        'students.tasks.bulk_process_settlements': {'queue': 'bulk_processing'},
+        'client.tasks.send_payment_notification': {'queue': 'notifications'},
+        'client.tasks.generate_payment_report': {'queue': 'reports'},
+        'financial.tasks.process_accounting_integration': {'queue': 'accounting'},
+        'financial.tasks.bulk_process_settlements': {'queue': 'bulk_processing'},
     },
     
     # Task serialization
@@ -61,16 +61,16 @@ app.conf.update(
     beat_schedule={
         # Financial settlement tasks
         'retry-failed-settlements': {
-            'task': 'students.tasks.retry_failed_settlements',
-            'schedule': 300.0,  # Every 5 minutes
+            'task': 'financial.tasks.retry_failed_settlements',
+            'schedule': 300.0,
         },
         'cleanup-old-audit-logs': {
-            'task': 'students.tasks.cleanup_old_audit_logs',
-            'schedule': 86400.0,  # Daily
+            'task': 'financial.tasks.cleanup_old_audit_logs',
+            'schedule': 86400.0,
         },
         'generate-daily-settlement-report': {
-            'task': 'students.tasks.generate_daily_settlement_report',
-            'schedule': 3600.0,  # Hourly during business hours
+            'task': 'financial.tasks.generate_daily_settlement_report',
+            'schedule': 3600.0,
         },
         
         # HR Biometric tasks

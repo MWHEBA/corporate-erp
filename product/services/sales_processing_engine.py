@@ -108,11 +108,6 @@ class SalesProcessingEngine:
                     transaction_record['status'] = 'completed'
                     transaction_record['completed_at'] = timezone.now()
                     
-                    logger.info(
-                        f"تم بيع {quantity} وحدة من المنتج المجمع {bundle_product.name} بنجاح. "
-                        f"رقم المعاملة: {transaction_record.get('transaction_id')}, "
-                        f"المعاملة المالية: {financial_record.get('financial_transaction_id') if financial_record else 'غير متاح'}"
-                    )
                     
                     return True, transaction_record, None
                     
@@ -284,11 +279,6 @@ class SalesProcessingEngine:
                 transaction_record['financial_reversal_success'] = financial_reversal_success
                 transaction_record['financial_reversal_error'] = financial_reversal_error
                 
-                logger.info(
-                    f"تم عكس بيع المنتج المجمع {bundle_product.name} بنجاح. "
-                    f"رقم المعاملة: {transaction_record.get('transaction_id')}, "
-                    f"عكس المعاملة المالية: {'نجح' if financial_reversal_success else 'فشل'}"
-                )
                 
                 return True, None
                 
@@ -523,33 +513,41 @@ class SalesProcessingEngine:
             # الحصول على المستخدم
             created_by = User.objects.get(id=created_by_id)
             
-            # ✅ استخدام MovementService بدلاً من التحديث المباشر
-            from governance.services import MovementService
-            from decimal import Decimal
+            # الحصول على المخزون الحالي قبل الحركة
+            stock, _ = Stock.objects.get_or_create(
+                product=product,
+                warehouse=warehouse,
+                defaults={'quantity': 0}
+            )
+            quantity_before = stock.quantity
             
-            movement_service = MovementService()
-            
-            # تحديد quantity_change حسب نوع الحركة
+            # حساب الكمية بعد الحركة
             if movement_type == 'out':
-                quantity_change = -Decimal(str(quantity))
+                quantity_after = max(0, quantity_before - quantity)
             elif movement_type == 'return_in':
-                quantity_change = Decimal(str(quantity))
+                quantity_after = quantity_before + quantity
             else:
-                quantity_change = Decimal('0')
+                quantity_after = quantity_before
             
-            # إنشاء حركة المخزون عبر MovementService
-            stock_movement = movement_service.process_movement(
-                product_id=product.id,
-                quantity_change=quantity_change,
+            # إنشاء حركة المخزون
+            stock_movement = StockMovement.objects.create(
+                product=product,
+                warehouse=warehouse,
                 movement_type=movement_type,
-                source_reference=reference_number,
-                idempotency_key=f"sales_engine_{product.id}_{reference_number}_{timezone.now().timestamp()}",
-                user=created_by,
-                document_number=reference_number,
-                notes=notes
+                quantity=quantity,
+                reference_number=reference_number,
+                document_type='sale' if movement_type == 'out' else 'sale_return',
+                notes=notes,
+                created_by=created_by,
+                quantity_before=quantity_before,
+                quantity_after=quantity_after
             )
             
-            logger.debug(f"تم إنشاء حركة مخزون عبر MovementService: {stock_movement}")
+            # تحديث كمية المخزون
+            stock.quantity = quantity_after
+            stock.save(update_fields=['quantity'])
+            
+            logger.debug(f"تم إنشاء حركة مخزون: {stock_movement}")
             
         except Exception as e:
             logger.error(f"خطأ في إنشاء حركة المخزون: {e}")

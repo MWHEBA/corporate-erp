@@ -281,13 +281,13 @@
             
             if (!hasReturns) {
                 e.preventDefault();
-                alert('يجب تحديد كمية مرتجعة واحدة على الأقل');
+                Swal.fire({ title: 'تنبيه', text: 'يجب تحديد كمية مرتجعة واحدة على الأقل', icon: 'warning', confirmButtonText: 'حسناً' });
                 return false;
             }
             
             if (!isValid) {
                 e.preventDefault();
-                alert('يجب إدخال سبب الإرجاع لجميع المنتجات المرتجعة');
+                Swal.fire({ title: 'تنبيه', text: 'يجب إدخال سبب الإرجاع لجميع المنتجات المرتجعة', icon: 'warning', confirmButtonText: 'حسناً' });
                 return false;
             }
             

@@ -20,10 +20,8 @@ from ..models import (
 from governance.services import AccountingGateway, JournalEntryLineData
 
 try:
-    from client.models import Customer
     from supplier.models import Supplier
 except ImportError:
-    Customer = None
     Supplier = None
 
 logger = logging.getLogger(__name__)
@@ -91,7 +89,6 @@ class ExpenseIncomeService:
                 if data.get("auto_post", False):
                     ExpenseIncomeService.post_journal_entry(journal_entry, user)
 
-                logger.info(f"تم إنشاء مصروف جديد: {journal_entry.reference}")
                 return journal_entry
 
         except Exception as e:
@@ -157,7 +154,6 @@ class ExpenseIncomeService:
                 if data.get("auto_post", False):
                     ExpenseIncomeService.post_journal_entry(journal_entry, user)
 
-                logger.info(f"تم إنشاء إيراد جديد: {journal_entry.reference}")
                 return journal_entry
 
         except Exception as e:
@@ -210,7 +206,6 @@ class ExpenseIncomeService:
 
                 journal_entry.save()
 
-                logger.info(f"تم تحديث المصروف: {journal_entry.reference}")
                 return journal_entry
 
         except Exception as e:
@@ -263,7 +258,6 @@ class ExpenseIncomeService:
 
                 journal_entry.save()
 
-                logger.info(f"تم تحديث الإيراد: {journal_entry.reference}")
                 return journal_entry
 
         except Exception as e:
@@ -303,12 +297,11 @@ class ExpenseIncomeService:
                 journal_entry.posted_by = user
                 journal_entry.posted_at = timezone.now()
                 journal_entry.accounting_period = period
-                journal_entry.save()
+                journal_entry.save(update_fields=['status', 'posted_by', 'posted_at', 'accounting_period'])
 
                 # تحديث أرصدة الحسابات
                 ExpenseIncomeService.update_account_balances(journal_entry)
 
-                logger.info(f"تم ترحيل القيد: {journal_entry.reference}")
                 return journal_entry
 
         except Exception as e:
@@ -337,7 +330,6 @@ class ExpenseIncomeService:
                 # تحديث أرصدة الحسابات (عكس)
                 ExpenseIncomeService.reverse_account_balances(journal_entry)
 
-                logger.info(f"تم إلغاء ترحيل القيد: {journal_entry.reference}")
                 return journal_entry
 
         except Exception as e:
@@ -357,7 +349,6 @@ class ExpenseIncomeService:
                 reference = journal_entry.reference
                 journal_entry.delete()
 
-                logger.info(f"تم حذف القيد: {reference}")
                 return True
 
         except Exception as e:
@@ -394,7 +385,6 @@ class ExpenseIncomeService:
                     status="open",
                 )
 
-                logger.info(f"تم إنشاء فترة محاسبية جديدة: {period.name}")
 
             return period
 

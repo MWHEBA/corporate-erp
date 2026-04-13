@@ -1,14 +1,12 @@
 """
 Management command لإنشاء حسابات محاسبية للموردين والعملاء الموجودين
-
-✅ Updated to use unified services with idempotency protection
 """
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from supplier.models import Supplier
-from client.models import Customer
-from supplier.services.supplier_service import SupplierService
-from client.services import CustomerService
+from financial.services.supplier_parent_account_service import (
+    SupplierParentAccountService,
+)
 
 
 class Command(BaseCommand):
@@ -75,11 +73,7 @@ class Command(BaseCommand):
             try:
                 if not dry_run:
                     with transaction.atomic():
-                        # ✅ Use unified SupplierService with idempotency
-                        account = SupplierService.create_financial_account_for_supplier(
-                            supplier=supplier,
-                            user=None
-                        )
+                        account = SupplierParentAccountService.create_supplier_account(supplier)
                         self.stdout.write(
                             self.style.SUCCESS(
                                 f"✅ {supplier.name} → {account.code} - {account.name}"
@@ -108,6 +102,12 @@ class Command(BaseCommand):
         self.stdout.write(self.style.HTTP_INFO("👥 معالجة العملاء"))
         self.stdout.write("=" * 60)
 
+        try:
+            from client.models import Customer
+        except ImportError:
+            self.stdout.write(self.style.WARNING("⚠️ وحدة العملاء غير متوفرة"))
+            return
+
         customers = Customer.objects.filter(financial_account__isnull=True)
         total = customers.count()
 
@@ -124,26 +124,59 @@ class Command(BaseCommand):
             try:
                 if not dry_run:
                     with transaction.atomic():
-                        # ✅ Use unified CustomerService with idempotency
-                        customer_service = CustomerService()
-                        account = customer_service.create_financial_account_for_customer(
-                            customer=customer,
-                            user=None
+                        from financial.models import ChartOfAccounts, AccountType
+                        from decimal import Decimal
+
+                        receivables_type = AccountType.objects.filter(code="RECEIVABLES").first()
+                        if not receivables_type:
+                            raise ValueError("نوع حساب RECEIVABLES غير موجود")
+
+                        parent_account = ChartOfAccounts.objects.filter(
+                            account_type=receivables_type, parent__isnull=True, is_active=True
+                        ).first()
+
+                        if not parent_account:
+                            parent_account = ChartOfAccounts.objects.create(
+                                code="10300",
+                                name="مدينو العملاء",
+                                account_type=receivables_type,
+                                is_active=True,
+                                is_leaf=False,
+                                is_control_account=True,
+                            )
+
+                        import time
+                        code = f"1030{customer.id:03d}"
+                        if ChartOfAccounts.objects.filter(code=code).exists():
+                            code = f"1030{int(time.time()) % 10000:04d}"
+
+                        account = ChartOfAccounts.objects.create(
+                            code=code,
+                            name=f"عميل - {customer}",
+                            parent=parent_account,
+                            account_type=receivables_type,
+                            is_active=True,
+                            is_leaf=True,
+                            opening_balance=Decimal('0'),
                         )
+
+                        customer.financial_account = account
+                        customer.save(update_fields=["financial_account"])
+
                         self.stdout.write(
                             self.style.SUCCESS(
-                                f"✅ {customer.name} → {account.code} - {account.name}"
+                                f"✅ {customer} → {account.code} - {account.name}"
                             )
                         )
                         success_count += 1
                 else:
                     self.stdout.write(
-                        f"📋 سيتم إنشاء حساب للعميل: {customer.name} (كود: {customer.code})"
+                        f"📋 سيتم إنشاء حساب للعميل: {customer}"
                     )
                     success_count += 1
             except Exception as e:
                 self.stdout.write(
-                    self.style.ERROR(f"❌ خطأ في العميل {customer.name}: {str(e)}")
+                    self.style.ERROR(f"❌ خطأ في العميل {customer}: {str(e)}")
                 )
                 error_count += 1
 

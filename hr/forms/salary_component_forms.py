@@ -465,10 +465,11 @@ class UnifiedSalaryComponentForm(forms.ModelForm):
         # معالجة نوع المدة
         duration_type = self.cleaned_data.get('duration_type', 'permanent')
         if duration_type == 'one_time':
-            # لمرة واحدة - تحديد نهاية الشهر
+            # لمرة واحدة - تحديد نهاية الدورة
             start_date = component.effective_from or date.today()
-            last_day = monthrange(start_date.year, start_date.month)[1]
-            component.effective_to = date(start_date.year, start_date.month, last_day)
+            from hr.utils.payroll_helpers import get_payroll_period
+            _, period_end, _ = get_payroll_period(start_date.replace(day=1))
+            component.effective_to = period_end
         elif duration_type == 'permanent':
             # دائم - بدون تاريخ نهاية
             component.effective_to = None
@@ -478,11 +479,11 @@ class UnifiedSalaryComponentForm(forms.ModelForm):
             if effective_to:
                 component.effective_to = effective_to
             else:
-                # إذا لم يحدد تاريخ نهاية، اجعله لمدة شهر
+                # إذا لم يحدد تاريخ نهاية، اجعله لنهاية الدورة
                 start_date = component.effective_from or date.today()
-                from calendar import monthrange
-                last_day = monthrange(start_date.year, start_date.month)[1]
-                component.effective_to = date(start_date.year, start_date.month, last_day)
+                from hr.utils.payroll_helpers import get_payroll_period
+                _, period_end, _ = get_payroll_period(start_date.replace(day=1))
+                component.effective_to = period_end
         
         if commit:
             component.save()

@@ -50,21 +50,19 @@ class AttendanceSystemTest(TestCase):
         # إنشاء ورديات مختلفة
         self.morning_shift = Shift.objects.create(
             name='الوردية الصباحية',
-            shift_type='morning',
+            shift_type='academic_year',
             start_time=time(8, 0),
             end_time=time(16, 0),
-            work_hours=Decimal('8.0'),
-            grace_period_in=15,  # 15 دقيقة سماح للحضور
-            grace_period_out=15,  # 15 دقيقة سماح للانصراف
+            grace_period_in=15,
+            grace_period_out=15,
             is_active=True
         )
         
         self.evening_shift = Shift.objects.create(
             name='الوردية المسائية',
-            shift_type='evening',
+            shift_type='academic_year',
             start_time=time(16, 0),
-            end_time=time(23, 59),  # قبل منتصف الليل بدقيقة
-            work_hours=Decimal('8.0'),
+            end_time=time(23, 59),
             grace_period_in=10,
             grace_period_out=10,
             is_active=True
@@ -318,10 +316,9 @@ class AttendanceSystemTest(TestCase):
         # إنشاء وردية ليلية
         night_shift = Shift.objects.create(
             name='الوردية الليلية',
-            shift_type='night',
-            start_time=time(22, 0),  # 10 مساءً
-            end_time=time(6, 0),     # 6 صباحاً اليوم التالي
-            work_hours=Decimal('8.0'),
+            shift_type='academic_year',
+            start_time=time(22, 0),
+            end_time=time(6, 0),
             is_active=True
         )
         
@@ -404,11 +401,10 @@ class AttendanceCalculationTest(TestCase):
         
         self.shift = Shift.objects.create(
             name='وردية مرنة',
-            shift_type='morning',
+            shift_type='academic_year',
             start_time=time(9, 0),
             end_time=time(17, 0),
-            work_hours=Decimal('8.0'),
-            grace_period_in=30,  # فترة سماح أطول
+            grace_period_in=30,
             grace_period_out=30,
             is_active=True
         )
@@ -494,8 +490,9 @@ class AttendanceCalculationTest(TestCase):
         attendance.work_hours = Decimal(str(round(total_hours, 2)))
         
         # حساب العمل الإضافي (أكثر من ساعات الوردية)
-        if attendance.work_hours > self.shift.work_hours:
-            attendance.overtime_hours = attendance.work_hours - self.shift.work_hours
+        shift_hours = Decimal(str(self.shift.calculate_work_hours()))
+        if attendance.work_hours > shift_hours:
+            attendance.overtime_hours = attendance.work_hours - shift_hours
         
         attendance.save()
         
@@ -593,10 +590,9 @@ class AttendanceIntegrationTest(TransactionTestCase):
         
         self.shift = Shift.objects.create(
             name='وردية الإنتاج',
-            shift_type='morning',
+            shift_type='academic_year',
             start_time=time(7, 0),
             end_time=time(15, 0),
-            work_hours=Decimal('8.0'),
             is_active=True
         )
         

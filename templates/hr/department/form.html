@@ -72,7 +72,7 @@
                                 <select name="manager" class="form-select">
                                     <option value="">اختر المدير...</option>
                                     {% for emp in employees %}
-                                        <option value="{{ emp.id }}" 
+                                        <option value="{{ emp.id }}"
                                                 {% if department and department.manager and department.manager.id == emp.id %}selected{% endif %}>
                                             {{ emp.employee_number }} - {{ emp.get_full_name_ar }}
                                         </option>
@@ -80,8 +80,15 @@
                                 </select>
                             </div>
                             <div class="col-md-6">
-                                <div class="form-check mt-4">
-                                    <input class="form-check-input" type="checkbox" name="is_active" id="is_active" 
+                                <label class="form-label">مركز التكلفة</label>
+                                {{ form.financial_subcategory }}
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="checkbox" name="is_active" id="is_active"
                                            {% if not department or department.is_active %}checked{% endif %}>
                                     <label class="form-check-label" for="is_active">
                                         نشط

@@ -29,10 +29,10 @@ class AccountingIntegrationService:
 
     # أكواد الحسابات الأساسية المطلوبة (حسب دليل الحسابات المعتمد)
     DEFAULT_ACCOUNTS = {
-        "sales_revenue": "40100",  # إيرادات الرسوم الدراسية
+        "sales_revenue": "40100",  # إيرادات الرسوم الأساسية
         "cost_of_goods_sold": "50100",  # تكلفة الخدمات المقدمة
         "inventory": "10400",  # المخزون
-        "accounts_receivable": "10300",  # العملاء
+        "accounts_receivable": "10300",  # ذمم العملاء
         "accounts_payable": "20100",  # الموردون
         "cash": "10100",  # الخزنة
         "bank": "10200",  # البنك
@@ -63,7 +63,7 @@ class AccountingIntegrationService:
                     logger.warning(f"لا توجد بنود في الفاتورة {sale.number}")
                     return None
 
-                # الحصول على معلومات العميل
+                # الحصول على معلومات العميل/ولي الأمر
                 client_account, client_name = cls._get_client_info(sale, user)
                 if not client_account:
                     return None
@@ -131,18 +131,20 @@ class AccountingIntegrationService:
                     )
 
                     created_entries.append(journal_entry)
-                    logger.info(f"تم إنشاء قيد محاسبي لـ {category_name}: {journal_entry.number}")
 
                 # ربط أول قيد بالفاتورة (للمرجعية)
                 if created_entries:
                     sale.journal_entry = created_entries[0]
                     sale.save(update_fields=["journal_entry"])
 
-                logger.info(f"تم إنشاء {len(created_entries)} قيد محاسبي للمبيعات - فاتورة {sale.number}")
                 return created_entries[0] if created_entries else None
 
         except Exception as e:
             logger.error(f"خطأ في إنشاء قيود المبيعات: {str(e)}")
+            return None
+
+        except Exception as e:
+            logger.error(f"خطأ في إنشاء قيد المبيعات: {str(e)}")
             return None
 
     @classmethod
@@ -170,7 +172,7 @@ class AccountingIntegrationService:
                     for item in purchase_items[:3]:
                         items_list.append(f"{item.product.name}")
                     
-                    items_text = ", ".join(items_list)
+                    items_text = "، ".join(items_list)
                     if purchase_items.count() > 3:
                         items_text += f" وعناصر أخرى ({purchase_items.count() - 3})"
                     
@@ -182,7 +184,12 @@ class AccountingIntegrationService:
                 lines = []
                 
                 # قيد المخزون أو المصروفات (مدين)
-                if purchase.is_service and purchase.financial_category:
+                if purchase.is_service:
+                    # للخدمات: استخدام حساب المصروفات من التصنيف المالي
+                    if not purchase.financial_category:
+                        logger.error(f"فاتورة الخدمات {purchase.number} ليس لها تصنيف مالي")
+                        return None
+                    
                     expense_account = purchase.financial_category.default_expense_account
                     if not expense_account:
                         logger.error(
@@ -200,15 +207,28 @@ class AccountingIntegrationService:
                         )
                     )
                 else:
-                    # للمنتجات: استخدام حساب المخزون
-                    lines.append(
-                        JournalEntryLineData(
-                            account_code=accounts["inventory"].code,
-                            debit=purchase.total,
-                            credit=Decimal("0.00"),
-                            description=f"مشتريات مخزون - فاتورة {purchase.number}"
+                    # للمنتجات: استخدام حساب المصروفات من التصنيف المالي (إذا كان موجود)
+                    # أو حساب المخزون الافتراضي
+                    if purchase.financial_category and purchase.financial_category.default_expense_account:
+                        # استخدام حساب المصروفات من التصنيف
+                        lines.append(
+                            JournalEntryLineData(
+                                account_code=purchase.financial_category.default_expense_account.code,
+                                debit=purchase.total,
+                                credit=Decimal("0.00"),
+                                description=f"مشتريات - {purchase.financial_category.name} - فاتورة {purchase.number}"
+                            )
                         )
-                    )
+                    else:
+                        # Fallback: استخدام حساب المخزون الافتراضي
+                        lines.append(
+                            JournalEntryLineData(
+                                account_code=accounts["inventory"].code,
+                                debit=purchase.total,
+                                credit=Decimal("0.00"),
+                                description=f"مشتريات مخزون - فاتورة {purchase.number}"
+                            )
+                        )
 
                 # قيد المورد (دائن)
                 supplier_account = cls._get_supplier_account(purchase.supplier)
@@ -227,7 +247,7 @@ class AccountingIntegrationService:
                     for item in purchase_items[:3]:
                         items_list.append(f"{item.product.name}")
                     
-                    items_text = ", ".join(items_list)
+                    items_text = "، ".join(items_list)
                     if purchase_items.count() > 3:
                         items_text += f" وعناصر أخرى ({purchase_items.count() - 3})"
                     
@@ -263,7 +283,6 @@ class AccountingIntegrationService:
                 purchase.journal_entry = journal_entry
                 purchase.save(update_fields=["journal_entry"])
 
-                logger.info(f"تم إنشاء قيد محاسبي للمشتريات: {journal_entry.number}")
                 return journal_entry
 
         except Exception as e:
@@ -318,16 +337,7 @@ class AccountingIntegrationService:
                 client_account = None
                 client_name = sale_return.sale.client_name
                 
-                if sale_return.sale.parent:
-                    client_account = cls._get_parent_account(sale_return.sale.parent)
-                    if not client_account:
-                        logger.warning(f"⚠️ العميل {sale_return.sale.parent.name} ليس له حساب محاسبي - سيتم إنشاء حساب جديد")
-                        client_account = cls._create_parent_account(sale_return.sale.parent, user or sale_return.created_by)
-                        if not client_account:
-                            error_msg = f"❌ فشل إنشاء حساب محاسبي لالعميل {sale_return.sale.parent.name}. يجب إنشاء حساب محاسبي لالعميل أولاً."
-                            logger.error(error_msg)
-                            raise ValueError(error_msg)
-                elif sale_return.sale.customer:
+                if sale_return.sale.customer:
                     client_account = cls._get_customer_account(sale_return.sale.customer)
                     if not client_account:
                         logger.warning(f"⚠️ العميل {sale_return.sale.customer.name} ليس له حساب محاسبي - سيتم إنشاء حساب جديد")
@@ -337,7 +347,7 @@ class AccountingIntegrationService:
                             logger.error(error_msg)
                             raise ValueError(error_msg)
                 else:
-                    error_msg = "❌ الفاتورة لا تحتوي على ولي أمر أو عميل"
+                    error_msg = "❌ الفاتورة لا تحتوي على عميل"
                     logger.error(error_msg)
                     raise ValueError(error_msg)
 
@@ -388,7 +398,6 @@ class AccountingIntegrationService:
                 sale_return.journal_entry = journal_entry
                 sale_return.save(update_fields=["journal_entry"])
 
-                logger.info(f"✅ تم إنشاء قيد محاسبي للمرتجع: {journal_entry.number}")
                 return journal_entry
 
         except Exception as e:
@@ -405,21 +414,12 @@ class AccountingIntegrationService:
         """
         إنشاء قيد محاسبي للمدفوعات
         """
-        print(f"\n>>> AccountingIntegrationService.create_payment_journal_entry called")
-        print(f">>> payment_type: {payment_type}")
-        print(f">>> payment.id: {payment.id}")
-        
         try:
             with transaction.atomic():
-                print(f">>> Getting required accounts...")
                 accounts = cls._get_required_accounts_for_payment()
-                print(f">>> Accounts: {accounts}")
-                
                 if not accounts:
-                    print(f">>> ERROR: No accounts found!")
                     return None
 
-                print(f">>> Checking payment_type...")
                 # تحديد نوع القيد
                 if payment_type == "sale_payment":
                     # دفعة من عميل/ولي أمر
@@ -446,52 +446,123 @@ class AccountingIntegrationService:
                     # دائن حساب العميل المحدد
                     client_account = None
                     
-                    if payment.sale.parent:
-                        # استخدام العميل (النظام الجديد)
-                        client_account = cls._get_parent_account(payment.sale.parent)
-                        
-                        if not client_account:
-                            # إنشاء حساب جديد لالعميل تلقائياً
-                            logger.warning(f"⚠️ العميل {payment.sale.parent.name} ليس له حساب محاسبي - سيتم إنشاء حساب جديد")
-                            client_account = cls._create_parent_account(payment.sale.parent, user or payment.created_by)
-                            
-                            if not client_account:
-                                # فشل إنشاء الحساب - إيقاف العملية
-                                error_msg = f"❌ فشل إنشاء حساب محاسبي لالعميل {payment.sale.parent.name}. يجب إنشاء حساب محاسبي لالعميل أولاً."
-                                logger.error(error_msg)
-                                raise ValueError(error_msg)
-                                
-                    elif payment.sale.customer:
-                        # استخدام العميل (النظام القديم - للتوافق المؤقت)
+                    if payment.sale.customer:
                         client_account = cls._get_customer_account(payment.sale.customer)
                         
                         if not client_account:
-                            # إنشاء حساب جديد للعميل تلقائياً
                             logger.warning(f"⚠️ العميل {payment.sale.customer.name} ليس له حساب محاسبي - سيتم إنشاء حساب جديد")
                             client_account = cls._create_customer_account(payment.sale.customer, user or payment.created_by)
                             
                             if not client_account:
-                                # فشل إنشاء الحساب - إيقاف العملية
                                 error_msg = f"❌ فشل إنشاء حساب محاسبي للعميل {payment.sale.customer.name}. يجب إنشاء حساب محاسبي للعميل أولاً."
                                 logger.error(error_msg)
                                 raise ValueError(error_msg)
                     else:
-                        error_msg = "❌ الفاتورة لا تحتوي على ولي أمر أو عميل"
+                        error_msg = "❌ الفاتورة لا تحتوي على عميل"
                         logger.error(error_msg)
                         raise ValueError(error_msg)
                     
                     account_credit = client_account
 
-                # DEPRECATED: fee_payment type is no longer supported
-                # This was part of the school management system
                 elif payment_type == "fee_payment":
-                    raise ValueError("fee_payment type is deprecated. Use client invoices instead.")
+                    # دفعة رسوم خدمات
+                    reference = f"دفعة رسوم - {payment.reference or ''}"
+                    description = f"استلام دفعة رسوم"
+
+                    payment_method = payment.payment_method
+                    try:
+                        from financial.models import ChartOfAccounts
+                        account_debit = ChartOfAccounts.objects.filter(
+                            code=payment_method,
+                            is_active=True
+                        ).first()
+                        
+                        if not account_debit:
+                            raise ValueError(f"الحساب المحاسبي {payment_method} غير موجود أو غير نشط")
+                            
+                    except Exception as e:
+                        logger.error(f"فشل في الحصول على حساب الدفع {payment_method}: {str(e)}")
+                        raise
+                    
+                    account_credit = None
 
                 elif payment_type == "purchase_payment":
                     # دفعة لمورد
-                    print(f"\n>>> Processing purchase_payment")
-                    print(f">>> Payment ID: {payment.id}")
-                    print(f">>> Payment method: {payment.payment_method}")
+                    # المرجع يبقى بسيط مع رقم الفاتورة
+                    reference = f"دفعة للمورد - فاتورة {payment.purchase.number}"
+                    
+                    # الوصف يكون تفصيلي مع المنتجات/الخدمات
+                    purchase_items = payment.purchase.items.all()
+                    if purchase_items.exists():
+                        # جمع أسماء المنتجات/الخدمات (أول 3 عناصر)
+                        items_list = []
+                        for item in purchase_items[:3]:
+                            items_list.append(f"{item.product.name}")
+                        
+                        items_text = "، ".join(items_list)
+                        if purchase_items.count() > 3:
+                            items_text += f" وعناصر أخرى ({purchase_items.count() - 3})"
+                        
+                        description = f"دفع لـ \"{payment.purchase.supplier.name}\" مقابل {items_text}"
+                    else:
+                        description = f"دفع للمورد {payment.purchase.supplier.name}"
+
+                    # مدين حساب المورد المحدد
+                    supplier_account = cls._get_supplier_account(payment.purchase.supplier)
+                    if not supplier_account:
+                        # إنشاء حساب جديد للمورد تلقائياً
+                        logger.warning(f"⚠️ المورد {payment.purchase.supplier.name} ليس له حساب محاسبي - سيتم إنشاء حساب جديد")
+                        supplier_account = cls._create_supplier_account(payment.purchase.supplier, user or payment.created_by)
+                        
+                        if not supplier_account:
+                            # فشل إنشاء الحساب - إيقاف العملية
+                            error_msg = f"❌ فشل إنشاء حساب محاسبي للمورد {payment.purchase.supplier.name}. يجب إنشاء حساب محاسبي للمورد أولاً."
+                            logger.error(error_msg)
+                            raise ValueError(error_msg)
+                    
+                    account_debit = supplier_account
+                    
+                    # النظام الجديد: payment_method هو account code مباشرة
+                    payment_method = payment.payment_method
+                    try:
+                        from financial.models import ChartOfAccounts
+                        account_credit = ChartOfAccounts.objects.filter(
+                            code=payment_method,
+                            is_active=True
+                        ).first()
+                        
+                        if not account_credit:
+                            raise ValueError(f"الحساب المحاسبي {payment_method} غير موجود أو غير نشط")
+                            
+                    except Exception as e:
+                        logger.error(f"فشل في الحصول على حساب الدفع {payment_method}: {str(e)}")
+                        raise
+
+                else:
+                    logger.error(f"نوع دفعة غير معروف: {payment_type}")
+                    return None
+
+                # تحديد نوع القيد الصحيح
+                entry_type = "automatic"  # افتراضي
+                financial_category = None
+                financial_subcategory = None
+                
+                if payment_type == "sale_payment":
+                    # دفعة من عميل
+                    entry_type = "client_payment"
+                    client_name = payment.sale.client_name
+                    reference = f"دفعة من العميل - فاتورة {payment.sale.number}"
+                    description = f"استلام دفعة من {client_name}"
+
+                elif payment_type == "fee_payment":
+                    # دفعة رسوم خدمات
+                    entry_type = "service_payment"
+                    reference = f"دفعة رسوم - {payment.reference or ''}"
+                    description = f"استلام دفعة رسوم"
+
+                elif payment_type == "purchase_payment":
+                    # دفعة لمورد
+                    entry_type = "supplier_payment"
                     
                     # المرجع يبقى بسيط مع رقم الفاتورة
                     reference = f"دفعة للمورد - فاتورة {payment.purchase.number}"
@@ -512,63 +583,6 @@ class AccountingIntegrationService:
                     else:
                         description = f"دفع للمورد {payment.purchase.supplier.name}"
 
-                    print(f">>> Getting supplier account...")
-                    # مدين حساب المورد المحدد
-                    supplier_account = cls._get_supplier_account(payment.purchase.supplier)
-                    print(f">>> Supplier account: {supplier_account}")
-                    
-                    if not supplier_account:
-                        # إنشاء حساب جديد للمورد تلقائياً
-                        logger.warning(f"⚠️ المورد {payment.purchase.supplier.name} ليس له حساب محاسبي - سيتم إنشاء حساب جديد")
-                        supplier_account = cls._create_supplier_account(payment.purchase.supplier, user or payment.created_by)
-                        
-                        if not supplier_account:
-                            # فشل إنشاء الحساب - إيقاف العملية
-                            error_msg = f"❌ فشل إنشاء حساب محاسبي للمورد {payment.purchase.supplier.name}. يجب إنشاء حساب محاسبي للمورد أولاً."
-                            logger.error(error_msg)
-                            raise ValueError(error_msg)
-                    
-                    account_debit = supplier_account
-                    
-                    print(f">>> Getting payment account...")
-                    # النظام الجديد: payment_method هو account code مباشرة
-                    payment_method = payment.payment_method
-                    try:
-                        from financial.models import ChartOfAccounts
-                        account_credit = ChartOfAccounts.objects.filter(
-                            code=payment_method,
-                            is_active=True
-                        ).first()
-                        
-                        print(f">>> Payment account: {account_credit}")
-                        
-                        if not account_credit:
-                            raise ValueError(f"الحساب المحاسبي {payment_method} غير موجود أو غير نشط")
-                            
-                    except Exception as e:
-                        print(f">>> ERROR getting payment account: {e}")
-                        logger.error(f"فشل في الحصول على حساب الدفع {payment_method}: {str(e)}")
-                        raise
-
-                else:
-                    print(f">>> ERROR: Unknown payment_type: {payment_type}")
-                    logger.error(f"نوع دفعة غير معروف: {payment_type}")
-                    return None
-
-                print(f">>> Determining entry_type...")
-                # تحديد نوع القيد الصحيح
-                entry_type = "automatic"  # افتراضي
-                
-                if payment_type == "sale_payment":
-                    entry_type = "parent_payment"
-                elif payment_type == "fee_payment":
-                    entry_type = "parent_payment"
-                elif payment_type == "purchase_payment":
-                    entry_type = "supplier_payment"
-                
-                print(f">>> Entry type: {entry_type}")
-                print(f">>> Preparing journal entry lines...")
-                
                 # Prepare journal entry lines
                 lines = [
                     JournalEntryLineData(
@@ -585,250 +599,370 @@ class AccountingIntegrationService:
                     )
                 ]
                 
-                print(f">>> Lines prepared: {len(lines)} lines")
-                print(f">>> Creating journal entry via AccountingGateway...")
+                # Determine correct source module and model based on payment type
+                if payment_type == "purchase_payment":
+                    source_module = 'purchase'
+                    source_model = 'PurchasePayment'
+                elif payment_type == "customer_payment":
+                    source_module = 'client'
+                    source_model = 'CustomerPayment'
+                elif payment_type == "sale_payment":
+                    source_module = 'sale'
+                    source_model = 'SalePayment'
+                else:
+                    # Fallback to generic payments
+                    source_module = 'payments'
+                    source_model = 'Payment'
                 
                 # Create journal entry via AccountingGateway
                 gateway = AccountingGateway()
                 journal_entry = gateway.create_journal_entry(
-                    source_module='sales' if payment_type in ['sale_payment', 'fee_payment'] else 'purchase',
-                    source_model='PurchasePayment' if payment_type == 'purchase_payment' else 'Payment',
+                    source_module=source_module,
+                    source_model=source_model,
                     source_id=payment.id,
                     lines=lines,
-                    idempotency_key=f"JE:payment:{payment_type}:{payment.id}:create",
+                    idempotency_key=f"JE:{source_module}:{source_model}:{payment.id}:create",
                     user=user or payment.created_by,
                     entry_type=entry_type,
                     description=description,
                     reference=reference,
-                    date=payment.payment_date
+                    date=timezone.now().date(),
+                    financial_category=financial_category,
+                    financial_subcategory=financial_subcategory
                 )
-                
-                print(f">>> Journal entry created: {journal_entry.number} - {journal_entry.date} - {journal_entry.description}")
-                print(f">>> Linking journal entry to payment...")
 
-                # ربط القيد بالدفعة
-                # ملاحظة: PurchasePayment بيستخدم financial_transaction مش journal_entry
-                try:
-                    if hasattr(payment, 'financial_transaction'):
-                        print(f">>> Using financial_transaction field")
-                        payment.financial_transaction = journal_entry
-                        payment.save(update_fields=["financial_transaction"])
-                        print(f">>> Saved with financial_transaction")
-                    elif hasattr(payment, 'journal_entry'):
-                        print(f">>> Using journal_entry field")
-                        payment.journal_entry = journal_entry
-                        payment.save(update_fields=["journal_entry"])
-                        print(f">>> Saved with journal_entry")
-                    else:
-                        print(f">>> WARNING: Payment has neither financial_transaction nor journal_entry field")
-                except Exception as save_error:
-                    print(f">>> ERROR saving payment: {save_error}")
-                    logger.error(f"فشل في ربط القيد بالدفعة: {str(save_error)}")
-                    # لا نرمي exception هنا - القيد تم إنشاؤه بنجاح
-                
-                print(f">>> SUCCESS! Journal entry number: {journal_entry.number}")
-
-                logger.info(f"✅ تم إنشاء قيد محاسبي للدفعة: {journal_entry.number}")
                 return journal_entry
 
         except Exception as e:
-            print(f">>> EXCEPTION in create_payment_journal_entry: {e}")
-            import traceback
-            traceback.print_exc()
-            logger.error(f"❌ خطأ في إنشاء قيد الدفعة: {str(e)}")
-            logger.error(traceback.format_exc())
+            logger.error(f"خطأ في إنشاء قيد الدفعة: {str(e)}")
             return None
 
-    # ==================== Helper Methods ====================
-
     @classmethod
-    def _get_required_accounts_for_sale(cls) -> Optional[Dict[str, ChartOfAccounts]]:
-        """الحصول على الحسابات المطلوبة لقيود المبيعات"""
+    def _get_required_accounts_for_sale(cls) -> Dict[str, ChartOfAccounts]:
+        """الحصول على الحسابات المطلوبة للمبيعات"""
         try:
             accounts = {}
-            for key, code in cls.DEFAULT_ACCOUNTS.items():
-                if key in ["sales_revenue", "cost_of_goods_sold", "inventory", "accounts_receivable"]:
-                    account = ChartOfAccounts.objects.filter(code=code, is_active=True).first()
-                    if not account:
-                        logger.error(f"الحساب {key} ({code}) غير موجود أو غير نشط")
-                        return None
-                    accounts[key] = account
-            return accounts
+            required_codes = [
+                "sales_revenue",
+                "cost_of_goods_sold",
+                "inventory",
+                "accounts_receivable",
+                "cash",
+                "bank",
+            ]
+
+            for account_key in required_codes:
+                code = cls.DEFAULT_ACCOUNTS[account_key]
+                account = ChartOfAccounts.objects.filter(
+                    code=code, is_active=True
+                ).first()
+                if account:
+                    accounts[account_key] = account
+                else:
+                    logger.warning(f"لا يمكن العثور على الحساب: {code}")
+
+            return accounts if len(accounts) >= 4 else None  # على الأقل 4 حسابات أساسية
         except Exception as e:
             logger.error(f"خطأ في الحصول على حسابات المبيعات: {str(e)}")
             return None
 
     @classmethod
-    def _get_required_accounts_for_purchase(cls) -> Optional[Dict[str, ChartOfAccounts]]:
-        """الحصول على الحسابات المطلوبة لقيود المشتريات"""
+    def _get_required_accounts_for_purchase(cls) -> Dict[str, ChartOfAccounts]:
+        """الحصول على الحسابات المطلوبة للمشتريات"""
         try:
             accounts = {}
-            for key, code in cls.DEFAULT_ACCOUNTS.items():
-                if key in ["inventory", "accounts_payable", "purchase_expense"]:
-                    account = ChartOfAccounts.objects.filter(code=code, is_active=True).first()
-                    if not account:
-                        logger.error(f"الحساب {key} ({code}) غير موجود أو غير نشط")
-                        return None
-                    accounts[key] = account
-            return accounts
+            required_codes = [
+                "inventory",
+                "accounts_payable",
+                "cash",
+                "bank",
+                "purchase_expense",
+            ]
+
+            for account_key in required_codes:
+                code = cls.DEFAULT_ACCOUNTS[account_key]
+                account = ChartOfAccounts.objects.filter(
+                    code=code, is_active=True
+                ).first()
+                if account:
+                    accounts[account_key] = account
+                else:
+                    logger.warning(f"لا يمكن العثور على الحساب: {code}")
+
+            return accounts if len(accounts) >= 4 else None
         except Exception as e:
             logger.error(f"خطأ في الحصول على حسابات المشتريات: {str(e)}")
             return None
 
     @classmethod
-    def _get_required_accounts_for_payment(cls) -> Optional[Dict[str, ChartOfAccounts]]:
-        """الحصول على الحسابات المطلوبة لقيود الدفعات"""
+    def _get_required_accounts_for_payment(cls) -> Dict[str, ChartOfAccounts]:
+        """الحصول على الحسابات المطلوبة للمدفوعات"""
         try:
             accounts = {}
-            # نجيب الحسابات الأساسية بس (الخزينة والبنك)
-            # الحسابات التانية (العملاء/الموردين) بنجيبها ديناميكياً حسب الحاجة
-            for key, code in cls.DEFAULT_ACCOUNTS.items():
-                if key in ["cash", "bank"]:
-                    account = ChartOfAccounts.objects.filter(code=code, is_active=True).first()
-                    if not account:
-                        logger.error(f"الحساب {key} ({code}) غير موجود أو غير نشط")
-                        return None
-                    accounts[key] = account
-            return accounts
+            required_codes = ["accounts_receivable", "accounts_payable", "cash", "bank"]
+
+            for account_key in required_codes:
+                code = cls.DEFAULT_ACCOUNTS[account_key]
+                account = ChartOfAccounts.objects.filter(
+                    code=code, is_active=True
+                ).first()
+                if account:
+                    accounts[account_key] = account
+                else:
+                    logger.warning(f"لا يمكن العثور على الحساب: {code}")
+
+            return accounts if len(accounts) >= 3 else None
         except Exception as e:
-            logger.error(f"خطأ في الحصول على حسابات الدفعات: {str(e)}")
+            logger.error(f"خطأ في الحصول على حسابات المدفوعات: {str(e)}")
             return None
-
-    @classmethod
-    def _group_sale_items_by_category(cls, sale) -> Dict[str, List]:
-        """تجميع بنود الفاتورة حسب التصنيف"""
-        items_by_category = {}
-        for item in sale.items.all():
-            category_name = item.product.category.name if item.product.category else "غير مصنف"
-            if category_name not in items_by_category:
-                items_by_category[category_name] = []
-            items_by_category[category_name].append(item)
-        return items_by_category
-
-    @classmethod
-    def _get_item_cost(cls, item) -> Decimal:
-        """الحصول على تكلفة البند"""
-        if hasattr(item.product, "cost_price") and item.product.cost_price:
-            return item.product.cost_price * item.quantity
-        return Decimal("0.00")
-
-    @classmethod
-    def _get_category_revenue_account(cls, category_name: str) -> Optional[ChartOfAccounts]:
-        """الحصول على حساب الإيرادات الخاص بالتصنيف"""
-        try:
-            # يمكن تخصيص هذه الدالة لربط كل تصنيف بحساب إيرادات محدد
-            # حالياً نستخدم حساب الإيرادات الافتراضي
-            return None
-        except Exception as e:
-            logger.error(f"خطأ في الحصول على حساب إيرادات التصنيف: {str(e)}")
-            return None
-
-    @classmethod
-    def _get_client_info(cls, sale, user: Optional[User] = None) -> Tuple[Optional[ChartOfAccounts], str]:
-        """الحصول على معلومات العميل"""
-        try:
-            client_account = None
-            client_name = sale.client_name
-            
-            if sale.parent:
-                client_account = cls._get_parent_account(sale.parent)
-                if not client_account:
-                    logger.warning(f"⚠️ العميل {sale.parent.name} ليس له حساب محاسبي - سيتم إنشاء حساب جديد")
-                    client_account = cls._create_parent_account(sale.parent, user or sale.created_by)
-                    if not client_account:
-                        error_msg = f"❌ فشل إنشاء حساب محاسبي لالعميل {sale.parent.name}"
-                        logger.error(error_msg)
-                        return None, client_name
-            elif sale.customer:
-                client_account = cls._get_customer_account(sale.customer)
-                if not client_account:
-                    logger.warning(f"⚠️ العميل {sale.customer.name} ليس له حساب محاسبي - سيتم إنشاء حساب جديد")
-                    client_account = cls._create_customer_account(sale.customer, user or sale.created_by)
-                    if not client_account:
-                        error_msg = f"❌ فشل إنشاء حساب محاسبي للعميل {sale.customer.name}"
-                        logger.error(error_msg)
-                        return None, client_name
-            else:
-                error_msg = "❌ الفاتورة لا تحتوي على ولي أمر أو عميل"
-                logger.error(error_msg)
-                return None, client_name
-            
-            return client_account, client_name
-            
-        except Exception as e:
-            logger.error(f"خطأ في الحصول على معلومات العميل: {str(e)}")
-            return None, ""
 
     @classmethod
     def _calculate_sale_cost(cls, sale) -> Decimal:
-        """حساب تكلفة فاتورة المبيعات"""
-        total_cost = Decimal("0.00")
-        for item in sale.items.all():
-            total_cost += cls._get_item_cost(item)
-        return total_cost
+        """حساب تكلفة البضاعة المباعة"""
+        try:
+            total_cost = Decimal("0.00")
+            items_without_cost = []
+            
+            for item in sale.items.all():
+                # التحقق من وجود حقل cost_price
+                if not hasattr(item.product, "cost_price"):
+                    logger.warning(f"المنتج {item.product.name} لا يحتوي على حقل cost_price")
+                    items_without_cost.append(item.product.name)
+                    continue
+                
+                # التحقق من أن التكلفة ليست None
+                if item.product.cost_price is None:
+                    logger.warning(f"المنتج {item.product.name} ليس له تكلفة محددة (None)")
+                    items_without_cost.append(item.product.name)
+                    continue
+                
+                # حساب تكلفة البند (حتى لو كانت صفر)
+                item_cost = item.product.cost_price * item.quantity
+                total_cost += item_cost
+                
+                logger.debug(
+                    f"  البند: {item.product.name}, الكمية: {item.quantity}, "
+                    f"التكلفة: {item.product.cost_price}, الإجمالي: {item_cost}"
+                )
+
+            # تسجيل تحذير إذا كانت هناك منتجات بدون تكلفة
+            if items_without_cost:
+                logger.warning(
+                    f"⚠️ الفاتورة {sale.number} تحتوي على منتجات بدون تكلفة محددة: "
+                    f"{', '.join(items_without_cost)}"
+                )
+            
+            # تسجيل إجمالي التكلفة
+
+            return total_cost
+        except Exception as e:
+            logger.error(f"خطأ في حساب تكلفة البضاعة: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return Decimal("0.00")
 
     @classmethod
-    def _get_accounting_period(cls, date: date) -> Optional[AccountingPeriod]:
-        """الحصول على الفترة المحاسبية للتاريخ المحدد"""
+    def _generate_journal_number(cls, prefix: str, reference: Any) -> str:
+        """توليد رقم القيد مع دعم التسميات العربية الموحدة"""
+        # قاموس البادئات الإنجليزية (أرقام القيود يجب أن تكون بالإنجليزية فقط)
+        prefix_mapping = {
+            # البادئات العربية القديمة → البادئات الإنجليزية الجديدة
+            "رسوم": "FEE",               # Fee (البادئة العامة للرسوم)
+            "رسوم-طالب": "TF",           # Tuition Fee (legacy - kept for DB compatibility)
+            "دفع-رسوم": "PP",             # Parent Payment
+            "استرداد-رسوم": "RF",         # Refund
+            "عكس-رسوم": "RV",             # Reversal
+            "تعديل-رسوم": "ADJ",          # Adjustment
+            "رسوم-تقديم": "APP",          # Application Fee
+            "تسليم-منتجات": "PD",         # Product Delivery
+            "رسوم-مكملة": "CF",           # Complementary Fee
+            "رسوم-تسليم": "DF",           # Delivery Fee
+            # البادئات الإنجليزية (تبقى كما هي)
+            "SALE": "SALE",
+            "PURCHASE": "PURCH", 
+            "RETURN": "RET",
+            "PAYMENT": "PAY",
+            "ADJ-SALE": "ADJ-SALE",
+            "ADJ-PURCHASE": "ADJ-PURCH",
+            "REV": "REV",
+            "JE": "JE"
+        }
+        
+        # استخدام البادئة المترجمة إذا كانت متوفرة
+        normalized_prefix = prefix_mapping.get(prefix, prefix)
+        
+        # البحث عن أعلى رقم للبادئة المحددة
+        existing_entries = JournalEntry.objects.filter(
+            number__startswith=f"{normalized_prefix}-"
+        ).order_by('-id')
+        
+        max_number = 0
+        for entry in existing_entries:
+            try:
+                # استخراج الرقم من نهاية اسم القيد
+                parts = entry.number.split("-")
+                if len(parts) >= 2:
+                    # أخذ آخر جزء كرقم
+                    number_part = parts[-1]
+                    # التحقق من أن الجزء الأخير رقم
+                    if number_part.isdigit():
+                        current_number = int(number_part)
+                        if current_number > max_number:
+                            max_number = current_number
+            except (ValueError, IndexError):
+                continue
+        
+        new_number = max_number + 1
+        return f"{normalized_prefix}-{new_number:04d}"
+
+    @classmethod
+    def _get_accounting_period(cls, date) -> Optional[AccountingPeriod]:
+        """الحصول على الفترة المحاسبية للتاريخ"""
         try:
-            return AccountingPeriod.objects.filter(
-                start_date__lte=date,
-                end_date__gte=date,
-                is_active=True
-            ).first()
-        except Exception as e:
-            logger.error(f"خطأ في الحصول على الفترة المحاسبية: {str(e)}")
+            return AccountingPeriod.get_period_for_date(date)
+        except Exception:
             return None
 
     @classmethod
-    def _generate_journal_number(cls, prefix: str, original_number: str) -> str:
-        """توليد رقم قيد جديد"""
+    def setup_default_accounts(cls) -> bool:
+        """إعداد الحسابات الأساسية المطلوبة"""
         try:
-            timestamp = timezone.now().strftime("%Y%m%d%H%M%S")
-            return f"{prefix}-{original_number}-{timestamp}"
-        except Exception as e:
-            logger.error(f"خطأ في توليد رقم القيد: {str(e)}")
-            return f"{prefix}-{original_number}"
+            with transaction.atomic():
+                # إنشاء أنواع الحسابات إذا لم تكن موجودة
+                account_types = cls._create_default_account_types()
 
-    # ==================== Account Methods ====================
+                # إنشاء الحسابات الأساسية
+                accounts_created = 0
+                for account_key, code in cls.DEFAULT_ACCOUNTS.items():
+                    if not ChartOfAccounts.objects.filter(code=code).exists():
+                        account_data = cls._get_account_data(account_key, code)
+                        if account_data:
+                            account_type = account_types.get(account_data["type"])
+                            if account_type:
+                                ChartOfAccounts.objects.create(
+                                    code=code,
+                                    name=account_data["name"],
+                                    name_en=account_data.get("name_en"),
+                                    account_type=account_type,
+                                    is_leaf=True,
+                                    is_active=True,
+                                    is_cash_account=account_data.get("is_cash", False),
+                                    is_bank_account=account_data.get("is_bank", False),
+                                    description=account_data.get("description", ""),
+                                )
+                                accounts_created += 1
+
+                return True
+
+        except Exception as e:
+            logger.error(f"خطأ في إعداد الحسابات الأساسية: {str(e)}")
+            return False
 
     @classmethod
-    def _get_parent_account(cls, parent) -> Optional[ChartOfAccounts]:
-        """الحصول على حساب العميل المحدد"""
-        try:
-            # أولاً: محاولة استخدام الحساب المالي المحدد لالعميل
-            if parent.financial_account and parent.financial_account.is_active:
-                logger.info(f"✅ استخدام حساب العميل المحدد: {parent.financial_account.code} - {parent.financial_account.name}")
-                return parent.financial_account
-            
-            # ثانياً: البحث عن حساب فرعي لالعميل في شجرة الحسابات
-            parent_sub_accounts = ChartOfAccounts.objects.filter(
-                name__icontains=parent.name,
-                is_active=True,
-                is_leaf=True,  # حساب نهائي
-                parent__code__startswith="103"  # تحت مجموعة العملاء
+    def _create_default_account_types(cls) -> Dict[str, AccountType]:
+        """إنشاء أنواع الحسابات الأساسية"""
+        account_types = {}
+
+        types_data = [
+            {"code": "ASSET", "name": "أصول", "category": "asset", "nature": "debit"},
+            {
+                "code": "LIABILITY",
+                "name": "خصوم",
+                "category": "liability",
+                "nature": "credit",
+            },
+            {
+                "code": "REVENUE",
+                "name": "إيرادات",
+                "category": "revenue",
+                "nature": "credit",
+            },
+            {
+                "code": "EXPENSE",
+                "name": "مصروفات",
+                "category": "expense",
+                "nature": "debit",
+            },
+        ]
+
+        for type_data in types_data:
+            account_type, created = AccountType.objects.get_or_create(
+                code=type_data["code"],
+                defaults={
+                    "name": type_data["name"],
+                    "category": type_data["category"],
+                    "nature": type_data["nature"],
+                    "is_active": True,
+                },
             )
-            
-            if parent_sub_accounts.exists():
-                account = parent_sub_accounts.first()
-                logger.info(f"✅ وُجد حساب فرعي لالعميل: {account.code} - {account.name}")
-                return account
-            
-            # ثالثاً: إرجاع None للإنشاء التلقائي
-            logger.warning(f"⚠️ لم يتم العثور على حساب محدد لالعميل {parent.name}")
-            return None
-            
-        except Exception as e:
-            logger.error(f"❌ خطأ في الحصول على حساب العميل: {e}")
-            return None
+            account_types[type_data["category"]] = account_type
+
+        return account_types
+
+    @classmethod
+    def _get_account_data(cls, account_key: str, code: str) -> Optional[Dict]:
+        """الحصول على بيانات الحساب"""
+        accounts_data = {
+            "sales_revenue": {
+                "name": "إيرادات المبيعات",
+                "name_en": "Sales Revenue",
+                "type": "revenue",
+                "description": "إيرادات من بيع البضائع والخدمات",
+            },
+            "cost_of_goods_sold": {
+                "name": "تكلفة البضاعة المباعة",
+                "name_en": "Cost of Goods Sold",
+                "type": "expense",
+                "description": "تكلفة البضائع التي تم بيعها",
+            },
+            "inventory": {
+                "name": "المخزون",
+                "name_en": "Inventory",
+                "type": "asset",
+                "description": "قيمة البضائع المخزنة",
+            },
+            "accounts_receivable": {
+                "name": "العملاء",
+                "name_en": "Accounts Receivable",
+                "type": "asset",
+                "description": "المبالغ المستحقة من العملاء",
+            },
+            "accounts_payable": {
+                "name": "الموردين",
+                "name_en": "Accounts Payable",
+                "type": "liability",
+                "description": "المبالغ المستحقة للموردين",
+            },
+            "cash": {
+                "name": "الصندوق",
+                "name_en": "Cash",
+                "type": "asset",
+                "is_cash": True,
+                "description": "النقدية في الصندوق",
+            },
+            "bank": {
+                "name": "البنك",
+                "name_en": "Bank",
+                "type": "asset",
+                "is_bank": True,
+                "description": "الأرصدة البنكية",
+            },
+            "purchase_expense": {
+                "name": "مصروفات المشتريات",
+                "name_en": "Purchase Expenses",
+                "type": "expense",
+                "description": "مصروفات متعلقة بالمشتريات",
+            },
+        }
+
+        return accounts_data.get(account_key)
 
     @classmethod
     def _get_supplier_account(cls, supplier) -> Optional[ChartOfAccounts]:
-        """الحصول على حساب المورد المحدد"""
+        """الحصول على حساب المورد المحدد أو إنشاؤه"""
         try:
             # أولاً: محاولة استخدام الحساب المالي المحدد للمورد
             if supplier.financial_account and supplier.financial_account.is_active:
-                logger.info(f"✅ استخدام حساب المورد المحدد: {supplier.financial_account.code} - {supplier.financial_account.name}")
                 return supplier.financial_account
             
             # ثانياً: البحث عن حساب فرعي للمورد في شجرة الحسابات
@@ -841,10 +975,59 @@ class AccountingIntegrationService:
             
             if supplier_sub_accounts.exists():
                 account = supplier_sub_accounts.first()
-                logger.info(f"✅ وُجد حساب فرعي للمورد: {account.code} - {account.name}")
                 return account
             
-            # ثالثاً: إرجاع None للإنشاء التلقائي
+            # ثالثاً: محاولة إنشاء حساب جديد للمورد
+            try:
+                # البحث عن الحساب الأب للموردين
+                parent_account = ChartOfAccounts.objects.get(code="2010", is_active=True)
+                
+                # إنشاء رقم حساب جديد للمورد
+                last_supplier_account = ChartOfAccounts.objects.filter(
+                    code__startswith="20101"
+                ).order_by("-code").first()
+                
+                if last_supplier_account:
+                    try:
+                        last_number = int(last_supplier_account.code[5:])  # آخر 3 أرقام
+                        new_number = last_number + 1
+                    except (ValueError, IndexError):
+                        new_number = 1
+                else:
+                    new_number = 1
+                
+                new_code = f"20101{new_number:03d}"  # مثال: 20101001
+                
+                # إنشاء الحساب الجديد
+                liability_type, _ = AccountType.objects.get_or_create(
+                    category="liability",
+                    defaults={
+                        'code': 'LIABILITY',
+                        'name': 'خصوم',
+                        'nature': 'credit',
+                        'is_active': True
+                    }
+                )
+                new_account = ChartOfAccounts.objects.create(
+                    code=new_code,
+                    name=f"المورد - {supplier.name}",
+                    parent=parent_account,
+                    account_type=liability_type,
+                    is_active=True,
+                    is_leaf=True,
+                    created_by_id=1  # استخدام المستخدم الافتراضي
+                )
+                
+                # ربط الحساب الجديد بالمورد
+                supplier.financial_account = new_account
+                supplier.save(update_fields=['financial_account'])
+                
+                return new_account
+                
+            except Exception as e:
+                logger.warning(f"⚠️ فشل في إنشاء حساب جديد للمورد: {e}")
+            
+            # رابعاً: إرجاع None للاستخدام الحساب العام
             logger.warning(f"⚠️ لم يتم العثور على حساب محدد للمورد {supplier.name}")
             return None
             
@@ -854,11 +1037,10 @@ class AccountingIntegrationService:
 
     @classmethod
     def _get_customer_account(cls, customer) -> Optional[ChartOfAccounts]:
-        """الحصول على حساب العميل المحدد"""
+        """الحصول على حساب العميل المحدد أو إنشاؤه"""
         try:
             # أولاً: محاولة استخدام الحساب المالي المحدد للعميل
             if customer.financial_account and customer.financial_account.is_active:
-                logger.info(f"✅ استخدام حساب العميل المحدد: {customer.financial_account.code} - {customer.financial_account.name}")
                 return customer.financial_account
             
             # ثانياً: البحث عن حساب فرعي للعميل في شجرة الحسابات
@@ -866,15 +1048,64 @@ class AccountingIntegrationService:
                 name__icontains=customer.name,
                 is_active=True,
                 is_leaf=True,  # حساب نهائي
-                parent__code__startswith="103"  # تحت مجموعة العملاء
+                parent__code__startswith="110"  # تحت مجموعة العملاء
             )
             
             if customer_sub_accounts.exists():
                 account = customer_sub_accounts.first()
-                logger.info(f"✅ وُجد حساب فرعي للعميل: {account.code} - {account.name}")
                 return account
             
-            # ثالثاً: إرجاع None للإنشاء التلقائي
+            # ثالثاً: محاولة إنشاء حساب جديد للعميل
+            try:
+                # البحث عن الحساب الأب للعملاء
+                parent_account = ChartOfAccounts.objects.get(code="1103", is_active=True)
+                
+                # إنشاء رقم حساب جديد للعميل
+                last_customer_account = ChartOfAccounts.objects.filter(
+                    code__startswith="10300"
+                ).order_by("-code").first()
+                
+                if last_customer_account:
+                    try:
+                        last_number = int(last_customer_account.code[5:])  # آخر 3 أرقام
+                        new_number = last_number + 1
+                    except (ValueError, IndexError):
+                        new_number = 1
+                else:
+                    new_number = 1
+                
+                new_code = f"10300{new_number:03d}"  # مثال: 10300001
+                
+                # إنشاء الحساب الجديد
+                asset_type, _ = AccountType.objects.get_or_create(
+                    category="asset",
+                    defaults={
+                        'code': 'ASSET',
+                        'name': 'أصول',
+                        'nature': 'debit',
+                        'is_active': True
+                    }
+                )
+                new_account = ChartOfAccounts.objects.create(
+                    code=new_code,
+                    name=f"العميل - {customer.name}",
+                    parent=parent_account,
+                    account_type=asset_type,
+                    is_active=True,
+                    is_leaf=True,
+                    created_by_id=1  # استخدام المستخدم الافتراضي
+                )
+                
+                # ربط الحساب الجديد بالعميل
+                customer.financial_account = new_account
+                customer.save(update_fields=['financial_account'])
+                
+                return new_account
+                
+            except Exception as e:
+                logger.warning(f"⚠️ فشل في إنشاء حساب جديد للعميل: {e}")
+            
+            # رابعاً: إرجاع None للاستخدام الحساب العام
             logger.warning(f"⚠️ لم يتم العثور على حساب محدد للعميل {customer.name}")
             return None
             
@@ -883,98 +1114,10 @@ class AccountingIntegrationService:
             return None
 
     @classmethod
-    def _create_parent_account(cls, parent, user: Optional[User] = None) -> Optional[ChartOfAccounts]:
-        """
-        إنشاء حساب محاسبي جديد لالعميل تلقائياً
-        """
-        try:
-            # التحقق من أن العميل لا يملك حساب بالفعل
-            if parent.financial_account:
-                logger.warning(f"⚠️ العميل {parent.name} مربوط بالفعل بحساب محاسبي {parent.financial_account.code}")
-                return parent.financial_account
-            
-            # البحث عن حساب العملاء الرئيسي (10300) أو إنشاؤه
-            parents_account = ChartOfAccounts.objects.filter(code="10300").first()
-            
-            if not parents_account:
-                # محاولة إنشاء الحساب الأساسي
-                try:
-                    asset_type, _ = AccountType.objects.get_or_create(
-                        category="asset",
-                        defaults={
-                            'code': 'ASSET',
-                            'name': 'أصول',
-                            'nature': 'debit',
-                            'is_active': True
-                        }
-                    )
-                    parents_account = ChartOfAccounts.objects.create(
-                        code="10300",
-                        name="أولياء الأمور",
-                        account_type=asset_type,  # أصول (مدينون)
-                        is_active=True,
-                        is_leaf=False,  # حساب أساسي يحتوي على حسابات فرعية
-                        description="الحساب الأساسي لجميع أولياء الأمور",
-                        created_by=user
-                    )
-                    logger.info("✅ تم إنشاء الحساب الأساسي لأولياء الأمور (10300)")
-                except Exception as e:
-                    logger.error(f"❌ فشل في إنشاء الحساب الأساسي لأولياء الأمور: {e}")
-                    return None
-            
-            # إنشاء كود فريد للحساب الجديد
-            # البحث عن آخر حساب فرعي تحت حساب العملاء
-            # النمط المتوقع: 10300001, 10300002, 10300003...
-            last_parent_account = ChartOfAccounts.objects.filter(
-                parent=parents_account,
-                code__regex=r'^10300\d{3}$'  # يبدأ بـ 10300 ويتبعه 3 أرقام بالضبط
-            ).order_by('-code').first()
-            
-            if last_parent_account:
-                # استخراج الرقم التسلسلي من آخر 3 أرقام
-                try:
-                    last_number = int(last_parent_account.code[-3:])
-                    new_number = last_number + 1
-                except (ValueError, IndexError):
-                    new_number = 1
-            else:
-                new_number = 1
-            
-            # تكوين الكود الجديد: 10300 + رقم تسلسلي من 3 أرقام
-            new_code = f"10300{new_number:03d}"
-            
-            # إنشاء اسم مناسب للحساب
-            account_name = f"ولي أمر - {parent.name}"
-            
-            # إنشاء الحساب الجديد
-            new_account = ChartOfAccounts.objects.create(
-                code=new_code,
-                name=account_name,
-                parent=parents_account,
-                account_type=parents_account.account_type,
-                is_active=True,
-                is_leaf=True,
-                description=f"حساب محاسبي لالعميل: {parent.name} (الرقم القومي: {parent.national_id})",
-                created_by=user
-            )
-            
-            # ربط العميل بالحساب الجديد
-            parent.financial_account = new_account
-            parent.save(update_fields=['financial_account'])
-            
-            logger.info(f"✅ تم إنشاء حساب جديد لالعميل: {new_account.code} - {new_account.name}")
-            return new_account
-            
-        except Exception as e:
-            logger.error(f"❌ فشل في إنشاء حساب جديد لالعميل {parent.name}: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-            return None
-
-    @classmethod
     def _create_customer_account(cls, customer, user: Optional[User] = None) -> Optional[ChartOfAccounts]:
         """
         إنشاء حساب محاسبي جديد للعميل تلقائياً
+        يستخدم نفس المنطق الموجود في client/views.py:customer_create_account
         """
         try:
             # التحقق من أن العميل لا يملك حساب بالفعل
@@ -991,21 +1134,19 @@ class AccountingIntegrationService:
             
             # إنشاء كود فريد للحساب الجديد
             # البحث عن آخر حساب فرعي تحت حساب العملاء
-            # النمط المتوقع: 10300001, 10300002, 10300003...
+            # النمط المتوقع: 1030001, 1030002, 1030003...
             last_customer_account = ChartOfAccounts.objects.filter(
                 parent=customers_account,
-                code__regex=r'^10300\d{3}$'  # يبدأ بـ 10300 ويتبعه 3 أرقام
-            ).order_by('-code').first()
+                code__startswith='1030'
+            ).exclude(code='10300').order_by('-code').first()
             
             if last_customer_account:
-                # استخراج الرقم التسلسلي من آخر 3 أرقام
-                last_number = int(last_customer_account.code[-3:])
+                last_number = int(last_customer_account.code[-4:])
                 new_number = last_number + 1
             else:
                 new_number = 1
             
-            # تكوين الكود الجديد: 10300 + رقم تسلسلي من 3 أرقام
-            new_code = f"10300{new_number:03d}"
+            new_code = f"1030{new_number:04d}"
             
             # إنشاء اسم مناسب للحساب
             account_name = f"عميل - {customer.name}"
@@ -1026,7 +1167,6 @@ class AccountingIntegrationService:
             customer.financial_account = new_account
             customer.save(update_fields=['financial_account'])
             
-            logger.info(f"✅ تم إنشاء حساب جديد للعميل: {new_account.code} - {new_account.name}")
             return new_account
             
         except Exception as e:
@@ -1039,6 +1179,7 @@ class AccountingIntegrationService:
     def _create_supplier_account(cls, supplier, user: Optional[User] = None) -> Optional[ChartOfAccounts]:
         """
         إنشاء حساب محاسبي جديد للمورد تلقائياً
+        يستخدم نفس المنطق الموجود في supplier/views.py:supplier_create_account
         """
         try:
             # التحقق من أن المورد لا يملك حساب بالفعل
@@ -1055,21 +1196,19 @@ class AccountingIntegrationService:
             
             # إنشاء كود فريد للحساب الجديد
             # البحث عن آخر حساب فرعي تحت حساب الموردين
-            # النمط المتوقع: 20100001, 20100002, 20100003...
+            # النمط المتوقع: 2010001, 2010002, 2010003...
             last_supplier_account = ChartOfAccounts.objects.filter(
                 parent=suppliers_account,
-                code__regex=r'^20100\d{3}$'  # يبدأ بـ 20100 ويتبعه 3 أرقام
-            ).order_by('-code').first()
+                code__startswith='2010'
+            ).exclude(code='20100').order_by('-code').first()
             
             if last_supplier_account:
-                # استخراج الرقم التسلسلي من آخر 3 أرقام
-                last_number = int(last_supplier_account.code[-3:])
+                last_number = int(last_supplier_account.code[-4:])
                 new_number = last_number + 1
             else:
                 new_number = 1
             
-            # تكوين الكود الجديد: 20100 + رقم تسلسلي من 3 أرقام
-            new_code = f"20100{new_number:03d}"
+            new_code = f"2010{new_number:04d}"
             
             # إنشاء اسم مناسب للحساب
             account_name = f"مورد - {supplier.name}"
@@ -1090,7 +1229,6 @@ class AccountingIntegrationService:
             supplier.financial_account = new_account
             supplier.save(update_fields=['financial_account'])
             
-            logger.info(f"✅ تم إنشاء حساب جديد للمورد: {new_account.code} - {new_account.name}")
             return new_account
             
         except Exception as e:
@@ -1099,9 +1237,6 @@ class AccountingIntegrationService:
             logger.error(traceback.format_exc())
             return None
 
-    # ==================== Adjustment & Reversal Methods ====================
-
-    @classmethod
     def create_sale_adjustment_entry(
         cls,
         sale,
@@ -1115,6 +1250,11 @@ class AccountingIntegrationService:
         
         يتم إنشاء قيد تصحيحي يُسجل الفرق بين القيم القديمة والجديدة
         مع الحفاظ على القيد الأصلي للأثر التدقيقي
+        
+        يتضمن:
+        - التحقق من إغلاق الفترة المحاسبية
+        - إنشاء سجل تدقيق مفصل
+        - ربط القيد التصحيحي بالفاتورة
         """
         try:
             with transaction.atomic():
@@ -1127,7 +1267,6 @@ class AccountingIntegrationService:
                 
                 # إذا لم يكن هناك فرق، لا حاجة لقيد تصحيحي
                 if total_difference == 0 and cost_difference == 0:
-                    logger.info(f"لا توجد فروقات تتطلب قيد تصحيحي للفاتورة {sale.number}")
                     return None
                 
                 # التحقق من إغلاق الفترة المحاسبية
@@ -1148,7 +1287,7 @@ class AccountingIntegrationService:
                 # Prepare journal entry lines
                 lines = []
                 
-                # معالجة فرق الإجمالي (الإيرادات والعملاء)
+                # معالجة فرق الإجمالي (الإيرادات والعملاء/أولياء الأمور)
                 if total_difference != 0:
                     client_account = None
                     client_name = sale.client_name
@@ -1156,10 +1295,10 @@ class AccountingIntegrationService:
                     if sale.parent:
                         client_account = cls._get_parent_account(sale.parent)
                         if not client_account:
-                            logger.warning(f"⚠️ العميل {sale.parent.name} ليس له حساب محاسبي - سيتم إنشاء حساب جديد")
+                            logger.warning(f"⚠️ ولي الأمر {sale.parent.name} ليس له حساب محاسبي - سيتم إنشاء حساب جديد")
                             client_account = cls._create_parent_account(sale.parent, user)
                             if not client_account:
-                                error_msg = f"❌ فشل إنشاء حساب محاسبي لالعميل {sale.parent.name}"
+                                error_msg = f"❌ فشل إنشاء حساب محاسبي لولي الأمر {sale.parent.name}. يجب إنشاء حساب محاسبي لولي الأمر أولاً."
                                 logger.error(error_msg)
                                 raise ValueError(error_msg)
                     elif sale.customer:
@@ -1168,7 +1307,7 @@ class AccountingIntegrationService:
                             logger.warning(f"⚠️ العميل {sale.customer.name} ليس له حساب محاسبي - سيتم إنشاء حساب جديد")
                             client_account = cls._create_customer_account(sale.customer, user)
                             if not client_account:
-                                error_msg = f"❌ فشل إنشاء حساب محاسبي للعميل {sale.customer.name}"
+                                error_msg = f"❌ فشل إنشاء حساب محاسبي للعميل {sale.customer.name}. يجب إنشاء حساب محاسبي للعميل أولاً."
                                 logger.error(error_msg)
                                 raise ValueError(error_msg)
                     else:
@@ -1269,11 +1408,6 @@ class AccountingIntegrationService:
                     created_by=user,
                 )
                 
-                logger.info(
-                    f"✅ تم إنشاء قيد تصحيحي للمبيعات: {adjustment_entry.number} - "
-                    f"فاتورة {sale.number} (فرق الإجمالي: {total_difference}, فرق التكلفة: {cost_difference}) - "
-                    f"سجل تدقيق: {audit_log.id}"
-                )
                 return adjustment_entry
                 
         except Exception as e:
@@ -1292,6 +1426,13 @@ class AccountingIntegrationService:
     ) -> Optional[JournalEntry]:
         """
         إنشاء قيد تصحيحي لتعديل فاتورة مشتريات مرحّلة
+        
+        يتم إنشاء قيد تصحيحي يُسجل الفرق بين القيم القديمة والجديدة
+        
+        يتضمن:
+        - التحقق من إغلاق الفترة المحاسبية
+        - إنشاء سجل تدقيق مفصل
+        - ربط القيد التصحيحي بالفاتورة
         """
         try:
             with transaction.atomic():
@@ -1301,7 +1442,6 @@ class AccountingIntegrationService:
                 
                 # إذا لم يكن هناك فرق، لا حاجة لقيد تصحيحي
                 if total_difference == 0:
-                    logger.info(f"لا توجد فروقات تتطلب قيد تصحيحي للفاتورة {purchase.number}")
                     return None
                 
                 # التحقق من إغلاق الفترة المحاسبية
@@ -1328,7 +1468,7 @@ class AccountingIntegrationService:
                     logger.warning(f"⚠️ المورد {purchase.supplier.name} ليس له حساب محاسبي - سيتم إنشاء حساب جديد")
                     supplier_account = cls._create_supplier_account(purchase.supplier, user)
                     if not supplier_account:
-                        error_msg = f"❌ فشل إنشاء حساب محاسبي للمورد {purchase.supplier.name}"
+                        error_msg = f"❌ فشل إنشاء حساب محاسبي للمورد {purchase.supplier.name}. يجب إنشاء حساب محاسبي للمورد أولاً."
                         logger.error(error_msg)
                         raise ValueError(error_msg)
                 
@@ -1363,11 +1503,11 @@ class AccountingIntegrationService:
                 # Create journal entry via AccountingGateway
                 gateway = AccountingGateway()
                 adjustment_entry = gateway.create_journal_entry(
-                    source_module='purchase',
+                    source_module='purchases',
                     source_model='Purchase',
                     source_id=purchase.id,
                     lines=lines,
-                    idempotency_key=f"JE:purchase:Purchase:{purchase.id}:adjustment:{current_date.strftime('%Y%m%d')}",
+                    idempotency_key=f"JE:purchases:Purchase:{purchase.id}:adjustment:{current_date.strftime('%Y%m%d')}",
                     user=user,
                     entry_type='adjustment',
                     description=f"تصحيح بسبب تعديل الفاتورة - الفرق: {total_difference} ج.م",
@@ -1384,19 +1524,17 @@ class AccountingIntegrationService:
                     invoice_number=purchase.number,
                     action_type="adjustment",
                     old_total=old_total,
+                    old_cost=None,  # المشتريات لا تحتاج تتبع التكلفة
                     new_total=new_total,
+                    new_cost=None,
                     total_difference=total_difference,
+                    cost_difference=None,
                     adjustment_entry=adjustment_entry,
                     reason=reason,
                     notes=f"تم إنشاء قيد تصحيحي {adjustment_entry.number}",
                     created_by=user,
                 )
                 
-                logger.info(
-                    f"✅ تم إنشاء قيد تصحيحي للمشتريات: {adjustment_entry.number} - "
-                    f"فاتورة {purchase.number} (فرق الإجمالي: {total_difference}) - "
-                    f"سجل تدقيق: {audit_log.id}"
-                )
                 return adjustment_entry
                 
         except Exception as e:
@@ -1406,6 +1544,184 @@ class AccountingIntegrationService:
             return None
 
     @classmethod
+    def get_invoice_audit_logs(cls, invoice_type: str, invoice_id: int):
+        """
+        الحصول على سجلات التدقيق لفاتورة معينة
+        
+        Args:
+            invoice_type: نوع الفاتورة ('sale' أو 'purchase')
+            invoice_id: رقم الفاتورة في قاعدة البيانات
+            
+        Returns:
+            QuerySet من سجلات التدقيق
+        """
+        try:
+            from financial.models import InvoiceAuditLog
+            
+            return InvoiceAuditLog.objects.filter(
+                invoice_type=invoice_type,
+                invoice_id=invoice_id
+            ).select_related('adjustment_entry', 'created_by').order_by('-created_at')
+            
+        except Exception as e:
+            logger.error(f"❌ خطأ في الحصول على سجلات التدقيق: {str(e)}")
+            return None
+
+    @classmethod
+    def get_adjustment_entries_for_invoice(cls, invoice_type: str, invoice_number: str):
+        """
+        الحصول على جميع القيود التصحيحية لفاتورة معينة
+        
+        Args:
+            invoice_type: نوع الفاتورة ('sale' أو 'purchase')
+            invoice_number: رقم الفاتورة
+            
+        Returns:
+            QuerySet من القيود التصحيحية
+        """
+        try:
+            from financial.models import JournalEntry
+            
+            reference_pattern = f"تصحيح فاتورة {'مبيعات' if invoice_type == 'sale' else 'مشتريات'} {invoice_number}"
+            
+            return JournalEntry.objects.filter(
+                entry_type='adjustment',
+                reference=reference_pattern
+            ).prefetch_related('lines').order_by('-date')
+            
+        except Exception as e:
+            logger.error(f"❌ خطأ في الحصول على القيود التصحيحية: {str(e)}")
+            return None
+    @classmethod
+    def _group_sale_items_by_category(cls, sale) -> dict:
+        """تجميع بنود الفاتورة حسب تصنيف المنتجات"""
+        try:
+            items_by_category = {}
+            
+            for item in sale.items.select_related('product', 'product__category').all():
+                category_name = item.product.category.name if item.product.category else "غير مصنف"
+                
+                if category_name not in items_by_category:
+                    items_by_category[category_name] = []
+                
+                items_by_category[category_name].append(item)
+            
+            return items_by_category
+            
+        except Exception as e:
+            logger.error(f"خطأ في تجميع بنود الفاتورة حسب التصنيف: {str(e)}")
+            return {}
+
+    @classmethod
+    def _get_client_info(cls, sale, user=None) -> tuple:
+        """الحصول على معلومات العميل/ولي الأمر وحسابه المحاسبي"""
+        try:
+            client_account = None
+            client_name = ""
+            
+            if sale.parent:
+                # استخدام ولي الأمر (النظام الجديد)
+                client_account = cls._get_parent_account(sale.parent)
+                client_name = sale.parent.name
+                
+                if not client_account:
+                    # إنشاء حساب جديد لولي الأمر تلقائياً
+                    logger.warning(f"⚠️ ولي الأمر {sale.parent.name} ليس له حساب محاسبي - سيتم إنشاء حساب جديد")
+                    client_account = cls._create_parent_account(sale.parent, user or sale.created_by)
+                    
+                    if not client_account:
+                        # فشل إنشاء الحساب - إيقاف العملية
+                        error_msg = f"❌ فشل إنشاء حساب محاسبي لولي الأمر {sale.parent.name}. يجب إنشاء حساب محاسبي لولي الأمر أولاً."
+                        logger.error(error_msg)
+                        raise ValueError(error_msg)
+                        
+            elif hasattr(sale, 'customer') and sale.customer:
+                # استخدام العميل (النظام القديم - للتوافق المؤقت)
+                client_account = cls._get_customer_account(sale.customer)
+                client_name = sale.customer.name
+                
+                if not client_account:
+                    # إنشاء حساب جديد للعميل تلقائياً
+                    logger.warning(f"⚠️ العميل {sale.customer.name} ليس له حساب محاسبي - سيتم إنشاء حساب جديد")
+                    client_account = cls._create_customer_account(sale.customer, user or sale.created_by)
+                    
+                    if not client_account:
+                        # فشل إنشاء الحساب - إيقاف العملية
+                        error_msg = f"❌ فشل إنشاء حساب محاسبي للعميل {sale.customer.name}. يجب إنشاء حساب محاسبي للعميل أولاً."
+                        logger.error(error_msg)
+                        raise ValueError(error_msg)
+            else:
+                error_msg = "❌ الفاتورة لا تحتوي على ولي أمر أو عميل"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            
+            return client_account, client_name
+            
+        except Exception as e:
+            logger.error(f"خطأ في الحصول على معلومات العميل: {str(e)}")
+            return None, ""
+
+    @classmethod
+    def _get_item_cost(cls, item) -> Decimal:
+        """حساب تكلفة بند واحد"""
+        try:
+            if not hasattr(item.product, "cost_price") or item.product.cost_price is None:
+                return Decimal("0.00")
+            
+            return item.product.cost_price * item.quantity
+            
+        except Exception as e:
+            logger.error(f"خطأ في حساب تكلفة البند: {str(e)}")
+            return Decimal("0.00")
+
+    @classmethod
+    def _get_fee_revenue_account(cls, fee_category: str) -> Optional['ChartOfAccounts']:
+        """الحصول على حساب الإيرادات المناسب حسب نوع الرسوم"""
+        try:
+            from financial.models.chart_of_accounts import ChartOfAccounts
+            
+            # خريطة أنواع الرسوم إلى حسابات الإيرادات
+            fee_category_accounts = {
+                'academic': '40100',    # إيرادات الرسوم الأساسية
+                'tuition': '40100',     # إيرادات الرسوم الأساسية
+                'transport': '40300',   # إيرادات النقل
+                'bus': '40300',         # إيرادات النقل
+                'services': '40300',    # إيرادات خدمات النقل
+                'activities': '40400',  # إيرادات أخرى
+                'sports': '40400',      # إيرادات أخرى
+                'events': '40400',      # إيرادات أخرى
+                'products': '41100',    # إيرادات المنتجات
+                'materials': '41100',   # إيرادات المنتجات
+                'books': '41100',       # إيرادات المنتجات
+                'uniform': '41100',     # إيرادات المنتجات
+                'stationery': '41100',  # إيرادات المنتجات
+            }
+            
+            # البحث عن حساب مناسب للفئة
+            account_code = fee_category_accounts.get(fee_category.lower())
+            
+            if account_code:
+                account = ChartOfAccounts.objects.filter(
+                    code=account_code, 
+                    is_active=True
+                ).first()
+                
+                if account:
+                    return account
+                else:
+                    logger.warning(f"⚠️ الحساب {account_code} غير موجود أو غير نشط لفئة الرسوم {fee_category}")
+            else:
+                logger.warning(f"⚠️ لا يوجد حساب مخصص لفئة الرسوم {fee_category}")
+            
+            # إذا لم يوجد حساب مخصص، إرجاع None لاستخدام الحساب الافتراضي
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ خطأ في الحصول على حساب الإيرادات لفئة الرسوم {fee_category}: {str(e)}")
+            return None
+
+    @classmethod
+    @classmethod
     def create_reversal_entry(
         cls, 
         original_entry: JournalEntry, 
@@ -1414,11 +1730,24 @@ class AccountingIntegrationService:
         user: Optional[User] = None
     ) -> Optional[JournalEntry]:
         """
-        إنشاء قيد عكسي للتسوية المالية
+        إنشاء قيد عكسي للتسوية المالية - تم تصحيح الخطأ المحاسبي
         
         المبدأ المحاسبي الصحيح:
         - إذا كان البند الأصلي: من حـ/أ (مدين 100) إلى حـ/ب (دائن 100)
         - فالقيد العكسي يكون: من حـ/ب (مدين 100) إلى حـ/أ (دائن 100)
+        
+        مثال عملي:
+        القيد الأصلي: من حـ/ولي الأمر (مدين 150) إلى حـ/الإيرادات (دائن 150)
+        القيد العكسي: من حـ/الإيرادات (مدين 150) إلى حـ/ولي الأمر (دائن 150)
+        
+        الوسائط:
+            original_entry: القيد الأصلي المراد عكسه
+            refund_amount: مبلغ الاسترداد
+            reason: سبب القيد العكسي
+            user: المستخدم الذي ينشئ القيد
+            
+        العائد:
+            JournalEntry: القيد العكسي المنشأ أو None في حالة الفشل
         """
         try:
             with transaction.atomic():
@@ -1432,11 +1761,18 @@ class AccountingIntegrationService:
                     logger.error("مبلغ الاسترداد يجب أن يكون أكبر من صفر")
                     return None
                 
-                # حساب المبلغ الإجمالي للقيد الأصلي
+                # حساب المبلغ الإجمالي للقيد الأصلي (أكبر قيمة بين المدين والدائن)
                 original_total = max(original_entry.total_debit, original_entry.total_credit)
                 
                 if refund_amount > original_total:
                     logger.error(f"مبلغ الاسترداد ({refund_amount}) لا يمكن أن يكون أكبر من مبلغ القيد الأصلي ({original_total})")
+                    return None
+                
+                # إنشاء رقم القيد العكسي
+                try:
+                    reversal_number = cls._generate_journal_number("REV", original_entry.number)
+                except Exception as e:
+                    logger.error(f"فشل في توليد رقم القيد العكسي: {e}")
                     return None
                 
                 # الحصول على الفترة المحاسبية
@@ -1488,7 +1824,6 @@ class AccountingIntegrationService:
                     date=timezone.now().date()
                 )
                 
-                logger.info(f"✅ تم إنشاء قيد عكسي صحيح: {reversal_entry.number} بمبلغ {refund_amount}")
                 
                 # إضافة سجل تدقيق للقيد العكسي
                 try:
@@ -1507,20 +1842,27 @@ class AccountingIntegrationService:
     @classmethod
     def _log_reversal_entry(cls, original_entry, reversal_entry, amount, reason, user):
         """تسجيل عملية القيد العكسي في سجل التدقيق"""
-        # SettlementAuditLog removed - students module no longer used
-        # Use general audit logging instead
         try:
             logger.info(
-                f"Reversal entry created: {reversal_entry.number} for original {original_entry.number}. "
-                f"Amount: {amount}, Reason: {reason}"
+                f"قيد عكسي {reversal_entry.number} للقيد الأصلي {original_entry.number} - "
+                f"المبلغ: {amount} - السبب: {reason}"
             )
         except Exception as e:
-            logger.warning(f"⚠️ فشل في تسجيل القيد العكسي: {e}")
+            logger.warning(f"⚠️ فشل في تسجيل القيد العكسي في سجل التدقيق: {e}")
     
     @classmethod
     def validate_reversal_entry(cls, original_entry: JournalEntry, reversal_entry: JournalEntry) -> bool:
         """
         التحقق من صحة القيد العكسي محاسبياً
+        
+        يتحقق من:
+        1. أن مجموع المدين في العكسي = مجموع الدائن في الأصلي
+        2. أن مجموع الدائن في العكسي = مجموع المدين في الأصلي
+        3. أن كل حساب في العكسي له نفس المبلغ بالجهة المعاكسة
+        
+        مثال:
+        القيد الأصلي: حـ/أ (مدين 100) + حـ/ب (دائن 100)
+        القيد العكسي: حـ/أ (دائن 100) + حـ/ب (مدين 100)
         """
         try:
             original_lines = {line.account_id: line for line in original_entry.lines.all()}
@@ -1546,205 +1888,8 @@ class AccountingIntegrationService:
                     logger.error(f"خطأ في الحساب {account_id}: الدائن الأصلي ({orig_line.credit}) لا يساوي المدين العكسي ({rev_line.debit})")
                     return False
             
-            logger.info("✅ تم التحقق من صحة القيد العكسي محاسبياً")
             return True
             
         except Exception as e:
             logger.error(f"❌ خطأ في التحقق من صحة القيد العكسي: {e}")
             return False
-
-    # ==================== DEPRECATED: Student Account Methods ====================
-    # These methods are deprecated and should not be used in Corporate ERP
-    # They were part of the school management system and have been removed.
-    # Use client/customer account methods instead.
-
-    @classmethod
-    def generate_financial_report(
-        cls,
-        date_from: date,
-        date_to: date,
-        report_type: str = "settlements",
-        filters: Optional[Dict] = None
-    ) -> Dict[str, Any]:
-        """
-        إنتاج تقرير مالي للتسويات والمرتجعات
-        """
-        try:
-            filters = filters or {}
-            
-            # إعداد التقرير الأساسي
-            report_data = {
-                "report_info": {
-                    "type": report_type,
-                    "date_from": date_from,
-                    "date_to": date_to,
-                    "generated_at": timezone.now(),
-                    "filters": filters
-                },
-                "summary": {
-                    "total_settlements": 0,
-                    "total_amount": Decimal("0.00"),
-                    "by_type": {},
-                    "by_status": {}
-                },
-                "details": [],
-                "accounting_entries": [],
-                "errors": []
-            }
-            
-            # الحصول على التسويات في الفترة المحددة
-            from students.models import StudentRefund
-            
-            settlements_query = StudentRefund.objects.filter(
-                created_at__date__gte=date_from,
-                created_at__date__lte=date_to
-            ).select_related(
-                'student', 'student__parent', 'created_by', 'approved_by', 'journal_entry'
-            ).prefetch_related('audit_logs')
-            
-            # تطبيق الفلاتر الإضافية
-            if filters.get('refund_type'):
-                settlements_query = settlements_query.filter(refund_type=filters['refund_type'])
-            
-            if filters.get('status'):
-                settlements_query = settlements_query.filter(status=filters['status'])
-            
-            if filters.get('student_id'):
-                settlements_query = settlements_query.filter(student_id=filters['student_id'])
-            
-            settlements = settlements_query.order_by('-created_at')
-            
-            # معالجة البيانات
-            for settlement in settlements:
-                # تحديث الملخص
-                report_data["summary"]["total_settlements"] += 1
-                report_data["summary"]["total_amount"] += settlement.amount
-                
-                # تجميع حسب النوع
-                refund_type = settlement.get_refund_type_display()
-                if refund_type not in report_data["summary"]["by_type"]:
-                    report_data["summary"]["by_type"][refund_type] = {
-                        "count": 0,
-                        "amount": Decimal("0.00")
-                    }
-                report_data["summary"]["by_type"][refund_type]["count"] += 1
-                report_data["summary"]["by_type"][refund_type]["amount"] += settlement.amount
-                
-                # تجميع حسب الحالة
-                status = settlement.get_status_display()
-                if status not in report_data["summary"]["by_status"]:
-                    report_data["summary"]["by_status"][status] = {
-                        "count": 0,
-                        "amount": Decimal("0.00")
-                    }
-                report_data["summary"]["by_status"][status]["count"] += 1
-                report_data["summary"]["by_status"][status]["amount"] += settlement.amount
-                
-                # إضافة التفاصيل
-                settlement_detail = {
-                    "id": settlement.id,
-                    "reference_number": settlement.reference_number,
-                    "student": {
-                        "id": settlement.student.id,
-                        "name": settlement.student.name,
-                        "parent_name": settlement.student.parent.name if settlement.student.parent else "غير محدد"
-                    },
-                    "refund_type": refund_type,
-                    "amount": settlement.amount,
-                    "status": status,
-                    "reason": settlement.reason,
-                    "created_at": settlement.created_at,
-                    "created_by": settlement.created_by.get_full_name() if settlement.created_by else "غير محدد",
-                    "approved_at": settlement.approved_at,
-                    "approved_by": settlement.approved_by.get_full_name() if settlement.approved_by else None,
-                    "journal_entry": {
-                        "number": settlement.journal_entry.number if settlement.journal_entry else None,
-                        "amount": settlement.journal_entry.total_amount if settlement.journal_entry else None,
-                        "status": settlement.journal_entry.get_status_display() if settlement.journal_entry else None
-                    } if settlement.journal_entry else None,
-                    "failure_info": {
-                        "reason": settlement.failure_reason,
-                        "retry_count": settlement.retry_count,
-                        "last_retry": settlement.last_retry_at
-                    } if settlement.failure_reason else None
-                }
-                
-                report_data["details"].append(settlement_detail)
-                
-                # إضافة القيود المحاسبية المرتبطة
-                if settlement.journal_entry:
-                    journal_lines = []
-                    for line in settlement.journal_entry.lines.all():
-                        journal_lines.append({
-                            "account_code": line.account.code,
-                            "account_name": line.account.name,
-                            "debit": line.debit,
-                            "credit": line.credit,
-                            "description": line.description
-                        })
-                    
-                    report_data["accounting_entries"].append({
-                        "settlement_id": settlement.id,
-                        "reference_number": settlement.reference_number,
-                        "journal_number": settlement.journal_entry.number,
-                        "journal_date": settlement.journal_entry.date,
-                        "total_amount": settlement.journal_entry.total_amount,
-                        "lines": journal_lines
-                    })
-            
-            # إضافة إحصائيات إضافية
-            if report_data["summary"]["total_settlements"] > 0:
-                report_data["summary"]["average_amount"] = (
-                    report_data["summary"]["total_amount"] / report_data["summary"]["total_settlements"]
-                )
-            else:
-                report_data["summary"]["average_amount"] = Decimal("0.00")
-            
-            # تحويل Decimal إلى string للتسلسل
-            def convert_decimals(obj):
-                if isinstance(obj, dict):
-                    return {k: convert_decimals(v) for k, v in obj.items()}
-                elif isinstance(obj, list):
-                    return [convert_decimals(item) for item in obj]
-                elif isinstance(obj, Decimal):
-                    return str(obj)
-                else:
-                    return obj
-            
-            report_data = convert_decimals(report_data)
-            
-            logger.info(
-                f"✅ تم إنتاج تقرير مالي: {report_type} "
-                f"من {date_from} إلى {date_to} "
-                f"({report_data['summary']['total_settlements']} تسوية)"
-            )
-            
-            return report_data
-            
-        except Exception as e:
-            logger.error(f"❌ خطأ في إنتاج التقرير المالي: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
-            
-            return {
-                "report_info": {
-                    "type": report_type,
-                    "date_from": date_from,
-                    "date_to": date_to,
-                    "generated_at": timezone.now(),
-                    "filters": filters
-                },
-                "summary": {
-                    "total_settlements": 0,
-                    "total_amount": "0.00",
-                    "by_type": {},
-                    "by_status": {}
-                },
-                "details": [],
-                "accounting_entries": [],
-                "errors": [f"خطأ في إنتاج التقرير: {str(e)}"]
-            }
-
-    # DEPRECATED: Student fee methods removed
-    # These methods were part of the school management system
-    # Use client/customer invoice methods instead

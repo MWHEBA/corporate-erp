@@ -57,7 +57,6 @@ class TemplateService:
                 component.amount = custom_amount
                 component.save()
             
-            logger.info(f"تم تطبيق قالب {template.name} على الموظف {employee.get_full_name_ar()}")
             
             return component, True
             
@@ -183,7 +182,6 @@ class TemplateService:
             
             component.delete()
             
-            logger.info(f"تم حذف {component_name} من الموظف {employee_name}")
             return True
             
         except SalaryComponent.DoesNotExist:

@@ -63,7 +63,7 @@ class Command(BaseCommand):
             self.stdout.write(f'   الموظفين المحدثين: {result["employees_with_updates"]}')
             self.stdout.write(f'   إجمالي الأرصدة المحدثة: {result["total_balances_updated"]}')
             
-            if result['details'] and self.verbosity >= 2:
+            if result['details'] and options.get('verbosity', 1) >= 2:
                 self.stdout.write('\n📋 التفاصيل:')
                 for emp_result in result['details']:
                     self.stdout.write(f'\n   {emp_result["employee"]}:')

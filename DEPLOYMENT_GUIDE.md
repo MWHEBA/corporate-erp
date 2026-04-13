@@ -1,8 +1,8 @@
-# دليل النشر - النظام المدرسي المتكامل
+﻿# دليل النشر - Corporate ERP
 
 ## نظرة عامة
 
-هذا الدليل يوضح كيفية نشر النظام المدرسي المتكامل في بيئة الإنتاج مع جميع التحسينات والتكوينات المطلوبة.
+هذا الدليل يوضح كيفية نشر النظام في بيئة الإنتاج مع جميع التحسينات والتكوينات المطلوبة.
 
 ## 📋 متطلبات النظام
 
@@ -46,11 +46,11 @@ sudo -u postgres psql
 
 # إنشاء قاعدة البيانات والمستخدم
 CREATE DATABASE corporate_erp;
-CREATE USER school_user WITH PASSWORD 'secure_password_here';
-ALTER ROLE school_user SET client_encoding TO 'utf8';
-ALTER ROLE school_user SET default_transaction_isolation TO 'read committed';
-ALTER ROLE school_user SET timezone TO 'UTC';
-GRANT ALL PRIVILEGES ON DATABASE corporate_erp TO school_user;
+CREATE USER erp_user WITH PASSWORD 'secure_password_here';
+ALTER ROLE erp_user SET client_encoding TO 'utf8';
+ALTER ROLE erp_user SET default_transaction_isolation TO 'read committed';
+ALTER ROLE erp_user SET timezone TO 'UTC';
+GRANT ALL PRIVILEGES ON DATABASE corporate_erp TO erp_user;
 \q
 ```
 
@@ -72,14 +72,14 @@ sudo systemctl enable redis-server
 
 ```bash
 # إنشاء مستخدم للتطبيق
-sudo adduser --system --group --home /opt/corporate_erp school_app
+sudo adduser --system --group --home /opt/corporate_erp erp_app
 
 # التبديل للمستخدم الجديد
-sudo -u school_app -i
+sudo -u erp_app -i
 
 # نسخ المشروع
 cd /opt/corporate_erp
-git clone https://github.com/your-repo/school-management.git .
+git clone https://github.com/your-repo/corporate-erp.git .
 
 # إنشاء البيئة الافتراضية
 python3 -m venv venv
@@ -93,7 +93,7 @@ pip install -r requirements.txt
 
 ```bash
 # إنشاء ملف .env
-sudo -u school_app nano /opt/corporate_erp/.env
+sudo -u erp_app nano /opt/corporate_erp/.env
 ```
 
 ```env
@@ -105,7 +105,7 @@ ALLOWED_HOSTS=your-domain.com,www.your-domain.com,server-ip
 # قاعدة البيانات
 DB_ENGINE=postgresql
 DB_NAME=corporate_erp
-DB_USER=school_user
+DB_USER=erp_user
 DB_PASSWORD=secure_password_here
 DB_HOST=localhost
 DB_PORT=5432
@@ -134,7 +134,7 @@ SECURE_HSTS_SECONDS=31536000
 
 ```bash
 # تطبيق الهجرات
-sudo -u school_app -i
+sudo -u erp_app -i
 cd /opt/corporate_erp
 source venv/bin/activate
 
@@ -166,8 +166,8 @@ max_requests_jitter = 100
 timeout = 30
 keepalive = 2
 preload_app = True
-user = "school_app"
-group = "school_app"
+user = "erp_app"
+group = "erp_app"
 tmp_upload_dir = None
 errorlog = "/var/log/corporate_erp/gunicorn_error.log"
 accesslog = "/var/log/corporate_erp/gunicorn_access.log"
@@ -186,7 +186,7 @@ sudo nano /etc/supervisor/conf.d/corporate_erp.conf
 [program:corporate_erp]
 command=/opt/corporate_erp/venv/bin/gunicorn corporate_erp.wsgi:application -c /opt/corporate_erp/gunicorn.conf.py
 directory=/opt/corporate_erp
-user=school_app
+user=erp_app
 autostart=true
 autorestart=true
 redirect_stderr=true
@@ -332,10 +332,10 @@ sudo crontab -e
 ```bash
 # إنشاء مجلدات السجلات
 sudo mkdir -p /var/log/corporate_erp
-sudo chown school_app:school_app /var/log/corporate_erp
+sudo chown erp_app:erp_app /var/log/corporate_erp
 
 # إعداد دوران السجلات
-sudo cp school-management-logrotate /etc/logrotate.d/
+sudo cp corporate-erp-logrotate /etc/logrotate.d/
 ```
 
 ### 2. إعداد المراقبة الصحية
@@ -344,7 +344,7 @@ sudo cp school-management-logrotate /etc/logrotate.d/
 # إضافة فحص صحي إلى crontab
 sudo crontab -e
 # إضافة:
-*/5 * * * * curl -f http://localhost/health/ || echo "Health check failed" | mail -s "Corporate ERP Health Alert" admin@school.com
+*/5 * * * * curl -f http://localhost/health/ || echo "Health check failed" | mail -s "Corporate ERP Health Alert" admin@company.com
 ```
 
 ## 🔒 إعدادات الأمان
@@ -422,7 +422,7 @@ MEDIA_BACKUP="$BACKUP_DIR/media_backup_$DATE.tar.gz"
 mkdir -p $BACKUP_DIR
 
 # نسخ احتياطية لقاعدة البيانات
-pg_dump -h localhost -U school_user -d corporate_erp > $DB_BACKUP
+pg_dump -h localhost -U erp_user -d corporate_erp > $DB_BACKUP
 
 # ضغط النسخة الاحتياطية
 gzip $DB_BACKUP
@@ -526,9 +526,9 @@ client_max_body_size 50M;
 
 ### جهات الاتصال
 
-- **الدعم التقني**: tech-support@school.com
+- **الدعم التقني**: tech-support@company.com
 - **الطوارئ**: +20-xxx-xxx-xxxx
-- **التوثيق**: https://docs.school-system.com
+- **التوثيق**: https://docs.company.com
 
 ### جدولة الصيانة
 

@@ -18,14 +18,14 @@ class FinancialValidationError(ValidationError):
     Attributes:
         message (str): رسالة الخطأ الوصفية
         code (str): رمز الخطأ للتعريف البرمجي
-        entity: الكيان المالي المرتبط بالخطأ (طالب، مورد، موظف، إلخ)
+        entity: الكيان المالي المرتبط بالخطأ (عميل، مورد، موظف، إلخ)
         validation_type (str): نوع التحقق الذي فشل (chart_of_accounts, accounting_period)
     
     Example:
         raise FinancialValidationError(
-            message="لا يوجد حساب محاسبي مرتبط بالطالب",
+            message="لا يوجد حساب محاسبي مرتبط بالعميل",
             code="missing_account",
-            entity=student,
+            entity=customer,
             validation_type="chart_of_accounts"
         )
     """
@@ -67,7 +67,7 @@ class ChartOfAccountsValidationError(FinancialValidationError):
         raise ChartOfAccountsValidationError(
             message="الحساب المحاسبي غير مفعّل",
             code="inactive_account",
-            entity=student,
+            entity=customer,
             account=chart_of_accounts
         )
     """
@@ -109,7 +109,7 @@ class AccountingPeriodValidationError(FinancialValidationError):
         raise AccountingPeriodValidationError(
             message="الفترة المحاسبية مغلقة",
             code="closed_period",
-            entity=student,
+            entity=customer,
             period=accounting_period,
             transaction_date=date(2024, 1, 15)
         )

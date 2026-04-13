@@ -22,7 +22,7 @@ class ProductBatch(models.Model):
         ("expired", _("منتهي الصلاحية")),
         ("recalled", _("مسحوب")),
         ("damaged", _("تالف")),
-        ("sold_out", _("نفد")),
+        ("sold_out", _("نفذ")),
     )
 
     # معلومات الدفعة
@@ -197,7 +197,7 @@ class ProductBatch(models.Model):
 
         self.current_quantity -= quantity
 
-        # تحديث الحالة إذا نفدت الدفعة
+        # تحديث الحالة إذا نفذت الدفعة
         if self.current_quantity <= 0:
             self.status = "sold_out"
 

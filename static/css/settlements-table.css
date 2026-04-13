@@ -1,4 +1,4 @@
-/* تحسينات خاصة بجدول التسويات المالية */
+﻿/* تحسينات خاصة بجدول التسويات المالية */
 
 /* تحسين مظهر رقم التسوية */
 #settlements-table code {
@@ -7,21 +7,6 @@
     background-color: var(--bs-light) !important;
     color: var(--bs-dark);
     border: 1px solid var(--bs-border-color);
-}
-
-/* تحسين مظهر أسماء الطلاب */
-#settlements-table .student-name {
-    line-height: 1.4;
-}
-
-#settlements-table .student-name strong {
-    color: var(--bs-dark);
-    font-weight: 600;
-}
-
-#settlements-table .student-name small {
-    font-size: 0.75rem;
-    color: var(--bs-secondary);
 }
 
 /* تحسين مظهر المبالغ */

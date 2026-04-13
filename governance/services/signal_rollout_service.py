@@ -294,16 +294,14 @@ class SignalRolloutService:
             return self._get_rollout_status(workflow)
         else:
             # Get status for all workflows
-            workflows = [
-                'student_fee_to_journal_entry',
-                'fee_payment_to_journal_entry',
-                'stock_movement_to_journal_entry',
-                'transportation_fee_to_journal_entry'
-            ]
-            
             return {
                 wf: self._get_rollout_status(wf) 
-                for wf in workflows
+                for wf in [
+                    'customer_payment_to_journal_entry',
+                    'purchase_payment_to_journal_entry',
+                    'stock_movement_to_journal_entry',
+                    'transportation_fee_to_journal_entry'
+                ]
             }
     
     def monitor_rollout_health(self, workflow: str) -> Dict[str, Any]:
@@ -361,8 +359,8 @@ class SignalRolloutService:
     def _validate_workflow(self, workflow: str) -> bool:
         """Validate that workflow is supported for rollout"""
         supported_workflows = [
-            'student_fee_to_journal_entry',
-            'fee_payment_to_journal_entry',
+            'customer_payment_to_journal_entry',
+            'purchase_payment_to_journal_entry',
             'stock_movement_to_journal_entry',
             'transportation_fee_to_journal_entry'
         ]
@@ -592,9 +590,9 @@ class SignalRolloutService:
             actions.append('workflow_disabled')
             
             # Disable related components if needed
-            if workflow == 'student_fee_to_journal_entry':
-                governance_switchboard.disable_component('auto_fee_creation', reason)
-                actions.append('auto_fee_creation_disabled')
+            if workflow == 'customer_payment_to_journal_entry':
+                governance_switchboard.disable_component('accounting_gateway_enforcement', reason)
+                actions.append('accounting_gateway_enforcement_disabled')
             
             # Clear any cached state
             cache.delete(f"{self.cache_prefix}:metrics:{workflow}")

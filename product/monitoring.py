@@ -200,7 +200,6 @@ class BundleSystemMonitor:
             cache.set(cache_key, operations, 3600)  # ساعة واحدة
             
             # تسجيل في logger
-            logger.info(f"عملية {operation_type}: {details}")
             
         except Exception as e:
             logger.error(f"خطأ في تسجيل العملية: {str(e)}")

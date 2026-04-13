@@ -49,11 +49,11 @@ class SmartContractAnalyzer:
         }
     
     def get_active_components(self, employee):
-        """جلب بنود الموظف النشطة (باستثناء الراتب الأساسي)"""
+        """جلب بنود الموظف النشطة (باستثناء الأجر الأساسي)"""
         return SalaryComponent.objects.filter(
             employee=employee,
             is_active=True,
-            is_basic=False  # استبعاد الراتب الأساسي
+            is_basic=False  # استبعاد الأجر الأساسي
         ).order_by('component_type', 'name')
     
     def classify_components(self, components):
@@ -123,7 +123,7 @@ class SmartContractAnalyzer:
         if not new_contract:
             return conflicts
         
-        # التحقق من تضارب الراتب الأساسي
+        # التحقق من تضارب الأجر الأساسي
         basic_salary_components = [
             comp for comp in current_components 
             if 'راتب' in comp.name and comp.component_type == 'earning'
@@ -135,7 +135,7 @@ class SmartContractAnalyzer:
                     conflicts.append({
                         'type': 'salary_mismatch',
                         'component': component,
-                        'message': f'تضارب في الراتب الأساسي: {component.amount} مقابل {new_contract.basic_salary}',
+                        'message': f'تضارب في الأجر الأساسي: {component.amount} مقابل {new_contract.basic_salary}',
                         'severity': 'high'
                     })
         

@@ -18,7 +18,6 @@ import csv
 import os
 
 from financial.models.journal_entry import JournalEntry, AccountingPeriod
-# FeePayment removed - students module no longer used
 from financial.models.transactions import FinancialTransaction
 from financial.models.loan_transactions import Loan, LoanPayment
 from financial.models.partner_transactions import PartnerTransaction
@@ -33,7 +32,7 @@ class Command(BaseCommand):
         parser.add_argument(
             '--module',
             type=str,
-            choices=['all', 'financial', 'students', 'activities', 'transportation', 'hr', 'supplier'],
+            choices=['all', 'financial', 'hr', 'supplier'],
             default='all',
             help='الوحدة المراد تدقيقها (افتراضي: all)',
         )
@@ -105,9 +104,6 @@ class Command(BaseCommand):
             self.audit_financial_transactions()
             self.audit_loan_transactions()
             self.audit_partner_transactions()
-        
-        if self.module == 'all' or self.module == 'students':
-            self.audit_fee_payments()
         
         # عرض التقرير
         self.display_report()
@@ -193,13 +189,13 @@ class Command(BaseCommand):
             entity_type = None
             
             # محاولة الحصول على الكيان المرتبط
-            if trans.student:
-                entity = trans.student
-                entity_type = 'student'
-            elif trans.supplier:
+            if hasattr(trans, 'customer') and trans.customer:
+                entity = trans.customer
+                entity_type = 'customer'
+            elif hasattr(trans, 'supplier') and trans.supplier:
                 entity = trans.supplier
                 entity_type = 'supplier'
-            elif trans.employee:
+            elif hasattr(trans, 'employee') and trans.employee:
                 entity = trans.employee
                 entity_type = 'employee'
             
@@ -257,78 +253,6 @@ class Command(BaseCommand):
         
         self.stdout.write(
             self.style.SUCCESS(f'  ✅ تم فحص {queryset.count()} معاملة مالية\n')
-        )
-
-    def audit_fee_payments(self):
-        """تدقيق مدفوعات الرسوم"""
-        self.stdout.write('🎓 تدقيق مدفوعات الرسوم...')
-        
-        queryset = FeePayment.objects.select_related('student_fee__student', 'student_fee__student__parent').all()
-        if self.limit:
-            queryset = queryset[:self.limit]
-        
-        for payment in queryset:
-            self.stats['total_checked'] += 1
-            
-            issues = []
-            
-            # الحصول على الطالب من student_fee
-            student = payment.student_fee.student
-            
-            # التحقق من الحساب المحاسبي (حساب العميل)
-            if self.check_type in ['all', 'account']:
-                account_valid, account_error, account = FinancialValidationService.validate_chart_of_accounts(
-                    entity=student,
-                    entity_type='student',
-                    raise_exception=False
-                )
-                
-                if not account_valid:
-                    issues.append({
-                        'type': 'account',
-                        'message': account_error
-                    })
-            
-            # التحقق من الفترة المحاسبية
-            if self.check_type in ['all', 'period']:
-                period_valid, period_error, period = FinancialValidationService.validate_accounting_period(
-                    transaction_date=payment.payment_date,
-                    entity=student,
-                    entity_type='student',
-                    raise_exception=False
-                )
-                
-                if not period_valid:
-                    issues.append({
-                        'type': 'period',
-                        'message': period_error
-                    })
-            
-            # تسجيل المعاملة المشكوك فيها
-            if issues:
-                self.record_suspicious_transaction(
-                    transaction_type='FeePayment',
-                    transaction_id=payment.id,
-                    transaction_number=f'PAY-{payment.id}',
-                    transaction_date=payment.payment_date,
-                    transaction_amount=payment.amount,
-                    entity_type='student',
-                    entity_name=str(student),
-                    issues=issues
-                )
-                
-                if len(issues) == 1:
-                    if issues[0]['type'] == 'account':
-                        self.stats['invalid_account'] += 1
-                    else:
-                        self.stats['invalid_period'] += 1
-                else:
-                    self.stats['invalid_both'] += 1
-            else:
-                self.stats['valid'] += 1
-        
-        self.stdout.write(
-            self.style.SUCCESS(f'  ✅ تم فحص {queryset.count()} دفعة رسوم\n')
         )
 
     def audit_loan_transactions(self):

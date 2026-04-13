@@ -116,7 +116,7 @@
                                     <div class="variables-list">
                                         <div class="variable-item" data-value="basic">
                                             <strong>basic</strong>
-                                            <small>الراتب الأساسي</small>
+                                            <small>الأجر الأساسي</small>
                                         </div>
                                         <div class="variable-item" data-value="total_earnings">
                                             <strong>total_earnings</strong>
@@ -873,7 +873,7 @@ if (typeof window.UnifiedSalaryComponentManager === 'undefined') {
         if (!formula) return;
         
         try {
-            // الحصول على الراتب الأساسي من السياق
+            // الحصول على الأجر الأساسي من السياق
             const basicSalary = this.getBasicSalary();
             
             // استبدال المتغيرات في الصيغة
@@ -898,7 +898,7 @@ if (typeof window.UnifiedSalaryComponentManager === 'undefined') {
     }
     
     getBasicSalary() {
-        // الحصول على الراتب الأساسي من العقد النشط فقط
+        // الحصول على الأجر الأساسي من العقد النشط فقط
         {% if active_contract and active_contract.basic_salary %}
             return {{ active_contract.basic_salary }};
         {% else %}

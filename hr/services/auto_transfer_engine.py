@@ -54,7 +54,6 @@ class AutoTransferEngine:
         """تنفيذ النقل الذكي للبنود"""
         
         old_contract_id = old_contract.id if old_contract else "لا يوجد"
-        logger.info(f"بدء النقل الذكي من العقد {old_contract_id} إلى {new_contract.id}")
         
         # جلب بنود الموظف النشطة
         active_components = SalaryComponent.objects.filter(
@@ -174,7 +173,7 @@ class AutoTransferEngine:
     def _has_conflict_with_contract(self, component, new_contract):
         """فحص التضارب مع العقد الجديد"""
         
-        # فحص تضارب الراتب الأساسي
+        # فحص تضارب الأجر الأساسي
         if ('راتب' in component.name.lower() and 
             component.component_type == 'earning' and
             new_contract.basic_salary):
@@ -389,10 +388,6 @@ class AutoTransferEngine:
         """تسجيل نتائج النقل في السجلات"""
         
         old_contract_id = old_contract.id if old_contract else "لا يوجد"
-        logger.info(
-            f"نتائج النقل من العقد {old_contract_id} إلى {new_contract.id}: "
-            f"{results['summary']['message']}"
-        )
         
         # تسجيل تفاصيل الأخطاء
         for error in results['errors']:

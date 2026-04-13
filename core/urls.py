@@ -3,7 +3,8 @@ from . import api
 from .views import (
     # Main views
     dashboard, company_settings, system_settings, get_current_time,
-    system_reset, notifications_list, notification_settings,
+    system_reset, notifications_list, notification_settings, whatsapp_settings,
+    whatsapp_webhook,
     # Logs views
     view_error_logs, clear_error_logs,
     # Backup views
@@ -51,6 +52,8 @@ urlpatterns = [
     # صفحة عرض كل الإشعارات
     path("notifications/", notifications_list, name="notifications_list"),
     path("notifications/settings/", notification_settings, name="notification_settings"),
+    path("settings/whatsapp/", whatsapp_settings, name="whatsapp_settings"),
+    path("webhooks/whatsapp/", whatsapp_webhook, name="whatsapp_webhook"),
     
     # مسارات API الإشعارات - مفعلة ✅
     path('api/notifications/mark-read/<int:notification_id>/', api.mark_notification_read, name='mark_notification_read'),

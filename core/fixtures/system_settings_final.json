@@ -18,7 +18,7 @@
     "pk": 2,
     "fields": {
       "key": "company_name_en",
-      "value": "School Foundation",
+      "value": "Mwheba Foundation",
       "data_type": "string",
       "description": "اسم الشركة بالإنجليزية",
       "group": "general",
@@ -1110,7 +1110,7 @@
     "pk": 80,
     "fields": {
       "key": "company_industry",
-      "value": "تعليم",
+      "value": "خدمات",
       "data_type": "string",
       "description": "مجال عمل الشركة أو الصناعة",
       "group": "general",
@@ -1408,6 +1408,48 @@
       "data_type": "string",
       "description": "شعار الشركة أو العبارة الترويجية",
       "group": "general",
+      "is_active": true,
+      "created_at": "2025-01-01T00:00:00Z",
+      "updated_at": "2025-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.systemsetting",
+    "pk": 102,
+    "fields": {
+      "key": "enable_daftra_sync",
+      "value": "true",
+      "data_type": "boolean",
+      "description": "تفعيل المزامنة مع نظام دفترة",
+      "group": "integrations",
+      "is_active": true,
+      "created_at": "2025-01-01T00:00:00Z",
+      "updated_at": "2025-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.systemsetting",
+    "pk": 103,
+    "fields": {
+      "key": "daftra_api_key",
+      "value": "",
+      "data_type": "string",
+      "description": "مفتاح API الخاص بحساب دفترة",
+      "group": "integrations",
+      "is_active": true,
+      "created_at": "2025-01-01T00:00:00Z",
+      "updated_at": "2025-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.systemsetting",
+    "pk": 104,
+    "fields": {
+      "key": "daftra_sync_frequency",
+      "value": "manual",
+      "data_type": "string",
+      "description": "تكرار المزامنة مع دفترة (manual, hourly, daily)",
+      "group": "integrations",
       "is_active": true,
       "created_at": "2025-01-01T00:00:00Z",
       "updated_at": "2025-01-01T00:00:00Z"

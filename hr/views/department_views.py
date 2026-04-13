@@ -1,4 +1,4 @@
-"""
+﻿"""
 Views إدارة الأقسام
 """
 from .base_imports import *
@@ -17,13 +17,20 @@ def department_list(request):
     """قائمة الأقسام"""
     from django.urls import reverse
     
-    departments = Department.objects.all().select_related('manager', 'parent')
+    departments = Department.objects.all().select_related('manager', 'parent', 'financial_subcategory').prefetch_related('employees')
     total_departments = departments.count()
     active_departments = departments.filter(is_active=True).count()
-    total_employees = Employee.objects.filter(status='active').count()
+    total_employees = Employee.objects.filter(status='active', is_insurance_only=False).count()
+    
+    # تجهيز أسماء الموظفين لكل قسم
+    dept_employees = {}
+    for dept in departments:
+        names = list(dept.employees.filter(status='active', is_insurance_only=False).values_list('name', flat=True))
+        dept_employees[dept.pk] = names
     
     context = {
         'departments': departments,
+        'dept_employees': dept_employees,
         'total_departments': total_departments,
         'active_departments': active_departments,
         'total_employees': total_employees,
@@ -161,7 +168,7 @@ def department_form(request, pk=None):
         'department': department,
         'next_code': next_code,
         'departments': departments,
-        'employees': Employee.objects.filter(status='active'),
+        'employees': Employee.objects.filter(status='active', is_insurance_only=False),
         
         # بيانات الهيدر
         'page_title': 'تعديل قسم' if pk else 'إضافة قسم جديد',

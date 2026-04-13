@@ -1,4 +1,4 @@
-"""
+﻿"""
 مصانع بيانات الاختبار - Test Data Factories
 """
 
@@ -6,13 +6,6 @@
 try:
     from .simple_factories import (
         SimpleUserFactory,
-        SimpleAcademicYearFactory,
-        SimpleAgeGroupFactory,
-        SimpleParentFactory,
-        SimpleStudentFactory,
-        create_simple_academic_year,
-        create_simple_student,
-        create_simple_parent,
         create_simple_batch,
         ARABIC_FIRST_NAMES_MALE,
         ARABIC_FIRST_NAMES_FEMALE,
@@ -22,14 +15,7 @@ try:
     
     # إعادة تسمية للتوافق مع الكود الموجود
     UserFactory = SimpleUserFactory
-    AcademicYearFactory = SimpleAcademicYearFactory
-    AgeGroupFactory = SimpleAgeGroupFactory
-    ParentFactory = SimpleParentFactory
-    StudentFactory = SimpleStudentFactory
     
-    create_test_academic_year = create_simple_academic_year
-    create_test_student = create_simple_student
-    create_test_parent = create_simple_parent
     create_test_batch = create_simple_batch
     
 except ImportError as e:
@@ -42,21 +28,10 @@ except ImportError as e:
             raise NotImplementedError("المصنع غير متاح")
     
     UserFactory = DummyFactory
-    AcademicYearFactory = DummyFactory
-    AgeGroupFactory = DummyFactory
-    ParentFactory = DummyFactory
-    StudentFactory = DummyFactory
 
 # قائمة المصانع المتاحة
 __all__ = [
     'UserFactory',
-    'AcademicYearFactory',
-    'AgeGroupFactory',
-    'ParentFactory',
-    'StudentFactory',
-    'create_test_academic_year',
-    'create_test_student',
-    'create_test_parent',
     'create_test_batch',
     'ARABIC_FIRST_NAMES_MALE',
     'ARABIC_FIRST_NAMES_FEMALE',
@@ -65,9 +40,9 @@ __all__ = [
 ]
 
 # دوال مساعدة سريعة
-def quick_setup(scenario='basic_school'):
+def quick_setup(scenario='basic_company'):
     """إعداد سريع لبيئة الاختبار"""
-    if scenario == 'basic_school':
+    if scenario == 'basic_company':
         return create_test_batch(5)
     else:
         raise NotImplementedError(f"السيناريو {scenario} غير متاح")

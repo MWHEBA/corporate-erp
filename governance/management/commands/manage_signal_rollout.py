@@ -4,11 +4,11 @@ Management command for managing signal governance rollout.
 This command provides safe, gradual rollout management with monitoring and rollback capabilities.
 
 Usage:
-    python manage.py manage_signal_rollout --action=start --workflow=student_fee_to_journal_entry
-    python manage.py manage_signal_rollout --action=advance --workflow=student_fee_to_journal_entry
+    python manage.py manage_signal_rollout --action=start --workflow=customer_payment_to_journal_entry
+    python manage.py manage_signal_rollout --action=advance --workflow=customer_payment_to_journal_entry
     python manage.py manage_signal_rollout --action=status
-    python manage.py manage_signal_rollout --action=monitor --workflow=student_fee_to_journal_entry
-    python manage.py manage_signal_rollout --action=rollback --workflow=student_fee_to_journal_entry --reason="Performance issues"
+    python manage.py manage_signal_rollout --action=monitor --workflow=customer_payment_to_journal_entry
+    python manage.py manage_signal_rollout --action=rollback --workflow=customer_payment_to_journal_entry --reason="Performance issues"
 """
 
 import logging
@@ -40,8 +40,8 @@ class Command(BaseCommand):
             '--workflow',
             type=str,
             choices=[
-                'student_fee_to_journal_entry',
-                'fee_payment_to_journal_entry',
+                'customer_payment_to_journal_entry',
+                'purchase_payment_to_journal_entry',
                 'stock_movement_to_journal_entry',
                 'transportation_fee_to_journal_entry',
                 'all'
@@ -137,8 +137,8 @@ class Command(BaseCommand):
         """Handle rollout start action"""
         if not workflow or workflow == 'all':
             workflows = [
-                'student_fee_to_journal_entry',
-                'fee_payment_to_journal_entry',
+                'customer_payment_to_journal_entry',
+                'purchase_payment_to_journal_entry',
                 'stock_movement_to_journal_entry',
                 'transportation_fee_to_journal_entry'
             ]
@@ -316,8 +316,8 @@ class Command(BaseCommand):
                 workflows = [workflow]
             else:
                 workflows = [
-                    'student_fee_to_journal_entry',
-                    'fee_payment_to_journal_entry',
+                    'customer_payment_to_journal_entry',
+                    'purchase_payment_to_journal_entry',
                     'stock_movement_to_journal_entry',
                     'transportation_fee_to_journal_entry'
                 ]

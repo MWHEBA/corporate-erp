@@ -103,7 +103,7 @@ class CategoryCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView
         })
         form.fields['name'].widget.attrs.update({
             'class': 'form-control',
-            'placeholder': 'مثال: الرسوم الدراسية'
+            'placeholder': 'مثال: رسوم الخدمات'
         })
         form.fields['description'].widget.attrs.update({
             'class': 'form-control',

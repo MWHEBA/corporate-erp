@@ -10,3 +10,5 @@ class HrConfig(AppConfig):
         """تفعيل الإشارات (Signals) عند تشغيل التطبيق"""
         import hr.signals  # noqa
         import hr.signals_permissions  # noqa
+        import hr.signals_permission_validation  # noqa
+        import hr.signals_official_holiday  # noqa

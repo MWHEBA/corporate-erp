@@ -31,6 +31,16 @@ class SaleForm(forms.ModelForm):
         ),
     )
 
+    # حقل التصنيف المالي
+    financial_category = forms.ChoiceField(
+        label="التصنيف المالي",
+        help_text="اختر التصنيف المالي للإيراد",
+        required=False,
+        widget=forms.Select(
+            attrs={"class": "form-control", "id": "id_financial_category"}
+        ),
+    )
+
     class Meta:
         model = Sale
         fields = [
@@ -40,6 +50,7 @@ class SaleForm(forms.ModelForm):
             "number",
             "discount",
             "payment_method",
+            "financial_category",
             "notes",
         ]
         widgets = {
@@ -91,9 +102,31 @@ class SaleForm(forms.ModelForm):
         
         # Handle old values when editing
         if self.instance and self.instance.pk and self.instance.payment_method:
-            # إذا كانت القيمة القديمة cash أو credit، نبقيها كما هي
-            # إذا كانت account code، نبقيها أيضاً
             self.initial['payment_method'] = self.instance.payment_method
+
+        # إعداد خيارات التصنيف المالي (إيرادات)
+        try:
+            from financial.models import FinancialCategory
+
+            category_choices = [('', 'اختر التصنيف المالي')]
+            financial_categories = FinancialCategory.objects.filter(
+                is_active=True,
+                default_revenue_account__isnull=False
+            ).prefetch_related('subcategories').order_by('display_order', 'name')
+
+            for cat in financial_categories:
+                category_choices.append((f"cat_{cat.pk}", f"📁 {cat.name}"))
+                for subcat in cat.subcategories.filter(is_active=True).order_by('display_order', 'name'):
+                    category_choices.append((f"sub_{subcat.pk}", f"   ↳ {subcat.name}"))
+
+            self.fields['financial_category'].choices = category_choices
+
+            if self.instance and self.instance.pk and self.instance.financial_category:
+                from financial.models import FinancialSubcategory
+                if isinstance(self.instance.financial_category, FinancialCategory):
+                    self.initial['financial_category'] = f"cat_{self.instance.financial_category.pk}"
+        except ImportError:
+            self.fields['financial_category'].choices = [('', 'اختر التصنيف المالي')]
 
     def clean(self):
         cleaned_data = super().clean()
@@ -110,6 +143,25 @@ class SaleForm(forms.ModelForm):
             cleaned_data['payment_method'] = 'credit'
         
         return cleaned_data
+
+    def clean_financial_category(self):
+        """معالجة التصنيف المالي - تحويل من ID إلى كائن"""
+        value = self.cleaned_data.get('financial_category')
+        if not value:
+            return None
+        try:
+            from financial.models import FinancialCategory, FinancialSubcategory
+            if value.startswith('cat_'):
+                cat_id = int(value.replace('cat_', ''))
+                return FinancialCategory.objects.get(pk=cat_id, is_active=True)
+            elif value.startswith('sub_'):
+                subcat_id = int(value.replace('sub_', ''))
+                subcat = FinancialSubcategory.objects.select_related('parent_category').get(pk=subcat_id, is_active=True)
+                return subcat.parent_category
+            else:
+                raise ValidationError('صيغة التصنيف المالي غير صحيحة')
+        except (ImportError, ValueError, Exception) as e:
+            raise ValidationError(f'خطأ في معالجة التصنيف المالي: {str(e)}')
 
     def clean_number(self):
         number = self.cleaned_data.get("number")

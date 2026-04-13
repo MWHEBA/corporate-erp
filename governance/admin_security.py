@@ -7,11 +7,9 @@ to prevent unauthorized access to high-risk models and enforce governance rules.
 
 High-Risk Models (as defined in requirements):
 - JournalEntry, JournalEntryLine (Financial)
-- Stock, StockMovement (Inventory) 
-- StudentFee, FeePayment (Student Finance)
-- AcademicYear, StudentEnrollment (Academic)
+- Stock, StockMovement (Inventory)
+- Sale, Purchase (Commerce)
 - User, Group (System)
-- TransportationFee (Transportation)
 
 Key Features:
 - Read-only enforcement for sensitive models
@@ -490,48 +488,6 @@ class SecureStockAdmin(ReadOnlyModelAdmin):
     readonly_fields = ['quantity', 'updated_at']
 
 
-class SecureStudentFeeAdmin(RestrictedModelAdmin):
-    """Secure admin for StudentFee model."""
-    
-    authoritative_service = "FinanceService"
-    business_interface_url = "/clients/fees/"
-    require_special_permission = True
-    
-    list_display = ['student', 'fee_type', 'total_amount', 'paid_amount', 'status']
-    list_filter = ['status', 'fee_type', 'academic_year']
-    search_fields = ['student__name', 'student__code']
-    readonly_fields = ['paid_amount', 'outstanding_amount', 'created_at']
-
-
-class SecureFeePaymentAdmin(ReadOnlyModelAdmin):
-    """Secure admin for FeePayment model."""
-    
-    authoritative_service = "FinanceService"
-    business_interface_url = "/clients/payments/"
-    security_warning_message = _(
-        "⚠️ المدفوعات محمية: استخدم نظام المدفوعات للتسجيل والتعديل"
-    )
-    
-    list_display = ['student_fee', 'amount', 'payment_date', 'payment_method']
-    list_filter = ['payment_method', 'payment_date']
-    search_fields = ['student_fee__student__name', 'reference_number']
-    readonly_fields = ['created_at', 'created_by']
-
-
-class SecureAcademicYearAdmin(RestrictedModelAdmin):
-    """Secure admin for AcademicYear model."""
-    
-    authoritative_service = "AcademicService"
-    require_special_permission = True
-    security_warning_message = _(
-        "⚠️ السنوات الدراسية حساسة: تأكد من وجود سنة نشطة واحدة فقط"
-    )
-    
-    list_display = ['display_name', 'year', 'year_type', 'is_active']
-    list_filter = ['year_type', 'is_active']
-    readonly_fields = ['start_date', 'end_date', 'created_at']
-
-
 class SecureUserAdmin(RestrictedModelAdmin):
     """Secure admin for User model."""
     
@@ -622,9 +578,6 @@ __all__ = [
     'RestrictedModelAdmin',
     'SecureJournalEntryAdmin',
     'SecureStockAdmin',
-    'SecureStudentFeeAdmin',
-    'SecureFeePaymentAdmin',
-    'SecureAcademicYearAdmin',
     'SecureUserAdmin',
     'SecureGroupAdmin',
     'AdminSecurityManager'

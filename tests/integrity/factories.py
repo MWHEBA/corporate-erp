@@ -198,7 +198,7 @@ class IntegrityTestDataFactory:
             'expected_total': total_amount
         }
     
-    # Sale methods removed - Sale module has been replaced with student_products
+    # Sale methods removed - Sale module has been replaced with a generic product module
     
     @staticmethod
     def create_concurrent_scenario(operation_count=10, thread_count=5):
@@ -374,8 +374,7 @@ class IntegrityTestDataFactory:
         
         return purchase_data
     
-    # Sale scenario methods removed - Sale module has been replaced with student_products
-    # Use student_products.models.ProductRequest for similar functionality
+    # Sale scenario methods removed - Sale module has been replaced with a generic product module
     
     @staticmethod
     def cleanup_test_data():

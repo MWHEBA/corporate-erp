@@ -316,7 +316,7 @@ class AdvanceSystemIntegrationTest(TransactionTestCase):
             contract=self.contract,
             component_type='earning',
             code='BASIC',
-            name='الراتب الأساسي',
+            name='الأجر الأساسي',
             amount=Decimal('10000.00'),
             effective_from=date(2025, 1, 1),
             is_active=True,

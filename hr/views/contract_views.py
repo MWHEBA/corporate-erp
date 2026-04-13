@@ -1,11 +1,12 @@
-"""
+﻿"""
 Views إدارة العقود - النظام الموحد
 دمج: contract_views.py + contract_form_views.py + contract_unified_views.py
 """
 from .base_imports import *
 from ..models import Contract, Employee, Department, SalaryComponent, ContractSalaryComponent
 from ..models.contract import ContractDocument, ContractAmendment, ContractIncrease
-from ..decorators import can_manage_contracts, hr_manager_required
+from ..decorators import can_manage_contracts, hr_manager_required, _is_hr_manager
+from django.core.exceptions import PermissionDenied
 from ..services.unified_contract_service import UnifiedContractService
 from ..services.unified_salary_component_service import UnifiedSalaryComponentService
 from ..services.smart_contract_analyzer import SmartContractAnalyzer
@@ -68,93 +69,137 @@ __all__ = [
 
 
 @login_required
-@hr_manager_required
 def contract_list(request):
     """قائمة العقود"""
-    # Query Optimization - تقليل عدد الـ queries
     contracts = Contract.objects.select_related(
         'employee',
         'employee__department',
         'employee__job_title',
         'job_title',
         'department'
-    ).prefetch_related(
-        'scheduled_increases',
-        'amendments'
-    ).order_by('-created_at')  # ✅ ترتيب بالأحدث أولاً
-    
-    # إحصائيات
+    ).order_by('-created_at')
+
+    # تطبيق الفلاتر
+    employee_id  = request.GET.get('employee')
+    status       = request.GET.get('status')
+    contract_type = request.GET.get('contract_type')
+    from_date    = request.GET.get('from_date')
+    to_date      = request.GET.get('to_date')
+
+    if employee_id:
+        contracts = contracts.filter(employee_id=employee_id)
+    if status:
+        contracts = contracts.filter(status=status)
+    if contract_type:
+        contracts = contracts.filter(contract_type=contract_type)
+    if from_date:
+        try:
+            contracts = contracts.filter(start_date__gte=from_date)
+        except Exception:
+            pass
+    if to_date:
+        try:
+            contracts = contracts.filter(start_date__lte=to_date)
+        except Exception:
+            pass
+
+    # إحصائيات على الـ queryset الكامل قبل الـ pagination
     stats = {
-        'total': contracts.count(),
-        'active': contracts.filter(status='active').count(),
-        'draft': contracts.filter(status='draft').count(),
-        'suspended': contracts.filter(status='suspended').count(),
+        'total':         contracts.count(),
+        'active':        contracts.filter(status='active').count(),
+        'draft':         contracts.filter(status='draft').count(),
+        'suspended':     contracts.filter(status='suspended').count(),
         'expiring_soon': contracts.filter(
             status='active',
             end_date__isnull=False,
             end_date__lte=date.today() + timedelta(days=30)
         ).count(),
     }
-    
-    # تعريف رؤوس الجدول
+
+    # Pagination على مستوى الداتابيز
+    paginator      = Paginator(contracts, 30)
+    page           = request.GET.get('page', 1)
+    contracts_page = paginator.get_page(page)
+
+    # جلب الأجر التأميني فقط للصفحة الحالية
+    from hr.models.contract_salary_component import ContractSalaryComponent
+    page_ids = [c.pk for c in contracts_page]
+    insurable_map = {
+        c['contract_id']: c['amount']
+        for c in ContractSalaryComponent.objects.filter(
+            code='INSURABLE_SALARY',
+            contract_id__in=page_ids
+        ).values('contract_id', 'amount')
+    }
+    for contract in contracts_page:
+        contract.insurable_salary_display = insurable_map.get(contract.pk)
+
+    try:
+        currency_symbol = SystemSetting.get_currency_symbol()
+    except Exception:
+        currency_symbol = 'جنيه'
+
+    # التحقق من صلاحية عرض الأجور - مخفية عن مسؤول الموارد البشرية (hr role)
+    user = request.user
+    can_view_salary_columns = (
+        user.is_superuser or
+        getattr(user, 'is_admin', False) or
+        not (hasattr(user, 'role') and user.role and user.role.name == 'hr')
+    )
+
+    # رؤوس الجدول
     headers = [
-        {'key': 'contract_number', 'label': 'رقم العقد', 'sortable': True, 'class': 'text-center'},
-        {'key': 'employee', 'label': 'الموظف', 'sortable': True, 'template': 'hr/contract/cells/employee.html'},
-        {'key': 'contract_type', 'label': 'نوع العقد', 'sortable': True, 'template': 'hr/contract/cells/contract_type.html', 'class': 'text-center'},
-        {'key': 'start_date', 'label': 'تاريخ البداية', 'sortable': True, 'format': 'date', 'class': 'text-center'},
-        {'key': 'end_date', 'label': 'تاريخ النهاية', 'sortable': True, 'template': 'hr/contract/cells/end_date.html', 'class': 'text-center'},
-        {'key': 'basic_salary', 'label': 'الراتب الأساسي', 'sortable': True, 'format': 'currency', 'class': 'text-center'},
-        {'key': 'status', 'label': 'الحالة', 'sortable': True, 'template': 'hr/contract/cells/status.html', 'class': 'text-center'},
+        {'key': 'contract_number',             'label': 'رقم العقد',      'sortable': True,  'class': 'text-center'},
+        {'key': 'employee',                    'label': 'الموظف',         'sortable': True,  'template': 'hr/contract/cells/employee.html'},
+        {'key': 'end_date',                    'label': 'تاريخ الانتهاء', 'sortable': True,  'template': 'hr/contract/cells/end_date.html',        'class': 'text-center'},
+        {'key': 'is_social_insurance_enrolled','label': 'التأمينات',      'sortable': True,  'template': 'hr/contract/cells/insurance.html',       'class': 'text-center'},
+        {'key': 'status',                      'label': 'الحالة',         'sortable': True,  'template': 'hr/contract/cells/status.html',          'class': 'text-center'},
     ]
-    
-    # أزرار الإجراءات
+
+    if can_view_salary_columns:
+        headers.insert(3, {'key': 'insurable_salary_display', 'label': 'الأجر التأميني', 'sortable': False, 'template': 'hr/contract/cells/insurance_salary.html', 'class': 'text-center'})
+        headers.insert(3, {'key': 'basic_salary',             'label': 'الأجر الأساسي',  'sortable': True,  'template': 'hr/contract/cells/basic_salary.html',     'class': 'text-center'})
+
+    is_hr_only = hasattr(user, 'role') and user.role and user.role.name == 'hr'
+
     action_buttons = [
         {'url': 'hr:contract_detail', 'icon': 'fa-eye', 'label': 'عرض', 'class': 'action-view'},
-        {'url': 'hr:contract_form_edit', 'icon': 'fa-edit', 'label': 'تعديل', 'class': 'action-edit'},
     ]
-    
-    # Pagination - 30 عقد لكل صفحة
-    paginator = Paginator(contracts, 30)
-    page = request.GET.get('page', 1)
-    contracts_page = paginator.get_page(page)
-    
+    if not is_hr_only:
+        action_buttons.append(
+            {'url': 'hr:contract_form_edit', 'icon': 'fa-edit', 'label': 'تعديل', 'class': 'action-edit', 'condition': "status != 'active'"}
+        )
+
     context = {
-        'headers': headers,
-        'data': contracts_page,
+        'headers':        headers,
+        'data':           contracts_page,
         'action_buttons': action_buttons,
-        'table_id': 'contracts-table',
-        'primary_key': 'pk',
-        'empty_message': 'لا توجد عقود',
-        'currency_symbol': 'جنيه',
+        'table_id':       'contracts-table',
+        'primary_key':    'pk',
+        'empty_message':  'لا توجد عقود',
+        'currency_symbol': currency_symbol,
         'clickable_rows': True,
-        'row_click_url': '/hr/contracts/0/',
+        'row_click_url':  '/hr/contracts/0/',
         **{f'{k}_contracts': v for k, v in stats.items()},
-        'show_stats': True,
-        'employees': Employee.objects.filter(status='active'),
-        
-        # بيانات الهيدر
-        'page_title': 'العقود',
+        'show_stats':     True,
+        'page_obj':       contracts_page,
+        'paginator':      paginator,
+        'employees':      Employee.objects.filter(status='active', is_insurance_only=False).only('id', 'name', 'employee_number'),
+
+        'page_title':    'العقود',
         'page_subtitle': 'إدارة عقود الموظفين والتجديدات',
-        'page_icon': 'fas fa-file-contract',
-        
-        # أزرار الهيدر
+        'page_icon':     'fas fa-file-contract',
         'header_buttons': [
-            {
-                'url': reverse('hr:contract_form'),
-                'icon': 'fa-plus',
-                'text': 'إضافة عقد',
-                'class': 'btn-primary',
-            },
+            {'url': reverse('hr:contract_form'),   'icon': 'fa-plus',        'text': 'إضافة عقد',    'class': 'btn-primary'},
+            {'url': reverse('hr:contract_import'), 'icon': 'fa-file-import', 'text': 'استيراد جماعي','class': 'btn-outline-success'},
         ],
-        
-        # البريدكرمب
         'breadcrumb_items': [
-            {'title': 'الرئيسية', 'url': reverse('core:dashboard'), 'icon': 'fas fa-home'},
+            {'title': 'الرئيسية',       'url': reverse('core:dashboard'),   'icon': 'fas fa-home'},
             {'title': 'الموارد البشرية', 'url': reverse('hr:employee_list'), 'icon': 'fas fa-users-cog'},
             {'title': 'العقود', 'active': True},
         ],
     }
-    
+
     return render(request, 'hr/contract/list.html', context)
 
 
@@ -209,7 +254,7 @@ def contract_detail(request, pk):
         {'key': 'actions', 'label': 'إجراءات', 'template': 'hr/contract/cells/document_actions.html', 'class': 'text-center', 'width': '100', 'searchable': False},
     ]
     
-    # تحديد حالة العقد كـ badge
+    # تحديد حالة العقد كـ badge (للعرض في الهيدر)
     status_badge = {
         'draft': {'text': 'مسودة', 'class': 'bg-secondary', 'icon': 'fa-file'},
         'active': {'text': 'نشط', 'class': 'bg-success', 'icon': 'fa-check-circle'},
@@ -218,21 +263,19 @@ def contract_detail(request, pk):
         'renewed': {'text': 'مجدد', 'class': 'bg-info', 'icon': 'fa-redo'},
     }.get(contract.status, {'text': contract.get_status_display(), 'class': 'bg-secondary', 'icon': 'fa-circle'})
     
-    # تحديد الأزرار حسب حالة العقد
-    header_buttons = [
-        {
-            'text': status_badge['text'],
-            'icon': status_badge['icon'],
-            'class': status_badge['class'],
-            'is_badge': True,
-        },
-        {
-            'url': f'/hr/contracts/{contract.pk}/form/',
-            'icon': 'fa-edit',
-            'text': 'تعديل',
-            'class': 'btn-warning',
-        },
-    ]
+    # تحديد الأزرار حسب حالة العقد (بدون status badge)
+    is_hr_only = hasattr(request.user, 'role') and request.user.role and request.user.role.name == 'hr'
+    header_buttons = []
+    
+    if not is_hr_only:
+        # زر التعديل - فقط للعقود غير النشطة
+        if contract.status != 'active':
+            header_buttons.append({
+                'url': f'/hr/contracts/{contract.pk}/form/',
+                'icon': 'fa-edit',
+                'text': 'تعديل',
+                'class': 'btn-warning',
+            })
     
     # أزرار حسب الحالة
     if contract.status == 'draft':
@@ -292,6 +335,7 @@ def contract_detail(request, pk):
     
     context = {
         'contract': contract,
+        'is_hr_only': is_hr_only,
         'system_settings': {'currency_symbol': currency_symbol},
         'documents_headers': documents_headers,
         'primary_key': 'id',
@@ -300,12 +344,14 @@ def contract_detail(request, pk):
         'applied_increases': applied_increases,
         'contract_synced_components': contract_synced_components,
         'manual_components': manual_components,
+        'status_badge': status_badge,
+        'header_badges': [status_badge],  # عرض الـ status كـ badge منفصل
         'page_title': f'عقد رقم {contract.contract_number}',
         'page_subtitle': f'{contract.employee.get_full_name_ar()} - {contract.employee.employee_number} • من تاريخ {contract.start_date.strftime("%d/%m/%Y")}' + (f' → {contract.end_date.strftime("%d/%m/%Y")}' if contract.end_date else ''),
         'page_icon': 'fas fa-file-contract',
         'header_buttons': header_buttons,
         'breadcrumb_items': [
-            {'title': 'الرئيسية', 'url': '/dashboard/', 'icon': 'fas fa-home'},
+            {'title': 'الرئيسية', 'url': '/', 'icon': 'fas fa-home'},
             {'title': 'الموارد البشرية', 'url': '/hr/', 'icon': 'fas fa-users-cog'},
             {'title': 'العقود', 'url': '/hr/contracts/', 'icon': 'fas fa-file-contract'},
             {'title': contract.employee.get_full_name_ar(), 'url': f'/hr/employees/{contract.employee.pk}/', 'icon': 'fas fa-user'},
@@ -317,6 +363,7 @@ def contract_detail(request, pk):
 
 
 @login_required
+@hr_manager_required
 @require_POST
 def sync_component(request, pk):
     """مزامنة بند واحد مع مصدره"""
@@ -348,6 +395,7 @@ def sync_component(request, pk):
 
 
 @login_required
+@hr_manager_required
 @require_POST
 def sync_contract_components(request, pk):
     """مزامنة جميع بنود العقد"""
@@ -384,6 +432,7 @@ def sync_contract_components(request, pk):
 
 
 @login_required
+@hr_manager_required
 def contract_document_upload(request, pk):
     """رفع مرفق للعقد"""
     contract = get_object_or_404(Contract, pk=pk)
@@ -415,6 +464,7 @@ def contract_document_upload(request, pk):
 
 
 @login_required
+@hr_manager_required
 def contract_document_delete(request, pk, doc_id):
     """حذف مرفق من العقد"""
     contract = get_object_or_404(Contract, pk=pk)
@@ -429,6 +479,7 @@ def contract_document_delete(request, pk, doc_id):
 
 
 @login_required
+@hr_manager_required
 def contract_amendment_create(request, pk):
     """إضافة تعديل على العقد"""
     contract = get_object_or_404(Contract, pk=pk)
@@ -492,32 +543,72 @@ def get_salary_component_templates(request):
 
 
 @login_required
+@hr_manager_required
 def contract_renew(request, pk):
     """تجديد العقد - يفتح form كامل للتعديل"""
     old_contract = get_object_or_404(Contract, pk=pk)
     
     if request.method == 'POST':
-        form = ContractForm(request.POST)
-        
-        # إضافة الموظف يدوياً لأن الحقل disabled
-        if form.data.get('employee') is None:
-            mutable_post = request.POST.copy()
-            mutable_post['employee'] = old_contract.employee.id
-            form = ContractForm(mutable_post)
-        
-        if form.is_valid():
-            new_contract = form.save(commit=False)
-            new_contract.employee = old_contract.employee
-            new_contract.created_by = request.user
-            new_contract.save()
-            
-            # تحديث العقد القديم
-            old_contract.status = 'renewed'
-            old_contract.renewed_to = new_contract
-            old_contract.save()
-            
-            messages.success(request, f'تم تجديد العقد بنجاح. رقم العقد الجديد: {new_contract.contract_number}')
-            return redirect('hr:contract_detail', pk=new_contract.pk)
+        from django.db import transaction
+
+        old_status = old_contract.status
+
+        # تحويل العقد القديم لـ "مجدد" فوراً قبل أي validation
+        old_contract.status = 'renewed'
+        old_contract.save(update_fields=['status'])
+
+        try:
+            form = ContractForm(request.POST, old_contract_pk=old_contract.pk, is_activating=True)
+
+            if form.data.get('employee') is None:
+                mutable_post = request.POST.copy()
+                mutable_post['employee'] = old_contract.employee.id
+                form = ContractForm(mutable_post, old_contract_pk=old_contract.pk, is_activating=True)
+
+            if form.is_valid():
+                with transaction.atomic():
+                    new_contract = form.save(commit=False)
+                    new_contract.employee = old_contract.employee
+                    new_contract.created_by = request.user
+                    new_contract.status = 'active'
+                    new_contract._skip_overlap_validation = True
+                    new_contract.save()
+
+                    from hr.models.contract_salary_component import ContractSalaryComponent
+                    for old_comp in old_contract.salary_components.all():
+                        ContractSalaryComponent.objects.create(
+                            contract=new_contract,
+                            name=old_comp.name,
+                            code=old_comp.code,
+                            component_type=old_comp.component_type,
+                            calculation_method=old_comp.calculation_method,
+                            amount=old_comp.amount,
+                            percentage=old_comp.percentage,
+                            formula=old_comp.formula,
+                            is_basic=old_comp.is_basic,
+                            is_taxable=old_comp.is_taxable,
+                            is_fixed=old_comp.is_fixed,
+                            affects_overtime=old_comp.affects_overtime,
+                            order=old_comp.order,
+                            show_in_payslip=old_comp.show_in_payslip,
+                            notes=old_comp.notes,
+                        )
+
+                    for component in new_contract.salary_components.all():
+                        component.copy_to_employee_component(new_contract.employee)
+
+                    old_contract.renewed_to = new_contract
+                    old_contract.save(update_fields=['renewed_to'])
+
+                messages.success(request, f'تم تجديد العقد بنجاح. رقم العقد الجديد: {new_contract.contract_number}')
+                return redirect('hr:contract_detail', pk=new_contract.pk)
+            else:
+                old_contract.status = old_status
+                old_contract.save(update_fields=['status'])
+        except Exception:
+            old_contract.status = old_status
+            old_contract.save(update_fields=['status'])
+            raise
     else:
         # تحديد تاريخ بداية العقد الجديد
         if old_contract.end_date:
@@ -547,9 +638,13 @@ def contract_renew(request, pk):
             'renewal_notice_days': old_contract.renewal_notice_days,
             'status': 'active',
             'has_annual_increase': old_contract.has_annual_increase,
+            'increase_type': old_contract.increase_type,
             'annual_increase_percentage': old_contract.annual_increase_percentage,
+            'annual_increase_amount': old_contract.annual_increase_amount,
             'increase_frequency': old_contract.increase_frequency,
             'increase_start_reference': old_contract.increase_start_reference,
+            'is_social_insurance_enrolled': old_contract.is_social_insurance_enrolled,
+            'social_insurance_number': old_contract.social_insurance_number,
         }
         form = ContractForm(initial=initial_data)
         
@@ -576,6 +671,7 @@ def contract_renew(request, pk):
 
 
 @login_required
+@hr_manager_required
 def contract_terminate(request, pk):
     """إنهاء العقد"""
     contract = get_object_or_404(Contract, pk=pk)
@@ -611,6 +707,7 @@ def contract_terminate(request, pk):
 
 
 @login_required
+@hr_manager_required
 def contract_create_increase_schedule(request, pk):
     """إنشاء جدول زيادات مجدولة للعقد"""
     contract = get_object_or_404(Contract, pk=pk)
@@ -636,6 +733,7 @@ def contract_create_increase_schedule(request, pk):
 
 
 @login_required
+@hr_manager_required
 @require_http_methods(["POST"])
 def contract_increase_action(request, increase_id, action):
     """دالة موحدة لإجراءات الزيادات (تطبيق/إلغاء)"""
@@ -659,6 +757,7 @@ def contract_increase_action(request, increase_id, action):
 
 
 @login_required
+@hr_manager_required
 @require_http_methods(["POST"])
 def contract_increase_apply(request, increase_id):
     """تطبيق زيادة مجدولة"""
@@ -666,6 +765,7 @@ def contract_increase_apply(request, increase_id):
 
 
 @login_required
+@hr_manager_required
 @require_http_methods(["POST"])
 def contract_increase_cancel(request, increase_id):
     """إلغاء زيادة مجدولة"""
@@ -746,13 +846,29 @@ def contract_activate(request, pk):
             messages.error(request, f'حدث خطأ أثناء تفعيل العقد: {str(e)}')
     
     # عرض صفحة التأكيد
-    components_count = contract.salary_components.count()
-    
+    from decimal import Decimal
+    components = contract.salary_components.all()
+    earnings = components.filter(component_type='earning').exclude(code='INSURABLE_SALARY')
+    deductions = components.filter(component_type='deduction')
+
+    total_fixed_earnings = sum(c.amount for c in earnings if c.calculation_method == 'fixed')
+    total_fixed_deductions = sum(c.amount for c in deductions if c.calculation_method == 'fixed')
+
+    summary = {
+        'earnings_count': earnings.count(),
+        'deductions_count': deductions.count(),
+        'total_components': components.count(),
+        'total_fixed_earnings': total_fixed_earnings,
+        'total_fixed_deductions': total_fixed_deductions,
+        'estimated_net': total_fixed_earnings - total_fixed_deductions,
+    }
+
     context = {
         'contract': contract,
-        'components_count': components_count,
-        'earnings_count': contract.salary_components.filter(component_type='earning').count(),
-        'deductions_count': contract.salary_components.filter(component_type='deduction').count(),
+        'summary': summary,
+        'components_count': components.count(),
+        'earnings_count': earnings.count(),
+        'deductions_count': deductions.count(),
         'page_title': f'تفعيل العقد: {contract.contract_number}',
         'page_subtitle': f'الموظف: {contract.employee.get_full_name_ar()}',
         'page_icon': 'fas fa-check-circle',
@@ -863,11 +979,21 @@ def contract_activate_with_components(request, pk):
 @login_required
 def contract_form(request, pk=None):
     """نموذج موحد لإضافة/تعديل عقد - مبسط باستخدام UnifiedContractService"""
+    # hr role يضيف فقط - لا يعدل على عقود موجودة
+    user = request.user
+    is_hr_only = hasattr(user, 'role') and user.role and user.role.name == 'hr'
+    if is_hr_only and pk:
+        raise PermissionDenied("صلاحيات HR Manager مطلوبة لتعديل العقود")
+    if not is_hr_only and not _is_hr_manager(user):
+        raise PermissionDenied("صلاحيات HR Manager مطلوبة للوصول لهذه الصفحة")
+
     contract = get_object_or_404(Contract, pk=pk) if pk else None
     unified_service = UnifiedContractService()
     
     if request.method == 'POST':
-        form = ContractForm(request.POST, instance=contract)
+        action = request.POST.get('action', 'save_draft')
+        is_activating = action == 'save_activate'
+        form = ContractForm(request.POST, instance=contract, is_activating=is_activating)
         if form.is_valid():
             contract_obj = form.save(commit=False)
             
@@ -881,8 +1007,7 @@ def contract_form(request, pk=None):
                 if not contract_obj.contract_type:
                     contract_obj.contract_type = 'contract'
             
-            # تحديد الإجراء: حفظ كمسودة أو حفظ وتفعيل
-            action = request.POST.get('action', 'save_draft')
+            # تحديد الإجراء: حفظ كمسودة أو حفظ وتفعيل (معرّف مسبقاً قبل الـ form)
             
             # إذا كان عقد جديد، تحديد الحالة حسب الإجراء
             if not pk:
@@ -895,7 +1020,7 @@ def contract_form(request, pk=None):
             
             contract_obj.save()
             
-            # إضافة بند الراتب الأساسي تلقائياً (للعقود الجديدة فقط)
+            # إضافة بند الأجر الأساسي تلقائياً (للعقود الجديدة فقط)
             if not pk and contract_obj.basic_salary and contract_obj.basic_salary > 0:
                 basic_exists = ContractSalaryComponent.objects.filter(
                     contract=contract_obj,
@@ -907,7 +1032,7 @@ def contract_form(request, pk=None):
                         contract=contract_obj,
                         component_type='earning',
                         code='BASIC_SALARY',
-                        name='الراتب الأساسي',
+                        name='الأجر الأساسي',
                         calculation_method='fixed',
                         amount=contract_obj.basic_salary,
                         is_basic=True,
@@ -918,12 +1043,14 @@ def contract_form(request, pk=None):
                         show_in_payslip=True,
                         notes='تم إضافته تلقائياً من العقد'
                     )
-                    logger.info(f"تم إضافة بند الراتب الأساسي تلقائياً: {contract_obj.basic_salary} ج.م")
                     
                     # إذا تم التفعيل مباشرة، انسخ للموظف
                     if action == 'save_activate':
                         emp_comp = basic_component.copy_to_employee_component(contract_obj.employee)
-                        logger.info(f"  → تم نسخ الراتب الأساسي إلى SalaryComponent - ID={emp_comp.id}")
+            
+            # الـ view بيتعامل مع نسخ البنود بنفسه - نمنع الـ signal من التكرار
+            if action == 'save_activate':
+                contract_obj._components_copied_by_view = True
             
             # حفظ مكونات الراتب
             _save_contract_components(request, contract_obj, pk, action)
@@ -974,7 +1101,7 @@ def contract_form(request, pk=None):
             },
         ],
         'breadcrumb_items': [
-            {'title': 'الرئيسية', 'url': '/dashboard/', 'icon': 'fas fa-home'},
+            {'title': 'الرئيسية', 'url': '/', 'icon': 'fas fa-home'},
             {'title': 'الموارد البشرية', 'url': '/hr/', 'icon': 'fas fa-users'},
             {'title': 'العقود', 'url': '/hr/contracts/', 'icon': 'fas fa-file-contract'},
             {'title': 'تعديل عقد' if contract else 'إضافة عقد', 'active': True},
@@ -999,7 +1126,8 @@ def _save_contract_components(request, contract_obj, pk, action):
         order = request.POST.get(f'earning_order_{counter}', 0)
         component_id = request.POST.get(f'earning_id_{counter}', '')
         
-        if name and amount:
+        clean_amount = amount.replace(',', '').strip() if amount else ''
+        if name and clean_amount:
             clean_id = None
             if component_id and component_id.strip():
                 try:
@@ -1007,12 +1135,18 @@ def _save_contract_components(request, contract_obj, pk, action):
                 except (ValueError, TypeError):
                     clean_id = None
             
+            try:
+                decimal_amount = Decimal(clean_amount)
+            except Exception:
+                decimal_amount = Decimal('0')
+            
             new_earnings.append({
                 'id': clean_id,
                 'name': name,
                 'formula': formula,
-                'amount': Decimal(amount),
-                'order': int(order) if order else 0
+                'amount': decimal_amount,
+                'order': int(order) if order else 0,
+                'code_override': request.POST.get(f'earning_code_{counter}', ''),
             })
     
     # جمع الاستقطاعات
@@ -1029,7 +1163,8 @@ def _save_contract_components(request, contract_obj, pk, action):
         order = request.POST.get(f'deduction_order_{counter}', 0)
         component_id = request.POST.get(f'deduction_id_{counter}', '')
         
-        if name and amount:
+        clean_amount = amount.replace(',', '').strip() if amount else ''
+        if name and clean_amount:
             clean_id = None
             if component_id and component_id.strip():
                 try:
@@ -1037,12 +1172,18 @@ def _save_contract_components(request, contract_obj, pk, action):
                 except (ValueError, TypeError):
                     clean_id = None
             
+            try:
+                decimal_amount = Decimal(clean_amount)
+            except Exception:
+                decimal_amount = Decimal('0')
+            
             new_deductions.append({
                 'id': clean_id,
                 'name': name,
                 'formula': formula,
-                'amount': Decimal(amount),
-                'order': int(order) if order else 0
+                'amount': decimal_amount,
+                'order': int(order) if order else 0,
+                'code_override': request.POST.get(f'deduction_code_{counter}', ''),
             })
     
     # حفظ البنود
@@ -1073,7 +1214,7 @@ def _update_contract_components(contract_obj, new_earnings, new_deductions, acti
                 obj.order = item['order']
                 obj.save()
                 
-                # إذا العقد active، حدث SalaryComponent المنسوخة
+                # إذا العقد active، حدث SalaryComponent المنسوخة أو أنشئها لو مش موجودة
                 if contract_obj.status == 'active':
                     try:
                         emp_comp = SalaryComponent.objects.get(
@@ -1087,12 +1228,13 @@ def _update_contract_components(contract_obj, new_earnings, new_deductions, acti
                         emp_comp.order = item['order']
                         emp_comp.save()
                     except SalaryComponent.DoesNotExist:
-                        pass
+                        # البند مش موجود عند الموظف - انسخه
+                        obj.copy_to_employee_component(contract_obj.employee)
             except ContractSalaryComponent.DoesNotExist:
                 pass
         else:
             # إنشاء بند جديد
-            code = item['name'].upper().replace(' ', '_')[:50]
+            code = item.pop('code_override', '') or item['name'].upper().replace(' ', '_')[:50]
             new_obj, created = ContractSalaryComponent.objects.get_or_create(
                 contract=contract_obj,
                 code=code,
@@ -1162,11 +1304,12 @@ def _update_contract_components(contract_obj, new_earnings, new_deductions, acti
                         emp_comp.order = item['order']
                         emp_comp.save()
                     except SalaryComponent.DoesNotExist:
-                        pass
+                        # البند مش موجود عند الموظف - انسخه
+                        obj.copy_to_employee_component(contract_obj.employee)
             except ContractSalaryComponent.DoesNotExist:
                 pass
         else:
-            code = item['name'].upper().replace(' ', '_')[:50]
+            code = item.pop('code_override', '') or item['name'].upper().replace(' ', '_')[:50]
             new_obj, created = ContractSalaryComponent.objects.get_or_create(
                 contract=contract_obj,
                 code=code,
@@ -1210,7 +1353,7 @@ def _create_contract_components(contract_obj, new_earnings, new_deductions, acti
     """إنشاء بنود العقد الجديد"""
     for data in new_earnings:
         data.pop('id', None)
-        code = data['name'].upper().replace(' ', '_')[:50]
+        code = data.pop('code_override', '') or data['name'].upper().replace(' ', '_')[:50]
         
         new_obj, created = ContractSalaryComponent.objects.get_or_create(
             contract=contract_obj,
@@ -1234,7 +1377,7 @@ def _create_contract_components(contract_obj, new_earnings, new_deductions, acti
     
     for data in new_deductions:
         data.pop('id', None)
-        code = data['name'].upper().replace(' ', '_')[:50]
+        code = data.pop('code_override', '') or data['name'].upper().replace(' ', '_')[:50]
         
         new_obj, created = ContractSalaryComponent.objects.get_or_create(
             contract=contract_obj,
@@ -1386,6 +1529,7 @@ def contract_apply_component_selection(request, contract_id):
 
 
 @login_required
+@hr_manager_required
 @require_http_methods(["POST"])
 def contract_optimize_components(request, employee_id):
     """تحسين بنود الموظف تلقائياً (من contract_unified_views)"""

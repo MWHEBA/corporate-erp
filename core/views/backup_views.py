@@ -1,4 +1,4 @@
-"""
+﻿"""
 Unified Backup Management Views
 """
 
@@ -78,8 +78,8 @@ def create_backup(request):
         from datetime import datetime
         from core.models import SystemSetting
         
-        school_name = SystemSetting.get_setting('site_name', 'School')
-        school_name = school_name.replace(' ', '_').replace('/', '_')
+        company_name = SystemSetting.get_setting('site_name', 'Company')
+        company_name = company_name.replace(' ', '_').replace('/', '_')
         date_str = datetime.now().strftime('%Y%m%d_%H%M%S')
         
         backup_type_en = {
@@ -97,7 +97,7 @@ def create_backup(request):
         else:
             ext = '.zip'
         
-        suggested_filename = f'{school_name}_Backup_{type_name}_{date_str}{ext}'
+        suggested_filename = f'{company_name}_Backup_{type_name}_{date_str}{ext}'
         
         response_data = {
             'success': True,
@@ -143,9 +143,9 @@ def download_backup(request, backup_id):
         if not backup_files:
             raise Http404("النسخة الاحتياطية غير موجودة")
         
-        # Get school name for filename
-        school_name = SystemSetting.get_setting('site_name', 'School')
-        school_name = school_name.replace(' ', '_').replace('/', '_')
+        # Get company name for filename
+        company_name = SystemSetting.get_setting('site_name', 'Company')
+        company_name = company_name.replace(' ', '_').replace('/', '_')
         
         # Determine backup type
         has_db = any('db_' in f.name for f in backup_files)
@@ -168,7 +168,7 @@ def download_backup(request, backup_id):
             import zipfile
             import tempfile
             
-            display_filename = f'{school_name}_Backup_{backup_type}_{date_str}.zip'
+            display_filename = f'{company_name}_Backup_{backup_type}_{date_str}.zip'
             
             # Create temporary zip file
             temp_zip = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
@@ -188,7 +188,7 @@ def download_backup(request, backup_id):
             
             # Get extension from original file
             ext = ''.join(backup_file.suffixes)
-            display_filename = f'{school_name}_Backup_{backup_type}_{date_str}{ext}'
+            display_filename = f'{company_name}_Backup_{backup_type}_{date_str}{ext}'
             
             response = FileResponse(
                 open(backup_file, 'rb'),
@@ -420,9 +420,9 @@ def list_backups(request):
         backup_service = BackupService()
         backups = backup_service.list_backups()
         
-        # Get school name for display
-        school_name = SystemSetting.get_setting('site_name', 'School')
-        school_name = school_name.replace(' ', '_').replace('/', '_')
+        # Get company name for display
+        company_name = SystemSetting.get_setting('site_name', 'Company')
+        company_name = company_name.replace(' ', '_').replace('/', '_')
         
         # Convert datetime objects to strings and add display name
         for backup in backups:
@@ -442,7 +442,7 @@ def list_backups(request):
             
             # Create display name
             date_str = backup['backup_id'].replace('backup_', '')
-            backup['display_name'] = f'{school_name}_Backup_{backup_type}_{date_str}'
+            backup['display_name'] = f'{company_name}_Backup_{backup_type}_{date_str}'
         
         return JsonResponse({
             'success': True,

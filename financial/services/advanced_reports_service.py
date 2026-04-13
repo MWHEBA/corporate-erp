@@ -577,7 +577,7 @@ class AdvancedReportsService:
         """
         # تحديد نوع الحساب
         if account_type == "customers":
-            base_account_code = "10300"  # العملاء
+            base_account_code = "10300"  # مدينو أولياء الأمور
             title = "تقرير أرصدة العملاء"
         else:
             base_account_code = "20100"  # الموردين
@@ -719,4 +719,3 @@ class AdvancedReportsService:
         financial_cache.delete_pattern("balance_sheet*")
         financial_cache.delete_pattern("cash_flow*")
 
-        logger.info("تم مسح كاش التقارير المالية")

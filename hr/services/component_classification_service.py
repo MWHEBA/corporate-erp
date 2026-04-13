@@ -38,7 +38,6 @@ class ComponentClassificationService:
                 component.save(update_fields=['source'])
                 updated_count += 1
             
-            logger.info(f"تم تصنيف {contract_components.count()} بند كـ 'من العقد'")
             
             # البنود المؤقتة (لها تاريخ انتهاء)
             temporary_components = SalaryComponent.objects.filter(
@@ -53,7 +52,6 @@ class ComponentClassificationService:
                 component.save(update_fields=['source'])
                 updated_count += 1
             
-            logger.info(f"تم تصنيف {temporary_components.count()} بند مؤقت")
             
             # البنود الدائمة (بدون تاريخ انتهاء وليست من العقد)
             permanent_components = SalaryComponent.objects.filter(
@@ -66,7 +64,6 @@ class ComponentClassificationService:
                 component.save(update_fields=['source'])
                 updated_count += 1
             
-            logger.info(f"تم تصنيف {permanent_components.count()} بند كـ 'تعديل'")
             
             return updated_count
     
@@ -136,10 +133,6 @@ class ComponentClassificationService:
             component.effective_to = new_end_date
             component.save(update_fields=['effective_to'])
             
-            logger.info(
-                f"تم تجديد البند {component.name} للموظف {component.employee} "
-                f"من {old_end_date} إلى {new_end_date}"
-            )
             
             return True, f"تم تجديد البند حتى {new_end_date}"
     

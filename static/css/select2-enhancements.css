@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ========================================
  * Select2 Unified Styles for Corporate ERP
  * ========================================
@@ -181,26 +181,3 @@
 /* ========================================
    8. SPECIAL COMPONENTS (مكونات خاصة)
    ======================================== */
-
-/* تحسين مظهر نتائج البحث للطلاب */
-.select2-result-student {
-    display: flex;
-    align-items: center;
-    padding: var(--spacing-2) var(--spacing-3);
-}
-
-.select2-result-student .student-details {
-    flex: 1;
-}
-
-.select2-result-student .student-name {
-    font-weight: var(--font-weight-medium);
-    margin-bottom: 2px;
-    color: var(--text-dark);
-}
-
-.select2-result-student small {
-    display: block;
-    font-size: var(--font-size-sm);
-    color: var(--text-light);
-}

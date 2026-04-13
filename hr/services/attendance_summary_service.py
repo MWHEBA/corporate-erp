@@ -28,7 +28,6 @@ class AttendanceSummaryService:
         Returns:
             AttendanceSummary: ملخص الحضور
         """
-        logger.info(f"بدء حساب ملخص حضور {employee.get_full_name_ar()} لشهر {month.strftime('%Y-%m')}")
         
         # الحصول على الملخص أو إنشاؤه
         summary, created = AttendanceSummary.objects.get_or_create(
@@ -39,7 +38,6 @@ class AttendanceSummaryService:
         # حساب الملخص
         summary.calculate()
         
-        logger.info(f"تم حساب ملخص الحضور: {summary.present_days} يوم حضور، {summary.absent_days} يوم غياب")
         
         return summary
     
@@ -79,7 +77,6 @@ class AttendanceSummaryService:
                     'error': str(e)
                 })
         
-        logger.info(f"تم حساب {len(results['success'])} ملخص، فشل {len(results['failed'])}")
         
         return results
     
@@ -137,22 +134,52 @@ class AttendanceSummaryService:
     def recalculate_summary(summary):
         """
         إعادة حساب ملخص الحضور
-        
+
         Args:
             summary: ملخص الحضور
-        
+
         Returns:
             AttendanceSummary: الملخص المحدث
         """
+        # Guard: cannot recalculate if payroll already processed for this month
+        payroll_exists = summary.employee.payrolls.filter(
+            month=summary.month,
+            status__in=['calculated', 'approved', 'paid']
+        ).exists()
+        if payroll_exists:
+            raise ValueError(
+                f'لا يمكن إعادة حساب ملخص الحضور للموظف {summary.employee.get_full_name_ar()} '
+                f'لشهر {summary.month.strftime("%Y-%m")} — تم حساب الراتب بالفعل'
+            )
+
         summary.is_calculated = False
         summary.is_approved = False
         summary.approved_by = None
         summary.approved_at = None
         summary.save()
-        
+
+        # تأكد إن أيام الإجازات المعتمدة حالتها on_leave قبل الحساب
+        from hr.models import Leave, Attendance
+        from hr.utils.payroll_helpers import get_payroll_period
+        from datetime import timedelta as _td
+        _start, _end, _ = get_payroll_period(summary.month)
+        _leave_dates = set()
+        for lv in Leave.objects.filter(
+            employee=summary.employee, status='approved',
+            start_date__lte=_end, end_date__gte=_start
+        ):
+            _cur = max(lv.start_date, _start)
+            while _cur <= min(lv.end_date, _end):
+                _leave_dates.add(_cur)
+                _cur += _td(days=1)
+        if _leave_dates:
+            Attendance.objects.filter(
+                employee=summary.employee,
+                date__in=_leave_dates,
+                status='absent'
+            ).update(status='on_leave', notes='تم التحديث تلقائياً عند إعادة الحساب')
+
         summary.calculate()
-        
-        logger.info(f"تم إعادة حساب ملخص حضور {summary.employee.get_full_name_ar()} لشهر {summary.month.strftime('%Y-%m')}")
-        
+
         return summary
 

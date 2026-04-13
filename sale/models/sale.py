@@ -59,6 +59,17 @@ class Sale(models.Model):
     )
     notes = models.TextField(_("ملاحظات"), blank=True, null=True)
 
+    # التصنيف المالي
+    financial_category = models.ForeignKey(
+        'financial.FinancialCategory',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name=_("التصنيف المالي"),
+        related_name="sales",
+        help_text=_("التصنيف المالي للإيراد (يحدد الحساب المحاسبي تلقائياً)")
+    )
+
     # ربط محاسبي
     journal_entry = models.ForeignKey(
         "financial.JournalEntry",

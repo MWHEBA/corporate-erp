@@ -26,7 +26,7 @@ class SignalChainAnalyzer:
         self.risk_indicators = {
             'journal_entry_creation': ['JournalEntry', 'create_journal', 'journal_entry'],
             'stock_modification': ['stock', 'quantity', 'inventory', 'movement'],
-            'fee_generation': ['StudentFee', 'generate_fee', 'fee_creation'],
+            'fee_generation': ['CustomerPayment', 'generate_fee', 'fee_creation'],
             'payment_processing': ['Payment', 'process_payment', 'payment_sync'],
             'status_changes': ['status', 'state', 'is_active', 'is_paid'],
             'cascade_operations': ['bulk_create', 'bulk_update', 'delete', 'cascade']

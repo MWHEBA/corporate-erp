@@ -52,13 +52,13 @@ class DataRetentionService:
         Load data retention policies from settings
         """
         default_policies = [
-            # Student data - 7 years after graduation
+            # Customer data - 7 years
             RetentionPolicy(
-                model_name='students.Student',
-                retention_days=2555,  # ~7 years
+                model_name='client.Customer',
+                retention_days=2555,
                 archive_before_delete=True,
                 anonymize_before_delete=True,
-                conditions={'is_graduated': True}
+                conditions={'is_active': False}
             ),
             
             # Financial records - 7 years for tax compliance
@@ -71,7 +71,7 @@ class DataRetentionService:
             
             # Payment records - 7 years
             RetentionPolicy(
-                model_name='students.FeePayment',
+                model_name='client.CustomerPayment',
                 retention_days=2555,
                 archive_before_delete=True
             ),

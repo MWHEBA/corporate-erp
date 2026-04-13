@@ -1,4 +1,4 @@
-http://127.0.0.1:8000/hr/attendance/"""
+"""
 Celery tasks for HR module
 مهام Celery لوحدة الموارد البشرية
 """
@@ -29,19 +29,16 @@ def process_biometric_logs_task(self):
         ).count()
         
         if unprocessed_logs == 0:
-            logger.info("لا توجد سجلات بصمة جديدة للمعالجة")
             return {
                 'success': True,
                 'message': 'لا توجد سجلات جديدة',
                 'processed': 0
             }
         
-        logger.info(f"بدء معالجة {unprocessed_logs} سجل بصمة")
         
         # معالجة السجلات
         result = process_biometric_logs()
         
-        logger.info(f"تمت معالجة {result.get('processed', 0)} سجل بنجاح")
         
         return {
             'success': True,
@@ -74,10 +71,8 @@ def cleanup_old_biometric_logs(months=6):
         
         if count > 0:
             old_logs.delete()
-            logger.info(f"تم حذف {count} سجل بصمة قديم")
             return {'success': True, 'deleted': count}
         else:
-            logger.info("لا توجد سجلات قديمة للحذف")
             return {'success': True, 'deleted': 0}
             
     except Exception as e:
@@ -119,7 +114,6 @@ def sync_biometric_devices():
                 })
         
         total_records = sum(r.get('records', 0) for r in results)
-        logger.info(f"تمت مزامنة {len(active_devices)} جهاز، تم جلب {total_records} سجل")
         
         return {
             'success': True,

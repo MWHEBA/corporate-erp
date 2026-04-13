@@ -114,7 +114,19 @@ class PayrollLine(models.Model):
     
     # الترتيب
     order = models.IntegerField(default=0, verbose_name='الترتيب')
-    
+
+    # التعديل اليدوي
+    is_manual = models.BooleanField(
+        default=False,
+        verbose_name='بند يدوي',
+        help_text='True إذا أُضيف البند يدوياً من قِبل المستخدم'
+    )
+    is_modified = models.BooleanField(
+        default=False,
+        verbose_name='معدّل يدوياً',
+        help_text='True إذا عُدِّل البند الأصلي يدوياً'
+    )
+
     # التواريخ
     created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
     
@@ -132,15 +144,17 @@ class PayrollLine(models.Model):
         return f"{self.payroll.employee.get_full_name_ar()} - {self.name}: {self.amount}"
     
     def save(self, *args, **kwargs):
-        """حساب المبلغ تلقائياً"""
+        """حساب المبلغ تلقائياً — لو rate > 0 يحسب quantity×rate، غير كده يحتفظ بالـ amount كما هو"""
         from decimal import Decimal, ROUND_HALF_UP
-        
-        # حساب المبلغ
-        self.amount = (Decimal(str(self.quantity)) * Decimal(str(self.rate))).quantize(
-            Decimal('0.01'), 
-            rounding=ROUND_HALF_UP
-        )
-        
+
+        rate = Decimal(str(self.rate))
+        if rate != Decimal('0'):
+            self.amount = (Decimal(str(self.quantity)) * rate).quantize(
+                Decimal('0.01'),
+                rounding=ROUND_HALF_UP
+            )
+        # لو rate=0 (بند يدوي أو تعديل)، نحتفظ بالـ amount كما هو بدون تغيير
+
         super().save(*args, **kwargs)
     
     def get_source_display_icon(self):

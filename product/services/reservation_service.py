@@ -81,7 +81,6 @@ class ReservationService:
                 stock.reserved_quantity += quantity
                 stock.save()
 
-                logger.info(f"تم إنشاء حجز جديد: {reservation}")
                 return reservation
 
         except Exception as e:
@@ -150,7 +149,6 @@ class ReservationService:
                     fulfillment.inventory_movement = inventory_movement
                     fulfillment.save()
 
-                logger.info(f"تم تنفيذ {quantity} من الحجز {reservation}")
                 return fulfillment
 
         except Exception as e:
@@ -167,7 +165,6 @@ class ReservationService:
                 reservation = StockReservation.objects.get(id=reservation_id)
                 reservation.cancel_reservation(reason, user)
 
-                logger.info(f"تم إلغاء الحجز {reservation}")
                 return reservation
 
         except Exception as e:
@@ -198,7 +195,6 @@ class ReservationService:
 
                 expired_count += 1
 
-            logger.info(f"تم إنهاء صلاحية {expired_count} حجز")
             return expired_count
 
         except Exception as e:
@@ -395,9 +391,6 @@ class ReservationService:
                             )
                             continue
 
-            logger.info(
-                f"تم إنشاء {len(reservations_created)} حجز تلقائي للطلب {order_id}"
-            )
             return reservations_created
 
         except Exception as e:
@@ -452,7 +445,7 @@ class ReservationService:
                             "available_quantity": available_quantity,
                             "min_stock": min_stock,
                             "shortage": max(0, min_stock - available_quantity),
-                            "status": "نفد" if available_quantity <= 0 else "منخفض",
+                            "status": "نفذ" if available_quantity <= 0 else "منخفض",
                         }
                     )
 

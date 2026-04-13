@@ -133,10 +133,6 @@ class SalaryComponentService:
             else:
                 raise e
         
-        logger.info(
-            f"تم إنشاء بند راتب من القالب - الموظف: {employee.get_full_name_ar()}, "
-            f"البند: {component.name}, المبلغ: {amount}"
-        )
         
         return component
     
@@ -168,9 +164,6 @@ class SalaryComponentService:
             )
             components.append(component)
         
-        logger.info(
-            f"تم نسخ {len(components)} بند راتب للموظف {employee.get_full_name_ar()}"
-        )
         
         return components
     
@@ -219,10 +212,6 @@ class SalaryComponentService:
             **kwargs
         )
         
-        logger.info(
-            f"تم إضافة بند راتب - الموظف: {employee.get_full_name_ar()}, "
-            f"البند: {component.name}, المبلغ: {component.amount}"
-        )
         
         return component
     
@@ -249,10 +238,6 @@ class SalaryComponentService:
         
         component.save()
         
-        logger.info(
-            f"تم تحديث بند راتب - الموظف: {component.employee.get_full_name_ar()}, "
-            f"البند: {component.name}"
-        )
         
         return component
     
@@ -282,10 +267,6 @@ class SalaryComponentService:
         
         component.save()
         
-        logger.info(
-            f"تم إلغاء تفعيل بند راتب - الموظف: {component.employee.get_full_name_ar()}, "
-            f"البند: {component.name}"
-        )
         
         return component
     
@@ -365,7 +346,7 @@ class SalaryComponentService:
         
         Returns:
             dict: {
-                'basic_salary': الراتب الأساسي,
+                'basic_salary': الأجر الأساسي,
                 'total_earnings': إجمالي المستحقات,
                 'total_deductions': إجمالي الاستقطاعات,
                 'net_salary': صافي الراتب
@@ -373,7 +354,7 @@ class SalaryComponentService:
         """
         components = SalaryComponentService.get_active_components(employee, month)
         
-        # حساب الراتب الأساسي من العقد النشط أولاً
+        # حساب الأجر الأساسي من العقد النشط أولاً
         active_contract = employee.contracts.filter(status='active').first()
         if active_contract and active_contract.basic_salary:
             basic_salary = Decimal(str(active_contract.basic_salary))
@@ -390,11 +371,11 @@ class SalaryComponentService:
             'month': month
         }
         
-        # حساب المستحقات (بدون الراتب الأساسي لتجنب التكرار)
+        # حساب المستحقات (بدون الأجر الأساسي لتجنب التكرار)
         earnings = components.filter(component_type='earning', is_basic=False)
         earnings_sum = sum((c.calculate_amount(context) for c in earnings), Decimal('0'))
         
-        # إضافة الراتب الأساسي لإجمالي المستحقات
+        # إضافة الأجر الأساسي لإجمالي المستحقات
         total_earnings = basic_salary + earnings_sum
         
         # حساب الاستقطاعات

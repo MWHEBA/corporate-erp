@@ -135,7 +135,7 @@ class BundleAnalyticsService:
                 'high_stock': 0,      # مخزون عالي (أكثر من 10)
                 'medium_stock': 0,    # مخزون متوسط (5-10)
                 'low_stock': 0,       # مخزون منخفض (1-4)
-                'out_of_stock': 0     # نفد المخزون (0)
+                'out_of_stock': 0     # نفذ المخزون (0)
             }
             
             stock_details = []

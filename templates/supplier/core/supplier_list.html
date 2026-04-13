@@ -66,45 +66,36 @@
   
   <!-- تصفية وبحث -->
   <div class="section-container mb-4">
-    <h5 class="section-title" data-bs-toggle="collapse" data-bs-target="#filterSection" aria-expanded="false" style="cursor: pointer;">
+    <h5 class="section-title" data-bs-toggle="collapse" data-bs-target="#filterSection" aria-expanded="{% if request.GET.search or request.GET.status or request.GET.has_debt %}true{% else %}false{% endif %}" style="cursor: pointer;">
       <i class="fas fa-filter me-2"></i>{% trans "تصفية وبحث" %}
+      {% if request.GET.search or request.GET.status or request.GET.has_debt %}<span class="badge bg-primary ms-2">فعّال</span>{% endif %}
       <i class="fas fa-chevron-down float-end"></i>
     </h5>
-    <div class="collapse" id="filterSection">
+    <div class="collapse {% if request.GET.search or request.GET.status or request.GET.has_debt %}show{% endif %}" id="filterSection">
       <div class="filter-section mb-4">
-      <form method="GET" action="{% url 'supplier:supplier_list' %}" class="row g-3">
-        <div class="col-md-2">
+      <form method="GET" action="{% url 'supplier:supplier_list' %}" class="d-flex flex-nowrap gap-2 align-items-end">
+        <div class="flex-grow-1">
+          <label for="search" class="form-label">{% trans "بحث" %}</label>
+          <input type="text" class="form-control" id="search" name="search" value="{{ request.GET.search }}" placeholder="اسم أو كود أو هاتف المورد">
+        </div>
+        <div class="flex-shrink-0">
+          <label for="has_debt" class="form-label">الاستحقاق</label>
+          <select class="form-select" id="has_debt" name="has_debt" style="min-width:150px">
+            <option value="">الكل</option>
+            <option value="1" {% if request.GET.has_debt == '1' %}selected{% endif %}>لديهم استحقاق</option>
+            <option value="0" {% if request.GET.has_debt == '0' %}selected{% endif %}>بدون استحقاق</option>
+          </select>
+        </div>
+        <div class="flex-shrink-0">
           <label for="status" class="form-label">{% trans "الحالة" %}</label>
-          <select class="form-select" id="status" name="status">
+          <select class="form-select" id="status" name="status" style="min-width:120px">
             <option value="">{% trans "الكل" %}</option>
             <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>{% trans "نشط" %}</option>
             <option value="inactive" {% if request.GET.status == 'inactive' %}selected{% endif %}>{% trans "غير نشط" %}</option>
           </select>
         </div>
-        <div class="col-md-3">
-          <label for="supplier_type" class="form-label">نوع المورد</label>
-          <select class="form-select" id="supplier_type" name="supplier_type">
-            <option value="">جميع الأنواع</option>
-            {% for type in supplier_types %}
-            <option value="{{ type.id }}" {% if request.GET.supplier_type == type.id|stringformat:"s" %}selected{% endif %}>
-              {{ type.settings.name }}
-            </option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-2">
-          <label for="preferred" class="form-label">المفضلين</label>
-          <select class="form-select" id="preferred" name="preferred">
-            <option value="">الكل</option>
-            <option value="1" {% if request.GET.preferred == '1' %}selected{% endif %}>المفضلين فقط</option>
-          </select>
-        </div>
-        <div class="col-md-3">
-          <label for="search" class="form-label">{% trans "بحث" %}</label>
-          <input type="text" class="form-control" id="search" name="search" value="{{ request.GET.search }}" placeholder="{% trans 'اسم أو كود المورد' %}">
-        </div>
-        <div class="col-md-2 d-flex align-items-end">
-          <button type="submit" class="btn btn-primary me-2">
+        <div class="flex-shrink-0 d-flex gap-2 align-self-end">
+          <button type="submit" class="btn btn-primary">
             <i class="fas fa-search me-1"></i>{% trans "بحث" %}
           </button>
           <a href="{% url 'supplier:supplier_list' %}" class="btn btn-outline-secondary">
@@ -112,24 +103,7 @@
           </a>
         </div>
       </form>
-    </div>
-    
-    <!-- فلاتر سريعة حسب نوع المورد -->
-    <div class="mt-4">
-      <h6 class="mb-3"><i class="fas fa-filter me-2"></i>فلترة سريعة حسب النوع:</h6>
-      <div class="d-flex flex-wrap gap-2" id="supplier-type-filters">
-        <button type="button" data-url="{% url 'supplier:supplier_list' %}" class="btn btn-sm supplier-type-filter {% if not request.GET.supplier_type %}btn-primary{% else %}btn-outline-primary{% endif %}">
-          <i class="fas fa-list me-1"></i>الكل
-        </button>
-        {% for type in supplier_types %}
-        <button type="button" data-url="?supplier_type={{ type.id }}" 
-           class="btn btn-sm supplier-type-filter {% if request.GET.supplier_type == type.id|stringformat:'s' %}btn-primary{% else %}btn-outline-primary{% endif %}"
-           style="{% if request.GET.supplier_type == type.id|stringformat:'s' %}background-color: {{ type.settings.color }}; border-color: {{ type.settings.color }};{% else %}color: {{ type.settings.color }}; border-color: {{ type.settings.color }};{% endif %}">
-          <i class="{{ type.settings.icon }} me-1"></i>{{ type.settings.name }}
-        </button>
-        {% endfor %}
       </div>
-    </div>
     </div>
   </div>
   
@@ -138,41 +112,13 @@
     <div class="card">
       <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="card-title mb-0"><i class="fas fa-list me-2"></i>{% trans "قائمة الموردين" %}</h5>
-        <div class="actions-container">
-          <a href="{% url 'supplier:supplier_add' %}" class="btn btn-sm btn-primary">
-            <i class="fas fa-plus me-1"></i>{% trans "إضافة مورد" %}
-          </a>
-        </div>
       </div>
       <div class="card-body">
-        <!-- استخدام قالب الجدول الموحد -->
-        {% with table_id="suppliers-table" %}
-          {% with headers=headers %}
-            {% with data=suppliers %}
-              {% with empty_message="لا يوجد موردين متاحين" %}
-                {% with table_class="hover" %}
-                  {% with action_buttons=action_buttons %}
-                    {% with primary_key="id" %}
-                      {% with clickable_rows=True row_click_url="/supplier/0/detail/" %}
-                        {% with current_order_by=current_order_by %}
-                          {% with current_order_dir=current_order_dir %}
-                            {% with show_currency=True currency_symbol=currency_symbol %}
-                              {% with show_search=True show_length_menu=True length_options="10,25,50,100" %}
-                                {% include "components/data_table.html" %}
-                              {% endwith %}
-                            {% endwith %}
-                          {% endwith %}
-                        {% endwith %}
-                      {% endwith %}
-                    {% endwith %}
-                  {% endwith %}
-                {% endwith %}
-              {% endwith %}
-            {% endwith %}
-          {% endwith %}
-        {% endwith %}
-        
-        <!-- إضافة زر تصدير البيانات -->
+        <div id="suppliers-table-container">
+        {% include "components/data_table.html" with table_id="suppliers-table" data=suppliers headers=headers action_buttons=action_buttons primary_key="id" table_class="hover" empty_message="لا يوجد موردين متاحين" show_search=False show_length_menu=False disable_pagination=True show_currency=True %}
+        </div>
+
+        <!-- تصدير البيانات -->
         <div class="d-flex justify-content-end mt-3">
           <button type="button" class="btn btn-sm btn-outline-secondary btn-export-table me-2" data-table="suppliers-table" data-filename="suppliers.csv">
             <i class="fas fa-file-csv me-1"></i>{% trans "تصدير CSV" %}
@@ -182,29 +128,29 @@
           </button>
         </div>
       </div>
+
+      <!-- Django Pagination -->
+      <div id="pagination-wrapper">
+      {% if paginator and paginator.num_pages > 1 %}
+      <div class="card-footer">
+        {% include "partials/pagination.html" with page_obj=page_obj align="center" %}
+      </div>
+      {% endif %}
+      </div>
+      </div>
     </div>
   </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<!-- مكتبة SheetJS لتصدير البيانات إلى Excel بدعم كامل للغة العربية -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<!-- استخدام مكتبة DataTables من ملف datatables.min.js الموجود -->
 <script src="{% static 'js/global-table.js' %}"></script>
 <script>
-  $(document).ready(function() {
-    // تهيئة جدول الموردين
+  function initTable() {
     if (typeof GlobalTableManager !== 'undefined') {
       GlobalTableManager.initializeTable('suppliers-table', {
-        order: [],
-        ordering: true,
-        orderCellsTop: true,
-        searching: true,  // تفعيل البحث للـ table-controls
-        lengthChange: true,  // تفعيل length menu للـ table-controls
-        info: true,  // تفعيل info text
-        paging: true,  // تفعيل pagination
-        dom: 't',  // إخفاء search box الافتراضي وإظهار الجدول فقط
+        paging: false, searching: false, info: false, dom: 't', ordering: true,
         columnDefs: [
           { targets: 'col-actions', orderable: false, width: '120px' },
           { targets: 'col-name', width: '20%' },
@@ -214,323 +160,150 @@
           { targets: 'col-is_preferred', width: '12%', className: 'text-center' },
           { targets: 'col-actual_balance', width: '19%', className: 'text-end' }
         ],
-        autoWidth: true,
-        responsive: true
-      });
-    } else {
-      // تهيئة DataTable مباشرة
-      $('#suppliers-table').DataTable({
-        order: [],
-        ordering: true,
-        orderCellsTop: true,
-        searching: true,
-        lengthChange: true,
-        info: true,
-        paging: true,
-        dom: 't',
-        columnDefs: [
-          { targets: 'col-actions', orderable: false, width: '120px' },
-          { targets: 'col-name', width: '20%' },
-          { targets: 'col-code', width: '12%' },
-          { targets: 'col-supplier_types_display', orderable: false, width: '22%' },
-          { targets: 'col-phone', width: '15%' },
-          { targets: 'col-is_preferred', width: '12%', className: 'text-center' },
-          { targets: 'col-actual_balance', width: '19%', className: 'text-end' }
-        ],
-        autoWidth: true,
-        responsive: true,
-        language: {
-          url: '{% static "js/ar.json" %}'
-        }
+        autoWidth: true, responsive: true
       });
     }
-    
-    // تنسيق حقول التاريخ
-    $('input[type="date"]').addClass('form-control');
-    
-    // ضبط حجم الجدول عند تحميل الصفحة وعند تغيير حجم النافذة
-    function adjustTableSize() {
-      $('.table-responsive').css('max-height', '100%').css('overflow-y', 'visible');
-      $('#suppliers-table').css('width', '100%');
-    }
-    
-    adjustTableSize();
-    $(window).resize(adjustTableSize);
-    
-    // جعل الصف كامل قابل للنقر للانتقال للتفاصيل
-    $('#suppliers-table tbody').on('click', 'tr', function(e) {
-      // تجاهل النقر على أزرار الإجراءات
-      if ($(e.target).closest('.col-actions').length > 0) {
-        return;
-      }
-      
-      // الحصول على رابط زر العرض
-      var viewButton = $(this).find('.action-view');
-      if (viewButton.length > 0) {
-        var url = viewButton.attr('href');
-        if (url) {
-          window.location.href = url;
-        }
-      }
-    });
-    
-    // إضافة مؤشر اليد عند المرور على الصف
-    $('#suppliers-table tbody tr').css('cursor', 'pointer');
-    
-    // Ajax filtering جذري وبسيط
-    $(document).on('click', '.supplier-type-filter', function(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      
-      const $btn = $(this);
-      const url = $btn.data('url');
-      
-      if (!url) {
-        return;
-      }
-      
-      // Loading state
-      const originalHtml = $btn.html();
-      $btn.html('<i class="fas fa-spinner fa-spin"></i> جاري التحميل...').prop('disabled', true);
-      
-      // Ajax call
+    $('#suppliers-table tbody').off('click', 'tr').on('click', 'tr', function(e) {
+      if ($(e.target).closest('.col-actions').length > 0) return;
+      const viewBtn = $(this).find('.action-view');
+      if (viewBtn.length) window.location.href = viewBtn.attr('href');
+    }).find('tr').css('cursor', 'pointer');
+  }
+
+  $(document).ready(function() {
+    initTable();
+
+    let debounceTimer;
+    function doSearch() {
+      const params = new URLSearchParams({
+        search: $('#search').val(),
+        has_debt: $('#has_debt').val(),
+        status: $('#status').val(),
+        page: 1
+      });
+
       $.ajax({
-        url: url,
-        type: 'GET',
-        headers: {
-          'X-Requested-With': 'XMLHttpRequest'
-        },
-        success: function(response) {
-          if (response.success && response.html) {
-            // استبدال المحتوى بالكامل
-            const newContent = $(response.html).find('#main-content').html();
-            $('#main-content').html(newContent);
-            
-            // إعادة تهيئة الجدول
-            setTimeout(function() {
-              if (typeof GlobalTableManager !== 'undefined') {
-                GlobalTableManager.initializeTable('suppliers-table', {
-                  order: [],
-                  ordering: true,
-                  orderCellsTop: true,
-                  searching: false,
-                  lengthChange: false,
-                  info: false,
-                  paging: false,
-                  columnDefs: [
-                    { targets: 'col-actions', orderable: false, width: '120px' },
-                    { targets: 'col-name', width: '18%' },
-                    { targets: 'col-code', width: '10%' },
-                    { targets: 'col-supplier_types_display', orderable: false, width: '20%' },
-                    { targets: 'col-phone', width: '12%' },
-                    { targets: 'col-is_preferred', width: '10%', className: 'text-center' },
-                    { targets: 'col-actual_balance', width: '15%', className: 'text-end' }
-                  ],
-                  autoWidth: true,
-                  responsive: true
-                });
-              } else if ($.fn.DataTable) {
-                $('#suppliers-table').DataTable({
-                  order: [],
-                  ordering: true,
-                  orderCellsTop: true,
-                  searching: false,
-                  lengthChange: false,
-                  info: false,
-                  paging: false,
-                  columnDefs: [
-                    { targets: 'col-actions', orderable: false, width: '120px' },
-                    { targets: 'col-name', width: '18%' },
-                    { targets: 'col-code', width: '10%' },
-                    { targets: 'col-supplier_types_display', orderable: false, width: '20%' },
-                    { targets: 'col-phone', width: '12%' },
-                    { targets: 'col-is_preferred', width: '10%', className: 'text-center' },
-                    { targets: 'col-actual_balance', width: '15%', className: 'text-end' }
-                  ],
-                  autoWidth: true,
-                  responsive: true,
-                  language: {
-                    "decimal": "",
-                    "emptyTable": "لا توجد بيانات متاحة في الجدول",
-                    "info": "عرض _START_ إلى _END_ من إجمالي _TOTAL_ عنصر",
-                    "infoEmpty": "عرض 0 إلى 0 من إجمالي 0 عنصر",
-                    "infoFiltered": "(مفلتر من إجمالي _MAX_ عنصر)",
-                    "lengthMenu": "عرض _MENU_ عنصر",
-                    "loadingRecords": "جاري التحميل...",
-                    "processing": "جاري المعالجة...",
-                    "search": "بحث:",
-                    "zeroRecords": "لم يتم العثور على نتائج مطابقة",
-                    "paginate": {
-                      "first": "الأول",
-                      "last": "الأخير",
-                      "next": "التالي",
-                      "previous": "السابق"
-                    }
-                  }
-                });
-              }
-              
-              // إعادة ربط أحداث الجدول
-              bindTableEvents();
-            }, 200);
-            
-            // تحديث URL
-            history.pushState(null, '', url);
-          } else {
-            // fallback للـ HTML العادي
-            const newContent = $(response).find('#main-content').html();
-            $('#main-content').html(newContent);
-            history.pushState(null, '', url);
-          }
-        },
-        error: function(xhr, status, error) {
-          alert('حدث خطأ في التحميل');
-          $btn.html(originalHtml).prop('disabled', false);
-        },
-        complete: function() {
-          // إعادة تمكين جميع الأزرار
-          $('.supplier-type-filter').prop('disabled', false);
-        }
-      });
-    });
-    
-    // تحسين البحث في table-controls (DataTable search box)
-    $(document).on('input', '.table-search', function() {
-      const searchTerm = $(this).val();
-      const tableId = $(this).data('table');
-      
-      // البحث في DataTable مباشرة
-      if ($.fn.DataTable && $.fn.DataTable.isDataTable('#' + tableId)) {
-        $('#' + tableId).DataTable().search(searchTerm).draw();
-      }
-    });
-    
-    // تحسين البحث في filter-section
-    $('form[action*="supplier_list"]').on('submit', function(e) {
-      e.preventDefault();
-      
-      const formData = new FormData(this);
-      const params = new URLSearchParams(formData);
-      const url = $(this).attr('action') + '?' + params.toString();
-      
-      // إظهار loading في زر البحث
-      const $submitBtn = $(this).find('button[type="submit"]');
-      const originalText = $submitBtn.html();
-      $submitBtn.html('<i class="fas fa-spinner fa-spin me-1"></i>جاري البحث...').prop('disabled', true);
-      
-      // Ajax call
-      $.ajax({
-        url: url,
-        type: 'GET',
-        headers: {
-          'X-Requested-With': 'XMLHttpRequest'
-        },
-        success: function(response) {
-          if (response.success && response.html) {
-            const newContent = $(response.html).find('#main-content').html();
-            $('#main-content').html(newContent);
-            
-            // إعادة تهيئة الجدول
-            setTimeout(function() {
-              if (typeof GlobalTableManager !== 'undefined') {
-                GlobalTableManager.initializeTable('suppliers-table', {
-                  order: [],
-                  ordering: true,
-                  orderCellsTop: true,
-                  searching: false,
-                  lengthChange: false,
-                  info: false,
-                  paging: false,
-                  columnDefs: [
-                    { targets: 'col-actions', orderable: false, width: '120px' },
-                    { targets: 'col-name', width: '18%' },
-                    { targets: 'col-code', width: '10%' },
-                    { targets: 'col-supplier_types_display', orderable: false, width: '20%' },
-                    { targets: 'col-phone', width: '12%' },
-                    { targets: 'col-is_preferred', width: '10%', className: 'text-center' },
-                    { targets: 'col-actual_balance', width: '15%', className: 'text-end' }
-                  ],
-                  autoWidth: true,
-                  responsive: true
-                });
-              } else if ($.fn.DataTable) {
-                $('#suppliers-table').DataTable({
-                  order: [],
-                  ordering: true,
-                  orderCellsTop: true,
-                  searching: false,
-                  lengthChange: false,
-                  info: false,
-                  paging: false,
-                  columnDefs: [
-                    { targets: 'col-actions', orderable: false, width: '120px' },
-                    { targets: 'col-name', width: '18%' },
-                    { targets: 'col-code', width: '10%' },
-                    { targets: 'col-supplier_types_display', orderable: false, width: '20%' },
-                    { targets: 'col-phone', width: '12%' },
-                    { targets: 'col-is_preferred', width: '10%', className: 'text-center' },
-                    { targets: 'col-actual_balance', width: '15%', className: 'text-end' }
-                  ],
-                  autoWidth: true,
-                  responsive: true,
-                  language: {
-                    "decimal": "",
-                    "emptyTable": "لا توجد بيانات متاحة في الجدول",
-                    "info": "عرض _START_ إلى _END_ من إجمالي _TOTAL_ عنصر",
-                    "infoEmpty": "عرض 0 إلى 0 من إجمالي 0 عنصر",
-                    "infoFiltered": "(مفلتر من إجمالي _MAX_ عنصر)",
-                    "lengthMenu": "عرض _MENU_ عنصر",
-                    "loadingRecords": "جاري التحميل...",
-                    "processing": "جاري المعالجة...",
-                    "search": "بحث:",
-                    "zeroRecords": "لم يتم العثور على نتائج مطابقة",
-                    "paginate": {
-                      "first": "الأول",
-                      "last": "الأخير",
-                      "next": "التالي",
-                      "previous": "السابق"
-                    }
-                  }
-                });
-              }
-              
-              bindTableEvents();
-            }, 200);
-            
-            // تحديث URL
-            history.pushState(null, '', url);
-          } else {
-            // fallback - إعادة تحميل الصفحة
-            window.location.href = url;
-          }
-        },
-        error: function() {
-          // fallback - إعادة تحميل الصفحة
-          window.location.href = url;
-        },
-        complete: function() {
-          $submitBtn.html(originalText).prop('disabled', false);
-        }
-      });
-    });
-    
-    // دالة لربط أحداث الجدول
-    function bindTableEvents() {
-      $('#suppliers-table tbody tr').css('cursor', 'pointer');
-      $('#suppliers-table tbody').off('click', 'tr').on('click', 'tr', function(e) {
-        if ($(e.target).closest('.col-actions').length > 0) {
-          return;
-        }
-        
-        const viewButton = $(this).find('.action-view');
-        if (viewButton.length > 0) {
-          const url = viewButton.attr('href');
-          if (url) {
-            window.location.href = url;
-          }
+        url: '{% url "supplier:supplier_list" %}?' + params.toString(),
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        success: function(data) {
+          $('#suppliers-table-container').html(data.table_html);
+          $('#pagination-wrapper').html(
+            data.pagination_html
+              ? '<div class="card-footer">' + data.pagination_html + '</div>'
+              : ''
+          );
+          history.replaceState(null, '', '?' + params.toString());
+          initTable();
         }
       });
     }
+
+    $('#search').on('input', function() {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(doSearch, 400);
+    });
+
+    $('#has_debt, #status').on('change', function() {
+      doSearch();
+    });
+
+    $('form').on('submit', function(e) {
+      e.preventDefault();
+      doSearch();
+    });
   });
+
+  // ===== مزامنة دفترة =====
+  window.syncWithDaftra = function(type) {
+    const url = type === 'clients' ? '/utils/daftra/sync-clients/' : '/utils/daftra/sync-suppliers/';
+    const label = type === 'clients' ? 'العملاء' : 'الموردين';
+
+    Swal.fire({
+      title: `مزامنة ${label} مع دفترة`,
+      html: `
+        <div class="text-start">
+          <p id="sync-status-msg" class="mb-2">جاري الاتصال بدفترة...</p>
+          <div class="progress mb-3" style="height: 20px;">
+            <div id="sync-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-info"
+                 role="progressbar" style="width: 0%">0%</div>
+          </div>
+          <div id="sync-stats" class="d-none">
+            <div class="row text-center">
+              <div class="col-3"><span class="badge bg-success fs-6" id="stat-created">0</span><br><small>جديد</small></div>
+              <div class="col-3"><span class="badge bg-primary fs-6" id="stat-updated">0</span><br><small>محدّث</small></div>
+              <div class="col-3"><span class="badge bg-secondary fs-6" id="stat-skipped">0</span><br><small>بدون تغيير</small></div>
+              <div class="col-3"><span class="badge bg-danger fs-6" id="stat-errors">0</span><br><small>أخطاء</small></div>
+            </div>
+          </div>
+        </div>`,
+      showConfirmButton: false,
+      showCancelButton: true,
+      cancelButtonText: 'إلغاء',
+      allowOutsideClick: false,
+      didOpen: () => {
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]') 
+                        || document.querySelector('meta[name="csrf-token"]');
+        const csrfValue = csrfToken ? (csrfToken.value || csrfToken.getAttribute('content')) : '';
+        if (!csrfValue) { Swal.close(); toastr.error('خطأ في CSRF Token'); return; }
+
+        fetch(url, {
+          method: 'POST',
+          headers: { 'X-CSRFToken': csrfValue }
+        }).then(response => {
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+
+          function read() {
+            reader.read().then(({ done, value }) => {
+              if (done) return;
+              const lines = decoder.decode(value).split('\n').filter(l => l.trim());
+              lines.forEach(line => {
+                try {
+                  const data = JSON.parse(line);
+                  const bar = document.getElementById('sync-progress-bar');
+                  const msg = document.getElementById('sync-status-msg');
+                  const stats = document.getElementById('sync-stats');
+
+                  if (bar) { bar.style.width = data.progress + '%'; bar.textContent = data.progress + '%'; }
+                  if (data.type === 'status' && msg) msg.textContent = data.message;
+
+                  if (data.stats && stats) {
+                    stats.classList.remove('d-none');
+                    document.getElementById('stat-created').textContent = data.stats.created;
+                    document.getElementById('stat-updated').textContent = data.stats.updated;
+                    document.getElementById('stat-skipped').textContent = data.stats.skipped;
+                    document.getElementById('stat-errors').textContent = data.stats.errors;
+                  }
+
+                  if (data.type === 'complete') {
+                    if (bar) bar.classList.replace('bg-info', data.stats.errors > 0 && data.stats.created === 0 && data.stats.updated === 0 ? 'bg-warning' : 'bg-success');
+                    const hasErrors = data.stats && data.stats.errors > 0;
+                    const msg = hasErrors
+                      ? `تمت المزامنة مع ${data.stats.errors} خطأ - تم: ${data.stats.created} جديد، ${data.stats.updated} محدّث`
+                      : `تمت مزامنة ${label} بنجاح`;
+                    hasErrors ? toastr.warning(msg) : toastr.success(msg);
+                    setTimeout(() => { Swal.close(); location.reload(); }, 2000);
+                  }
+
+                  if (data.type === 'error') {
+                    if (msg) msg.textContent = data.message;
+                    if (bar) bar.classList.replace('bg-info', 'bg-danger');
+                    Swal.update({ showConfirmButton: true, confirmButtonText: 'إغلاق', showCancelButton: false });
+                    toastr.error(data.message);
+                  }
+                } catch(e) {}
+              });
+              read();
+            });
+          }
+          read();
+        }).catch(() => {
+          toastr.error('فشل الاتصال بالخادم');
+          Swal.close();
+        });
+      }
+    });
+  }
 </script>
-{% endblock %} 
+{% csrf_token %}
+{% endblock %}

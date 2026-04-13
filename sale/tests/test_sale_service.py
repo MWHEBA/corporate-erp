@@ -173,7 +173,7 @@ def chart_of_accounts(db):
             }
         )[0],
         'inventory': ChartOfAccounts.objects.get_or_create(
-            code='10300',
+            code='10400',
             defaults={
                 'name': 'المخزون',
                 'account_type': asset_type,
@@ -214,11 +214,11 @@ def chart_of_accounts(db):
         )[0],
     }
     
-    # Create customers parent account (11030) - مطلوب للـ fallback في SaleService
+    # Create customers parent account (10300) - مطلوب للـ fallback في SaleService
     ChartOfAccounts.objects.get_or_create(
-        code='11030',
+        code='10300',
         defaults={
-            'name': 'العملاء',
+            'name': 'مدينو العملاء',
             'account_type': asset_type,
             'is_active': True
         }

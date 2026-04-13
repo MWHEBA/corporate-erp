@@ -7,6 +7,9 @@
 
 {% block extra_css %}
 <!-- جميع الستايلات موجودة في shared-components.css و components.css -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+<link rel="stylesheet" href="{% static 'css/select2-enhancements.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -29,35 +32,22 @@
                             سيتم خصم السلفة على أقساط شهرية تبدأ من شهر الخصم المحدد، وفقاً لعدد الأقساط.
                         </div>
 
-                        <div class="mb-3">
-                            <label class="form-label">الموظف *</label>
-                            <select class="form-select" name="employee" required>
-                                <option value="">اختر الموظف...</option>
-                                {% for emp in employees %}
-                                <option value="{{ emp.pk }}">{{ emp.get_full_name_ar }} - {{ emp.employee_number }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="mb-3">
-                                    <label class="form-label">المبلغ المطلوب *</label>
-                                    <input type="number" class="form-control" name="amount" step="0.01" required>
+                                    <label class="form-label">الموظف *</label>
+                                    <select class="form-select" name="employee" required>
+                                        <option value="">اختر الموظف...</option>
+                                        {% for emp in employees %}
+                                        <option value="{{ emp.pk }}">{{ emp.get_full_name_ar }} - {{ emp.employee_number }}</option>
+                                        {% endfor %}
+                                    </select>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-3">
-                                    <label class="form-label">عدد الأقساط *</label>
-                                    <input type="number"
-                                           class="form-control"
-                                           name="installments_count"
-                                           id="installmentsInput"
-                                           min="1"
-                                           max="24"
-                                           value="1"
-                                           required>
-                                    <small class="text-muted">عدد الأشهر (1-24 شهر)</small>
+                                    <label class="form-label">المبلغ المطلوب *</label>
+                                    <input type="number" class="form-control" name="amount" step="0.01" required>
                                 </div>
                             </div>
                         </div>
@@ -75,23 +65,27 @@
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-3">
-                                    <label class="form-label">التصنيف المالي</label>
-                                    <select class="form-select" name="financial_category">
-                                        <option value="">افتراضي (رواتب)</option>
-                                        {% for category in financial_categories %}
-                                        <option value="{{ category.pk }}" {% if default_category and category.pk == default_category.pk %}selected{% endif %}>
-                                            {{ category.name }}
-                                        </option>
-                                        {% endfor %}
-                                    </select>
-                                    <small class="text-muted">يحدد الحساب المحاسبي تلقائياً</small>
+                                    <label class="form-label">عدد الأقساط *</label>
+                                    <input type="number"
+                                           class="form-control"
+                                           name="installments_count"
+                                           id="installmentsInput"
+                                           min="1"
+                                           max="5"
+                                           value="1"
+                                           required>
+                    <small class="text-muted">1-5 أقساط</small>
                                 </div>
                             </div>
                         </div>
 
+                        {% if default_category %}
+                        <input type="hidden" name="financial_category" value="{{ default_category.pk }}">
+                        {% endif %}
+
                         <div class="mb-3">
                             <label class="form-label">السبب *</label>
-                            <textarea class="form-control" name="reason" rows="4" required></textarea>
+                            <textarea class="form-control" name="reason" rows="2" required></textarea>
                         </div>
 
                         <div class="mt-4">
@@ -147,8 +141,8 @@
             <div class="card">
                 <div class="card-body">
                     <ul class="mb-0 text-muted" style="font-size: 0.9rem;">
-                        <li>الحد الأقصى للمبلغ: 50,000 جنيه.</li>
-                        <li>عدد الأقساط من 1 إلى 24 شهر.</li>
+                        <li>الحد الأقصى للمبلغ: 10,000 جنيه.</li>
+                        <li>عدد الأقساط من 1 إلى 5 أقساط.</li>
                         <li>يُفضّل أن يكون السبب واضحاً ومختصراً.</li>
                     </ul>
                 </div>
@@ -160,8 +154,20 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/i18n/ar.js"></script>
 <script>
     $(document).ready(function () {
+        // تهيئة Select2 لحقل الموظف
+        $('select[name="employee"]').select2({
+            theme: 'bootstrap-5',
+            language: 'ar',
+            dir: 'rtl',
+            placeholder: 'اختر الموظف...',
+            allowClear: true,
+            width: '100%'
+        });
+
         var $amountInput = $('input[name="amount"]');
         var $installmentsInput = $('#installmentsInput');
         var $startMonthInput = $('#startMonthInput');

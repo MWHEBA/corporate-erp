@@ -185,6 +185,36 @@ class Supplier(models.Model):
         _("مورد مفضل"), default=False, help_text=_("هل هذا مورد مفضل للشركة؟")
     )
 
+    # معلومات تجارية إضافية
+    delivery_time_days = models.PositiveIntegerField(
+        _("مدة التسليم (أيام)"),
+        null=True,
+        blank=True,
+        help_text=_("متوسط مدة التسليم بالأيام"),
+    )
+    min_order_amount = models.DecimalField(
+        _("الحد الأدنى للطلب"),
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=_("الحد الأدنى لقيمة الطلب"),
+    )
+    payment_terms = models.CharField(
+        _("شروط الدفع"),
+        max_length=100,
+        blank=True,
+        help_text=_("مثال: 30 يوم، نقداً، آجل"),
+    )
+    supplier_rating = models.DecimalField(
+        _("تقييم المورد"),
+        max_digits=3,
+        decimal_places=1,
+        null=True,
+        blank=True,
+        help_text=_("تقييم من 1 إلى 5"),
+    )
+
     created_at = models.DateTimeField(_("تاريخ الإنشاء"), auto_now_add=True, null=True)
     updated_at = models.DateTimeField(_("تاريخ التحديث"), auto_now=True, null=True)
     created_by = models.ForeignKey(
@@ -266,11 +296,11 @@ class Supplier(models.Model):
 
 
     @property 
-    def monthly_cost_per_student(self):
+    def monthly_cost_per_unit(self):
         """
-        خاصية للتوافق مع الكود القديم - تحسب التكلفة من الباصات
+        التكلفة الشهرية للوحدة
         """
-        return self.get_monthly_cost_per_student()
+        return 0
 
 
 
@@ -361,7 +391,7 @@ class Supplier(models.Model):
     
     
     def is_educational_supplier(self):
-        """التحقق من كون المورد مورد تعليمي - ديناميكي من الإعدادات"""
+        """التحقق من كون المورد مورد متخصص - ديناميكي من الإعدادات"""
         if self.primary_type and hasattr(self.primary_type, 'settings') and self.primary_type.settings:
             return self.primary_type.settings.is_educational
         # Fallback للطريقة القديمة
@@ -376,7 +406,7 @@ class Supplier(models.Model):
     
     
     def get_educational_info(self):
-        """الحصول على معلومات المورد التعليمي"""
+        """الحصول على معلومات المورد المتخصص"""
         if not self.is_educational_supplier():
             return None
         
@@ -385,12 +415,12 @@ class Supplier(models.Model):
         }
     
     def get_educational_products_count(self):
-        """عدد المنتجات التعليمية للمورد"""
+        """عدد المنتجات المتخصصة للمورد"""
         try:
             from product.models import Product
             return Product.objects.filter(
                 supplier=self,
-                category__name__icontains='تعليمي'
+                category__name__icontains='مواد'
             ).count()
         except:
             return 0
@@ -644,16 +674,17 @@ class SupplierTypeSettings(models.Model):
                 }
             )
             
-            # إذا كان موجوداً، قم بتحديثه
+            # إذا كان موجوداً، قم بتحديثه بدون استدعاء save() لمنع الـ sync loop
             if not created:
-                supplier_type.name = self.name
-                supplier_type.description = self.description
-                supplier_type.icon = self.icon
-                supplier_type.color = self.color
-                supplier_type.display_order = self.display_order
-                supplier_type.is_active = self.is_active
-                supplier_type.settings = self
-                supplier_type.save()
+                SupplierType.objects.filter(pk=supplier_type.pk).update(
+                    name=self.name,
+                    description=self.description,
+                    icon=self.icon,
+                    color=self.color,
+                    display_order=self.display_order,
+                    is_active=self.is_active,
+                    settings=self,
+                )
             
             # ربط العلاقة العكسية إذا لم تكن موجودة
             if not hasattr(self, 'supplier_type'):
@@ -676,15 +707,11 @@ class SupplierTypeSettings(models.Model):
     def can_delete(self):
         """هل يمكن حذف هذا النوع؟"""
         return not self.is_system and self.suppliers_count == 0
-    @property
-    def can_delete(self):
-        """هل يمكن حذف هذا النوع؟"""
-        return not self.is_system and self.suppliers_count == 0
 
 
     @property
     def is_educational(self):
-        """هل هذا النوع خاص بالموردين التعليميين؟"""
+        """هل هذا النوع خاص بالموردين المتخصصين؟"""
         return self.code == 'educational'
     
     @classmethod
@@ -694,9 +721,168 @@ class SupplierTypeSettings(models.Model):
 
     @classmethod
     def create_default_types(cls):
-        """إنشاء الأنواع الافتراضية للنظام - النسخة المحدثة للشركة"""
-        # استخدام create_school_supplier_types بدلاً من الأنواع القديمة
-        return cls.create_school_supplier_types()
+        """إنشاء الأنواع الافتراضية للنظام"""
+        return cls.create_company_supplier_types()
+
+
+# ========================================
+# نماذج خدمات الموردين — المرحلة الأولى
+# ========================================
+
+class ServiceType(models.Model):
+    """
+    أنواع الخدمات التي يقدمها الموردون.
+    كل نوع يحمل attribute_schema يعرّف الحقول الديناميكية لخدماته.
+    """
+
+    CATEGORY_CHOICES = [
+        ('printing',      _('طباعة')),
+        ('logistics',     _('لوجستيات')),
+        ('manufacturing', _('تصنيع')),
+        ('general',       _('عام')),
+    ]
+
+    code             = models.CharField(_("الرمز"), max_length=50, unique=True, db_index=True)
+    name             = models.CharField(_("الاسم"), max_length=100)
+    category         = models.CharField(_("الفئة"), max_length=50, choices=CATEGORY_CHOICES, default='general')
+    icon             = models.CharField(_("الأيقونة"), max_length=50, default='fas fa-cog')
+    description      = models.TextField(_("الوصف"), blank=True)
+    attribute_schema = models.JSONField(
+        _("مخطط الخصائص"),
+        default=dict,
+        blank=True,
+        help_text=_("تعريف الحقول الديناميكية لهذا النوع من الخدمات")
+    )
+    is_active        = models.BooleanField(_("نشط"), default=True)
+    order            = models.PositiveIntegerField(_("الترتيب"), default=0)
+    created_at       = models.DateTimeField(_("تاريخ الإنشاء"), auto_now_add=True)
+
+    class Meta:
+        verbose_name        = _("نوع خدمة")
+        verbose_name_plural = _("أنواع الخدمات")
+        ordering            = ['order', 'name']
+        db_table            = 'supplier_service_type'
+
+    def __str__(self):
+        return self.name
+
+
+class SupplierService(models.Model):
+    """
+    خدمة محددة يقدمها مورد معين.
+    الخصائص التفصيلية (السعر، المواصفات) تُخزَّن في حقل attributes كـ JSON
+    وفق attribute_schema الخاص بـ ServiceType.
+    """
+
+    supplier     = models.ForeignKey(
+        Supplier,
+        on_delete=models.CASCADE,
+        related_name='services',
+        verbose_name=_("المورد")
+    )
+    service_type = models.ForeignKey(
+        ServiceType,
+        on_delete=models.PROTECT,
+        related_name='supplier_services',
+        verbose_name=_("نوع الخدمة")
+    )
+    name         = models.CharField(_("اسم الخدمة"), max_length=255)
+    base_price   = models.DecimalField(
+        _("السعر الأساسي"),
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))]
+    )
+    setup_cost   = models.DecimalField(
+        _("تكلفة الإعداد"),
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))]
+    )
+    attributes   = models.JSONField(
+        _("الخصائص"),
+        default=dict,
+        blank=True,
+        help_text=_("القيم الفعلية حسب attribute_schema الخاص بنوع الخدمة")
+    )
+    is_active    = models.BooleanField(_("نشط"), default=True)
+    notes        = models.TextField(_("ملاحظات"), blank=True)
+    created_at   = models.DateTimeField(_("تاريخ الإنشاء"), auto_now_add=True)
+    updated_at   = models.DateTimeField(_("تاريخ التحديث"), auto_now=True)
+
+    class Meta:
+        verbose_name        = _("خدمة مورد")
+        verbose_name_plural = _("خدمات الموردين")
+        ordering            = ['supplier__name', 'service_type__name']
+        db_table            = 'supplier_supplier_service'
+        indexes             = [
+            models.Index(fields=['supplier', 'service_type']),
+            models.Index(fields=['service_type', 'is_active']),
+        ]
+
+    def __str__(self):
+        return f"{self.supplier.name} — {self.name}"
+
+    def get_price_for_quantity(self, quantity=1):
+        """
+        إرجاع السعر المناسب للكمية المطلوبة.
+        يبحث أولاً في الشرائح السعرية، ثم يرجع base_price كـ fallback.
+        """
+        tier = self.price_tiers.filter(
+            is_active=True,
+            min_quantity__lte=quantity
+        ).filter(
+            models.Q(max_quantity__isnull=True) | models.Q(max_quantity__gte=quantity)
+        ).order_by('-min_quantity').first()
+
+        return tier.price_per_unit if tier else self.base_price
+
+
+class ServicePriceTier(models.Model):
+    """
+    شرائح سعرية للخدمة — سعر مختلف حسب الكمية.
+    مثال: 1-999 نسخة بسعر X، 1000+ نسخة بسعر Y.
+    """
+
+    service        = models.ForeignKey(
+        SupplierService,
+        on_delete=models.CASCADE,
+        related_name='price_tiers',
+        verbose_name=_("الخدمة")
+    )
+    min_quantity   = models.PositiveIntegerField(_("الحد الأدنى للكمية"))
+    max_quantity   = models.PositiveIntegerField(
+        _("الحد الأقصى للكمية"),
+        null=True,
+        blank=True,
+        help_text=_("اتركه فارغاً للدلالة على بلا حد أعلى")
+    )
+    price_per_unit = models.DecimalField(
+        _("السعر لكل وحدة"),
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.00'))]
+    )
+    is_active      = models.BooleanField(_("نشط"), default=True)
+
+    class Meta:
+        verbose_name        = _("شريحة سعرية")
+        verbose_name_plural = _("الشرائح السعرية")
+        ordering            = ['service', 'min_quantity']
+        db_table            = 'supplier_service_price_tier'
+        constraints         = [
+            models.CheckConstraint(
+                check=models.Q(max_quantity__isnull=True) | models.Q(max_quantity__gte=models.F('min_quantity')),
+                name='price_tier_max_gte_min'
+            )
+        ]
+
+    def __str__(self):
+        if self.max_quantity:
+            return f"{self.service.name}: {self.min_quantity}–{self.max_quantity} → {self.price_per_unit}"
+        return f"{self.service.name}: {self.min_quantity}+ → {self.price_per_unit}"
 
 
 

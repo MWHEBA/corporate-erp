@@ -16,8 +16,9 @@ class EmployeeForm(forms.ModelForm):
             'military_status', 'personal_email', 'work_email',
             'mobile_phone', 'home_phone', 'address', 'city', 'postal_code',
             'emergency_contact_name', 'emergency_contact_relation', 'emergency_contact_phone',
-            'department', 'job_title', 'direct_manager', 'shift', 'biometric_user_id', 'hire_date',
-            'employment_type', 'photo'
+            'department', 'job_title', 'direct_manager', 'shift',
+            'attendance_exempt', 'hire_date', 'employment_type', 'photo',
+            'is_insurance_only'
         ]
         widgets = {
             'birth_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
@@ -66,6 +67,16 @@ class EmployeeForm(forms.ModelForm):
         self.fields['work_email'].required = False
         self.fields['address'].required = False
         self.fields['city'].required = False
+        
+        # الوردية مطلوبة دائماً
+        self.fields['shift'].required = True
+        
+        # تعيين أول وردية نشطة كـ default للموظفين الجدد
+        if not self.instance.pk and not self.initial.get('shift'):
+            from ..models import Shift
+            first_shift = Shift.objects.filter(is_active=True).order_by('id').first()
+            if first_shift:
+                self.fields['shift'].initial = first_shift.pk
         
         # تحديث placeholder للحقول الاختيارية
         self.fields['personal_email'].widget.attrs.update({'placeholder': 'البريد الشخصي (اختياري)'})
@@ -204,10 +215,22 @@ class EmployeeForm(forms.ModelForm):
 
 class DepartmentForm(forms.ModelForm):
     """نموذج إضافة/تعديل قسم"""
-    
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        try:
+            from financial.models import FinancialSubcategory
+            self.fields['financial_subcategory'].queryset = FinancialSubcategory.objects.filter(
+                parent_category__code='salaries',
+                is_active=True
+            ).select_related('parent_category').order_by('display_order', 'name')
+            self.fields['financial_subcategory'].empty_label = 'بدون تصنيف'
+        except Exception:
+            pass
+
     class Meta:
         model = Department
-        fields = ['code', 'name_ar', 'name_en', 'description', 'parent', 'manager', 'is_active']
+        fields = ['code', 'name_ar', 'name_en', 'description', 'parent', 'manager', 'financial_subcategory', 'is_active']
         widgets = {
             'code': forms.TextInput(attrs={'class': 'form-control'}),
             'name_ar': forms.TextInput(attrs={'class': 'form-control'}),
@@ -215,6 +238,7 @@ class DepartmentForm(forms.ModelForm):
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'parent': forms.Select(attrs={'class': 'form-select'}),
             'manager': forms.Select(attrs={'class': 'form-select'}),
+            'financial_subcategory': forms.Select(attrs={'class': 'form-select'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 

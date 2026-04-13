@@ -1,4 +1,4 @@
-{% extends 'base.html' %}
+﻿{% extends 'base.html' %}
 {% load static %}
 {% load i18n %}
 {% load utils_extras %}
@@ -221,7 +221,7 @@
                             <!-- فلتر مبسط للأنواع -->
                             <select name="type" class="form-select" style="width: 150px;" onchange="this.form.submit()">
                                 <option value="">كل الأنواع</option>
-                                <option value="parents" {% if request.GET.type == 'parents' %}selected{% endif %}>الحسابات الرئيسية </option>
+                                <option value="parents" {% if request.GET.type == 'parents' %}selected{% endif %}>العملاء</option>
                             </select>
                             
                             <!-- فلتر الحسابات الصفرية -->
@@ -264,7 +264,7 @@
                         <div>
                             <strong>نتائج البحث:</strong>
                             {% if search_query %}البحث عن "{{ search_query }}" • {% endif %}
-                            {% if request.GET.type == 'parents' %}الحسابات الرئيسية  فقط • {% endif %}
+                            {% if request.GET.type == 'parents' %}العملاء فقط • {% endif %}
                             {% if request.GET.hide_zero %}إخفاء الحسابات الصفرية • {% endif %}
                         </div>
                     </div>

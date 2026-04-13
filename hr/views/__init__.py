@@ -7,6 +7,7 @@ from .employee_views import (
     employee_detail,
     employee_form,
     employee_delete,
+    employee_reinstate,
     check_component_code,
     employee_export,
 )
@@ -28,13 +29,26 @@ from .job_title_views import (
 )
 from .attendance_views import (
     attendance_list,
+    attendance_export_excel,
     attendance_check_in,
     attendance_check_out,
     attendance_summary_list,
     attendance_summary_detail,
     approve_attendance_summary,
     recalculate_attendance_summary,
+    update_absence_multiplier,
     calculate_attendance_summaries,
+    calculate_exempt_summaries,
+    ramadan_settings_list,
+    ramadan_settings_create,
+    ramadan_settings_update,
+    ramadan_settings_delete,
+    fetch_ramadan_dates,
+    penalty_list,
+    penalty_create,
+    penalty_update,
+    penalty_delete,
+    penalty_toggle_active,
 )
 from .shift_views import (
     shift_list,
@@ -63,20 +77,46 @@ from .leave_views import (
     leave_detail,
     leave_approve,
     leave_reject,
+    leave_cancel,
+    employee_leave_info_api,
+    leave_update_multiplier,
+)
+from .leave_type_views import (
+    leave_type_list,
+    leave_type_save,
+    leave_type_delete,
+    leave_type_toggle,
 )
 from .leave_bulk_operations import (
     bulk_approve_leaves,
     bulk_reject_leaves,
 )
+from .official_holiday_views import (
+    official_holiday_list,
+    official_holiday_create,
+    official_holiday_update,
+    official_holiday_delete,
+    official_holiday_toggle,
+)
 from .permission_views import (
     permission_list,
     permission_request,
+    get_permission_quota_ajax,
     permission_detail,
     permission_approve,
     permission_reject,
     permission_type_list,
     permission_type_form,
     permission_type_delete,
+)
+from .penalty_reward_views import (
+    penalty_reward_list,
+    penalty_reward_create,
+    penalty_reward_detail,
+    penalty_reward_edit,
+    penalty_reward_delete,
+    penalty_reward_approve,
+    penalty_reward_reject,
 )
 from .leave_balance_views import (
     leave_balance_list,
@@ -85,6 +125,8 @@ from .leave_balance_views import (
     leave_balance_update_all,
     leave_balance_rollover,
     leave_balance_accrual_status,
+    leave_encashment_process,
+    leave_balance_get_api,
 )
 from .contract_views import (
     # CRUD
@@ -114,14 +156,21 @@ from .contract_views import (
 from .payroll_advance_views import (
     payroll_list,
     payroll_detail,
-    payroll_edit_lines,
     payroll_approve,
+    payroll_unapprove,
     payroll_delete,
+    payroll_export,
     advance_list,
     advance_request,
     advance_detail,
     advance_approve,
     advance_reject,
+    advance_pay,
+)
+from .payroll_line_ajax_views import (
+    payroll_line_update,
+    payroll_line_add,
+    payroll_line_delete,
 )
 from .payroll_payment_views import (
     payroll_pay,
@@ -130,6 +179,7 @@ from .payroll_payment_views import (
 from .other_views import (
     organization_chart,
     hr_settings,
+    leave_policy_settings,
     employee_create_user,
     employee_link_user,
     employee_unlink_user,
@@ -140,7 +190,14 @@ from .other_views import (
     salary_component_template_form,
     salary_component_template_delete,
     employee_detail_api,
+    employee_shift_api,
     contract_check_overlap,
+)
+from .insurance_views import (
+    employee_add_insurance_component,
+    insurance_payment_list,
+    insurance_payment_generate,
+    insurance_payment_pay,
 )
 from .salary_component_views import (
     employee_salary_components,
@@ -181,6 +238,7 @@ from .biometric_advanced_views import (
     api_biometric_stats,
     api_cleanup_old_logs,
     api_process_all_biometric_logs,
+    api_reset_month_processing,
 )
 from .admin_maintenance_views import (
     maintenance_dashboard,
@@ -205,6 +263,10 @@ from .contract_views import (
     contract_increase_cancel,
     contract_expiring,
 )
+from .contract_import import (
+    contract_import,
+    contract_import_template,
+)
 # ملاحظة: تم حذف contract_views_new.py ودمج contract_activate في contract_views.py
 # contract_create_with_components و contract_update_with_components تم استبدالهم بـ contract_form
 # contract_deactivate و contract_component_delete غير مستخدمين حالياً
@@ -214,6 +276,7 @@ from .payroll_processing_views import (
     integrated_payroll_dashboard,
     process_monthly_payrolls,
     calculate_single_payroll,
+    payroll_recalculate,
 )
 
 __all__ = [
@@ -221,6 +284,7 @@ __all__ = [
     'employee_detail',
     'employee_form',
     'employee_delete',
+    'employee_reinstate',
     'export_employees',
     'employee_import',
     'department_list',
@@ -236,7 +300,19 @@ __all__ = [
     'attendance_summary_detail',
     'approve_attendance_summary',
     'recalculate_attendance_summary',
+    'update_absence_multiplier',
     'calculate_attendance_summaries',
+    'calculate_exempt_summaries',
+    'ramadan_settings_list',
+    'ramadan_settings_create',
+    'ramadan_settings_update',
+    'ramadan_settings_delete',
+    'fetch_ramadan_dates',
+    'penalty_list',
+    'penalty_create',
+    'penalty_update',
+    'penalty_delete',
+    'penalty_toggle_active',
     'shift_list',
     'shift_delete',
     'shift_assign_employees',
@@ -257,8 +333,12 @@ __all__ = [
     'leave_detail',
     'leave_approve',
     'leave_reject',
+    'leave_cancel',
+    'employee_leave_info_api',
+    'leave_update_multiplier',
     'permission_list',
     'permission_request',
+    'get_permission_quota_ajax',
     'permission_detail',
     'permission_approve',
     'permission_reject',
@@ -269,6 +349,8 @@ __all__ = [
     'leave_balance_update_all',
     'leave_balance_rollover',
     'leave_balance_accrual_status',
+    'leave_encashment_process',
+    'leave_balance_get_api',
     # Contract CRUD
     'contract_list',
     'contract_detail',
@@ -294,10 +376,12 @@ __all__ = [
     'contract_amendment_create',
     'payroll_list',
     'payroll_detail',
-    'payroll_edit_lines',
     'payroll_approve',
     'payroll_pay',
     'payroll_print',
+    'payroll_line_update',
+    'payroll_line_add',
+    'payroll_line_delete',
     'advance_list',
     'advance_request',
     'advance_detail',
@@ -306,6 +390,7 @@ __all__ = [
     # دوال أخرى
     'organization_chart',
     'hr_settings',
+    'leave_policy_settings',
     'employee_create_user',
     'employee_link_user',
     'employee_unlink_user',
@@ -316,6 +401,7 @@ __all__ = [
     'salary_component_template_form',
     'salary_component_template_delete',
     'employee_detail_api',
+    'employee_shift_api',
     'contract_check_overlap',
     # دوال بنود الراتب
     'employee_salary_components',
@@ -378,9 +464,21 @@ __all__ = [
     'integrated_payroll_dashboard',
     'process_monthly_payrolls',
     'calculate_single_payroll',
+    'payroll_recalculate',
     'calculate_attendance_summaries',
     'attendance_summary_detail',
     'approve_attendance_summary',
     'recalculate_attendance_summary',
     'payroll_print',
+    # الإجازات الرسمية
+    'official_holiday_list',
+    'official_holiday_create',
+    'official_holiday_update',
+    'official_holiday_delete',
+    'official_holiday_toggle',
+    # دفعات التأمين
+    'employee_add_insurance_component',
+    'insurance_payment_list',
+    'insurance_payment_generate',
+    'insurance_payment_pay',
 ]

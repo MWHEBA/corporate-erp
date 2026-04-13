@@ -32,6 +32,7 @@ urlpatterns = [
     path('employees/export/', views.employee_export, name='employee_export'),
     path('employees/<int:pk>/', views.employee_detail, name='employee_detail'),
     path('employees/<int:pk>/delete/', views.employee_delete, name='employee_delete'),
+    path('employees/<int:pk>/reinstate/', views.employee_reinstate, name='employee_reinstate'),
     path('employees/check-email/', views.check_employee_email, name='check_employee_email'),
     path('employees/check-mobile/', views.check_employee_mobile, name='check_employee_mobile'),
     path('employees/check-national-id/', views.check_employee_national_id, name='check_employee_national_id'),
@@ -43,6 +44,12 @@ urlpatterns = [
     path('employees/<int:pk>/create-user/', views.employee_create_user, name='employee_create_user'),
     path('employees/<int:pk>/link-user/', views.employee_link_user, name='employee_link_user'),
     path('employees/<int:pk>/unlink-user/', views.employee_unlink_user, name='employee_unlink_user'),
+    path('employees/<int:pk>/add-insurance-component/', views.employee_add_insurance_component, name='employee_add_insurance_component'),
+
+    # دفعات التأمين
+    path('insurance-payments/', views.insurance_payment_list, name='insurance_payment_list'),
+    path('insurance-payments/generate/', views.insurance_payment_generate, name='insurance_payment_generate'),
+    path('insurance-payments/<int:pk>/pay/', views.insurance_payment_pay, name='insurance_payment_pay'),
     
     # الأقسام
     path('departments/', views.department_list, name='department_list'),
@@ -63,9 +70,25 @@ urlpatterns = [
     
     # إعدادات الموارد البشرية
     path('settings/', views.hr_settings, name='hr_settings'),
+    path('settings/leave-policy/', views.leave_policy_settings, name='leave_policy_settings'),
+
+    # إعدادات رمضان
+    path('ramadan-settings/', views.ramadan_settings_list, name='ramadan_settings_list'),
+    path('ramadan-settings/create/', views.ramadan_settings_create, name='ramadan_settings_create'),
+    path('ramadan-settings/<int:pk>/update/', views.ramadan_settings_update, name='ramadan_settings_update'),
+    path('ramadan-settings/<int:pk>/delete/', views.ramadan_settings_delete, name='ramadan_settings_delete'),
+    path('ramadan-settings/fetch-dates/', views.fetch_ramadan_dates, name='fetch_ramadan_dates'),
+
+    # جدول الجزاءات
+    path('attendance-penalties/', views.penalty_list, name='penalty_list'),
+    path('attendance-penalties/create/', views.penalty_create, name='penalty_create'),
+    path('attendance-penalties/<int:pk>/update/', views.penalty_update, name='penalty_update'),
+    path('attendance-penalties/<int:pk>/delete/', views.penalty_delete, name='penalty_delete'),
+    path('attendance-penalties/<int:pk>/toggle/', views.penalty_toggle_active, name='penalty_toggle_active'),
     
     # الحضور
     path('attendance/', views.attendance_list, name='attendance_list'),
+    path('attendance/export/', views.attendance_export_excel, name='attendance_export_excel'),
     path('attendance/check-in/', views.attendance_check_in, name='attendance_check_in'),
     path('attendance/check-out/', views.attendance_check_out, name='attendance_check_out'),
     path('attendance/summaries/', views.attendance_summary_list, name='attendance_summary_list'),
@@ -109,21 +132,49 @@ urlpatterns = [
     path('api/biometric/logs/bulk-link/', views.api_bulk_link_logs, name='api_bulk_link_logs'),
     path('api/biometric/logs/cleanup/', views.api_cleanup_old_logs, name='api_cleanup_old_logs'),
     path('api/biometric/logs/process-all/', views.api_process_all_biometric_logs, name='api_process_all_biometric_logs'),
+    path('api/biometric/logs/reset-month/', views.api_reset_month_processing, name='api_reset_month_processing'),
     
+    # الإجازات الرسمية
+    path('official-holidays/', views.official_holiday_list, name='official_holiday_list'),
+    path('official-holidays/create/', views.official_holiday_create, name='official_holiday_create'),
+    path('official-holidays/<int:pk>/update/', views.official_holiday_update, name='official_holiday_update'),
+    path('official-holidays/<int:pk>/delete/', views.official_holiday_delete, name='official_holiday_delete'),
+    path('official-holidays/<int:pk>/toggle/', views.official_holiday_toggle, name='official_holiday_toggle'),
+
+    # أنواع الإجازات
+    path('leave-types/', views.leave_type_list, name='leave_type_list'),
+    path('leave-types/save/', views.leave_type_save, name='leave_type_save'),
+    path('leave-types/<int:pk>/save/', views.leave_type_save, name='leave_type_save_edit'),
+    path('leave-types/<int:pk>/delete/', views.leave_type_delete, name='leave_type_delete'),
+    path('leave-types/<int:pk>/toggle/', views.leave_type_toggle, name='leave_type_toggle'),
+
     # الإجازات
     path('leaves/', views.leave_list, name='leave_list'),
     path('leaves/request/', views.leave_request, name='leave_request'),
     path('leaves/<int:pk>/', views.leave_detail, name='leave_detail'),
     path('leaves/<int:pk>/approve/', views.leave_approve, name='leave_approve'),
     path('leaves/<int:pk>/reject/', views.leave_reject, name='leave_reject'),
-    
+    path('leaves/<int:pk>/cancel/', views.leave_cancel, name='leave_cancel'),
+    path('leaves/<int:pk>/update-multiplier/', views.leave_update_multiplier, name='leave_update_multiplier'),
+    path('api/employee/<int:employee_id>/leave-info/', views.employee_leave_info_api, name='employee_leave_info_api'),
+
     # Bulk operations for leaves (Issue #32-35)
     path('leaves/bulk/approve/', views.bulk_approve_leaves, name='bulk_approve_leaves'),
     path('leaves/bulk/reject/', views.bulk_reject_leaves, name='bulk_reject_leaves'),
     
+    # الجزاءات والمكافآت
+    path('penalties-rewards/', views.penalty_reward_list, name='penalty_reward_list'),
+    path('penalties-rewards/create/', views.penalty_reward_create, name='penalty_reward_create'),
+    path('penalties-rewards/<int:pk>/', views.penalty_reward_detail, name='penalty_reward_detail'),
+    path('penalties-rewards/<int:pk>/edit/', views.penalty_reward_edit, name='penalty_reward_edit'),
+    path('penalties-rewards/<int:pk>/delete/', views.penalty_reward_delete, name='penalty_reward_delete'),
+    path('penalties-rewards/<int:pk>/approve/', views.penalty_reward_approve, name='penalty_reward_approve'),
+    path('penalties-rewards/<int:pk>/reject/', views.penalty_reward_reject, name='penalty_reward_reject'),
+
     # الأذونات
     path('permissions/', views.permission_list, name='permission_list'),
     path('permissions/request/', views.permission_request, name='permission_request'),
+    path('permissions/ajax/quota/', views.get_permission_quota_ajax, name='permission_quota_ajax'),
     path('permissions/<int:pk>/', views.permission_detail, name='permission_detail'),
     path('permissions/<int:pk>/approve/', views.permission_approve, name='permission_approve'),
     path('permissions/<int:pk>/reject/', views.permission_reject, name='permission_reject'),
@@ -138,15 +189,23 @@ urlpatterns = [
     path('leave-balances/employee/<int:employee_id>/', views.leave_balance_employee, name='leave_balance_employee'),
     path('leave-balances/accrual-status/<int:employee_id>/', views.leave_balance_accrual_status, name='leave_balance_accrual_status'),
     path('leave-balances/update/', views.leave_balance_update, name='leave_balance_update'),
+    path('leave-balances/get-balance/', views.leave_balance_get_api, name='leave_balance_get_api'),
     path('leave-balances/update-all/', views.leave_balance_update_all, name='leave_balance_update_all'),
     path('leave-balances/rollover/', views.leave_balance_rollover, name='leave_balance_rollover'),
+    path('leave-balances/encashment/', views.leave_encashment_process, name='leave_encashment_process'),
     
     # الرواتب
     path('payroll/', views.payroll_list, name='payroll_list'),
+    path('payroll/export/', views.payroll_export, name='payroll_export'),
     path('payroll/<int:pk>/', views.payroll_detail, name='payroll_detail'),
-    path('payroll/<int:pk>/edit-lines/', views.payroll_edit_lines, name='payroll_edit_lines'),
     path('payroll/<int:pk>/approve/', views.payroll_approve, name='payroll_approve'),
+    path('payroll/<int:pk>/unapprove/', views.payroll_unapprove, name='payroll_unapprove'),
     path('payroll/<int:pk>/delete/', views.payroll_delete, name='payroll_delete'),
+    path('payroll/<int:pk>/recalculate/', views.payroll_recalculate, name='payroll_recalculate'),
+    # AJAX endpoints for inline line editing
+    path('payroll/line/<int:line_pk>/update/', views.payroll_line_update, name='payroll_line_update'),
+    path('payroll/line/<int:line_pk>/delete/', views.payroll_line_delete, name='payroll_line_delete'),
+    path('payroll/<int:pk>/line/add/', views.payroll_line_add, name='payroll_line_add'),
     # ✨ مسارات الدفع الجديدة
     path('payroll/<int:pk>/pay/', views.payroll_pay, name='payroll_pay'),
     
@@ -156,6 +215,7 @@ urlpatterns = [
     path('advances/<int:pk>/', views.advance_detail, name='advance_detail'),
     path('advances/<int:pk>/approve/', views.advance_approve, name='advance_approve'),
     path('advances/<int:pk>/reject/', views.advance_reject, name='advance_reject'),
+    path('advances/<int:pk>/pay/', views.advance_pay, name='advance_pay'),
     
     # معالجة الرواتب المتكاملة
     path('payroll/integrated/', views.integrated_payroll_dashboard, name='integrated_payroll_dashboard'),
@@ -167,11 +227,17 @@ urlpatterns = [
     path('attendance/summaries/<int:pk>/', views.attendance_summary_detail, name='attendance_summary_detail'),
     path('attendance/summaries/<int:pk>/approve/', views.approve_attendance_summary, name='approve_attendance_summary'),
     path('attendance/summaries/<int:pk>/recalculate/', views.recalculate_attendance_summary, name='recalculate_attendance_summary'),
+    path('attendance/summaries/calculate-exempt/', views.calculate_exempt_summaries, name='calculate_exempt_summaries'),
+    
+    # تحديث معامل الغياب
+    path('attendance/<int:pk>/update-absence-multiplier/', views.update_absence_multiplier, name='update_absence_multiplier'),
     
     # طباعة قسيمة الراتب
     path('payroll/<int:pk>/print/', views.payroll_print, name='payroll_print'),
     
     # العقود
+    path('contracts/import/', views.contract_import, name='contract_import'),
+    path('contracts/import/template/', views.contract_import_template, name='contract_import_template'),
     path('contracts/', views.contract_list, name='contract_list'),
     path('contracts/<int:pk>/', views.contract_detail, name='contract_detail'),
     # نموذج موحد
@@ -211,6 +277,7 @@ urlpatterns = [
     
     # API الموظفين
     path('api/employees/<int:pk>/', views.employee_detail_api, name='employee_detail_api'),
+    path('api/employees/<int:pk>/shift/', views.employee_shift_api, name='employee_shift_api'),
     path('api/employees/<int:employee_id>/components-analysis/', views.employee_components_analysis, name='employee_components_analysis'),
     
     # أدوات الصيانة الإدارية

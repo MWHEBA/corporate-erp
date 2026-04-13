@@ -92,7 +92,8 @@ class MovementService:
         unit_cost: Optional[Decimal] = None,
         document_number: Optional[str] = None,
         notes: str = '',
-        movement_date: Optional[datetime] = None
+        movement_date: Optional[datetime] = None,
+        warehouse_id: Optional[int] = None
     ) -> StockMovement:
         """
         Process stock movement with full validation and thread-safety.
@@ -174,7 +175,8 @@ class MovementService:
                     unit_cost=unit_cost,
                     document_number=document_number,
                     notes=notes,
-                    movement_date=movement_date
+                    movement_date=movement_date,
+                    warehouse_id=warehouse_id
                 )
                 
                 # Update idempotency record with result
@@ -251,7 +253,8 @@ class MovementService:
         unit_cost: Optional[Decimal],
         document_number: Optional[str],
         notes: str,
-        movement_date: Optional[datetime]
+        movement_date: Optional[datetime],
+        warehouse_id: Optional[int] = None
     ) -> StockMovement:
         """
         Process stock movement within atomic transaction with proper locking.
@@ -262,11 +265,18 @@ class MovementService:
         Requirements 2.4, 2.7: Ensure atomic updates of stock and journal entries
         """
         with DatabaseLockManager.atomic_operation():
-            # Get default warehouse
-            default_warehouse = self._get_default_warehouse()
+            # Get warehouse - use provided warehouse_id or fall back to default
+            if warehouse_id:
+                from product.models.stock_management import Warehouse
+                try:
+                    warehouse = Warehouse.objects.get(id=warehouse_id, is_active=True)
+                except Warehouse.DoesNotExist:
+                    warehouse = self._get_default_warehouse()
+            else:
+                warehouse = self._get_default_warehouse()
             
             # Get current stock with appropriate locking
-            current_stock = self.get_current_stock(product_id, default_warehouse.id)
+            current_stock = self.get_current_stock(product_id, warehouse.id)
             
             # Validate stock operation (including negative stock check)
             self._validate_stock_operation(product_id, quantity_change, current_stock)
@@ -275,7 +285,7 @@ class MovementService:
             new_stock_level = current_stock + quantity_change
             
             # Get or create Stock record
-            stock_record = self._get_or_create_stock_record(product_id, default_warehouse.id)
+            stock_record = self._get_or_create_stock_record(product_id, warehouse.id)
             
             # Create StockMovement record
             movement_date = movement_date or timezone.now()
@@ -295,7 +305,7 @@ class MovementService:
             
             stock_movement = StockMovement(
                 product_id=product_id,
-                warehouse=default_warehouse,
+                warehouse=warehouse,
                 movement_type=movement_type,
                 quantity=abs(quantity_change),  # Store absolute quantity
                 unit_cost=unit_cost,
@@ -316,6 +326,9 @@ class MovementService:
             # Set flag to skip automatic journal entry creation in save()
             # because we'll create it explicitly below via _create_accounting_entry()
             stock_movement._skip_journal_entry = True
+            # Set flag to skip stock quantity update in signal (StockOrchestratorService)
+            # because we update stock_record directly below - prevents double update
+            stock_movement._skip_update = True
             stock_movement.save()
             
             # Update Stock record
@@ -660,7 +673,7 @@ class MovementService:
             return 'sale'
         
         # Check for purchase operations
-        if 'PURCHASE_ITEM_' in ref_upper or 'PURCHASE_' in ref_upper or 'PUR-' in ref_upper:
+        if 'PURCHASE_ITEM_' in ref_upper or 'PURCHASE_' in ref_upper or 'PUR-' in ref_upper or 'PURCHASE-' in ref_upper:
             if 'RETURN' in ref_upper or 'CANCEL' in ref_upper:
                 return 'purchase_return'
             return 'purchase'

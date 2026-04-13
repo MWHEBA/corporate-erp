@@ -27,20 +27,9 @@
             <label class="form-label"><i class="fas fa-calendar me-1"></i>إلى تاريخ</label>
             <input type="date" name="date_to" class="form-control" value="{{ date_to }}">
           </div>
-          <div class="col-md-2">
-            <label class="form-label"><i class="fas fa-fingerprint me-1"></i>الماكينة</label>
-            <select name="device" class="form-select">
-              <option value="">الكل</option>
-              {% for device in devices %}
-              <option value="{{ device.id }}" {% if request.GET.device == device.id|stringformat:"s" %}selected{% endif %}>
-                {{ device.device_name }}
-              </option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="col-md-2">
+          <div class="col">
             <label class="form-label"><i class="fas fa-user me-1"></i>الموظف</label>
-            <select name="employee" class="form-select">
+            <select name="employee" id="employee-filter" class="form-select select2-employee">
               <option value="">الكل</option>
               {% for employee in employees %}
               <option value="{{ employee.id }}" {% if request.GET.employee == employee.id|stringformat:"s" %}selected{% endif %}>
@@ -114,6 +103,17 @@
 {% block extra_js %}
 <script>
 $(document).ready(function() {
+    // تهيئة select2 لفلتر الموظف
+    $('#employee-filter').select2({
+        placeholder: 'ابحث عن موظف...',
+        allowClear: true,
+        width: '100%',
+        language: {
+            noResults: function() { return 'لا توجد نتائج'; },
+            searching: function() { return 'جاري البحث...'; }
+        }
+    });
+
     // تهيئة جدول سجلات البصمة - بدون pagination (نستخدم Django pagination)
     initGlobalTable('biometric-logs-table', {
         ordering: false, // تعطيل الترتيب - نستخدم Django ordering
@@ -162,8 +162,7 @@ function runBiometricBulkLink() {
     const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
 
     const payload = {
-        unlinked_only: true,
-        limit: 500
+        unlinked_only: true
     };
     if (deviceId) {
         payload.device_id = deviceId;
@@ -209,56 +208,50 @@ function runBiometricBulkLink() {
 }
 
 function cleanupOldLogs() {
-    if (!confirm('هل أنت متأكد من حذف سجلات البصمة الأقدم من 6 شهور؟\n\nهذا الإجراء لا يمكن التراجع عنه!')) {
-        return;
-    }
+    Swal.fire({
+        title: 'حذف السجلات القديمة',
+        text: 'سيتم حذف سجلات البصمة الأقدم من 6 شهور. هذا الإجراء لا يمكن التراجع عنه.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'نعم، احذف',
+        cancelButtonText: 'إلغاء',
+        confirmButtonColor: '#dc3545',
+    }).then((result) => {
+        if (!result.isConfirmed) return;
 
-    const btn = document.getElementById('btn-cleanup-old-logs');
-    if (!btn) {
-        notify('لا يمكن العثور على زر الحذف', 'error');
-        return;
-    }
+        const btn = document.getElementById('btn-cleanup-old-logs');
+        if (!btn) return;
 
-    const originalText = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> جاري الحذف...';
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> جاري الحذف...';
 
-    // CSRF Token
-    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
-    const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+        const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
 
-    fetch('/hr/api/biometric/logs/cleanup/', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-CSRFToken': csrfToken
-        },
-        body: JSON.stringify({ months: 6 })
-    })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error('HTTP ' + response.status);
-        }
-        return response.json();
-    })
-    .then(data => {
-        if (data.success) {
-            notify(data.message, 'success');
-            setTimeout(function() {
-                window.location.reload();
-            }, 1500);
-        } else {
-            notify('حدث خطأ: ' + (data.error || 'غير معروف'), 'error');
-        }
-    })
-    .catch(error => {
-        console.error('Cleanup error:', error);
-        notify('حدث خطأ في الاتصال أثناء الحذف', 'error');
-    })
-    .finally(() => {
-        btn.disabled = false;
-        btn.innerHTML = originalText;
+        fetch('/hr/api/biometric/logs/cleanup/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({ months: 6 })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                toastr.success(data.message);
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                toastr.error('حدث خطأ: ' + (data.error || 'غير معروف'));
+            }
+        })
+        .catch(() => toastr.error('حدث خطأ في الاتصال أثناء الحذف'))
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        });
     });
 }
 </script>

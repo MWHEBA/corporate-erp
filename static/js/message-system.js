@@ -1,6 +1,6 @@
-/**
- * Enhanced Message System for Student Profile
- * نظام الرسائل المحسن لصفحة الطالب
+﻿/**
+ * Enhanced Message System
+ * نظام الرسائل المحسن
  */
 
 // تجنب التعريف المكرر

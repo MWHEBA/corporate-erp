@@ -431,7 +431,8 @@ function repositionAllNotifications() {
 
 // فتح مودال إنشاء حساب محاسبي
 function openCreateAccountModal(customerId) {
-    fetch(`/client/${customerId}/create-account/`, {
+    const createAccountUrl = `{% url 'client:customer_create_account' 0 %}`.replace('/0/', `/${customerId}/`);
+    fetch(createAccountUrl, {
         method: 'GET',
         headers: {
             'X-Requested-With': 'XMLHttpRequest',
@@ -508,7 +509,8 @@ function createCustomerAccount(customerId) {
         return;
     }
     
-    fetch(`/client/${customerId}/create-account/`, {
+    const createAccountUrl = `{% url 'client:customer_create_account' 0 %}`.replace('/0/', `/${customerId}/`);
+    fetch(createAccountUrl, {
         method: 'POST',
         headers: {
             'X-Requested-With': 'XMLHttpRequest',

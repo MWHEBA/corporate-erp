@@ -15,7 +15,7 @@ class SecurePayrollService:
     ALLOWED_PAYROLL_ACCOUNTS = {
         # حسابات المصروفات
         '50200': 'الرواتب والأجور',
-        '50210': 'الراتب الأساسي', 
+        '50210': 'الأجر الأساسي', 
         '50220': 'البدلات',
         '50230': 'المكافآت',
         '50240': 'التأمينات الاجتماعية',
@@ -220,7 +220,6 @@ class SecurePayrollService:
                         credit=Decimal('0'),
                         description=f"{line.name} - {payroll.employee.get_full_name_ar()}"
                     )
-                    logger.info(f"تم إضافة مستحق آمن: {line.name} - {line.amount}")
                 else:
                     logger.error(f"فشل إضافة المستحق: {line.name}")
     
@@ -245,7 +244,6 @@ class SecurePayrollService:
                         credit=line.amount,
                         description=f"{line.name} - {payroll.employee.get_full_name_ar()}"
                     )
-                    logger.info(f"تم إضافة خصم آمن: {line.name} - {line.amount}")
                 else:
                     logger.error(f"فشل إضافة الخصم: {line.name}")
     

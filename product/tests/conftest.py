@@ -36,7 +36,6 @@ from product.models import (
 )
 from supplier.models import Supplier
 # استيراد TestDataFactory من tests/factories
-# from tests.factories.student_factories import StudentFactory
 # from tests.factories.academic_factories import AcademicYearFactory
 
 # إنشاء TestDataFactory مؤقت

@@ -81,9 +81,6 @@ def admin_client(client, admin_user):
 def test_data_context():
     """Context للبيانات التجريبية"""
     return {
-        'students_count': 0,
-        'parents_count': 0,
-        'academic_years_count': 0,
         'created_at': 'test_context'
     }
 
@@ -91,9 +88,6 @@ def test_data_context():
 def data_stats():
     """إحصائيات البيانات للاختبار"""
     return {
-        'total_students': 0,
-        'total_parents': 0,
-        'total_academic_years': 0,
         'database_size': '0 MB',
         'last_updated': 'test_stats',
         '_total_records': 0,

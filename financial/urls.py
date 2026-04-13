@@ -116,6 +116,12 @@ urlpatterns = [
         views.journal_entries_create,
         name="journal_entries_create",
     ),
+    # القيود اليدوية (Manual Journal Entries) - للسوبر أدمن فقط
+    path(
+        "journal-entries/manual/create/",
+        views.manual_journal_entry_create,
+        name="manual_journal_entry_create",
+    ),
     # alias للاختبارات
     path(
         "journal-entry/create/",
@@ -246,6 +252,7 @@ urlpatterns = [
     ),
     # تقارير العمليات
     path("reports/sales/", views.sales_report, name="sales_report"),
+    path("reports/purchases/", views.purchases_report, name="purchases_report"),
     path("reports/inventory/", views.inventory_report, name="inventory_report"),
     path("reports/abc-analysis/", views.abc_analysis_report, name="abc_analysis_report"),
     # الصيانة
@@ -295,7 +302,9 @@ urlpatterns = [
         views.payment_history,
         name="payment_history",
     ),
-    # سجل التدقيق - تم نقله إلى governance/audit/
+    # سجل التدقيق
+    path("audit-trail/", views.audit_trail_list, name="audit_trail_list"),
+    path("audit-trail/cleanup/", views.audit_trail_cleanup, name="audit_trail_cleanup"),
     # معاملات الشريك
     path("partner/", views.partner_dashboard, name="partner_dashboard"),
     path("partner/transactions/", views.partner_transactions_list, name="partner_transactions_list"),

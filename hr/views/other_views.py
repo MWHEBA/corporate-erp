@@ -1,4 +1,4 @@
-"""
+﻿"""
 Views متنوعة للموارد البشرية
 """
 from .base_imports import *
@@ -10,6 +10,7 @@ from datetime import date, timedelta
 __all__ = [
     'organization_chart',
     'hr_settings',
+    'leave_policy_settings',
     'employee_create_user',
     'employee_link_user',
     'employee_unlink_user',
@@ -34,7 +35,7 @@ def organization_chart(request):
     context = {
         'root_departments': root_departments,
         'total_departments': Department.objects.filter(is_active=True).count(),
-        'total_employees': Employee.objects.filter(status='active').count(),
+        'total_employees': Employee.objects.filter(status='active', is_insurance_only=False).count(),
         'total_job_titles': JobTitle.objects.filter(is_active=True).count(),
         
         # بيانات الهيدر الموحد
@@ -57,53 +58,155 @@ def organization_chart(request):
 def hr_settings(request):
     """صفحة إعدادات الموارد البشرية"""
     if request.method == 'POST':
-        # حفظ إعدادات الإجازات
+        action = request.POST.get('action', 'leave_settings')
+
+        if action == 'insurance_settings':
+            for key in ['hr_insurance_employee_share', 'hr_insurance_employer_share']:
+                if key in request.POST:
+                    SystemSetting.objects.update_or_create(
+                        key=key,
+                        defaults={
+                            'value': request.POST.get(key),
+                            'data_type': 'decimal',
+                            'group': 'hr',
+                            'is_active': True,
+                        }
+                    )
+            messages.success(request, 'تم حفظ إعدادات التأمينات بنجاح')
+            return redirect('hr:hr_settings')
+
+        if action == 'attendance_settings':
+            # حفظ إعدادات الحضور
+            import json
+
+            # أيام الإجازة الأسبوعية (checkboxes متعددة)
+            off_days = request.POST.getlist('hr_weekly_off_days')
+            off_days_int = [int(d) for d in off_days if d.isdigit()]
+            SystemSetting.objects.filter(key='hr_weekly_off_days').update(value=json.dumps(off_days_int))
+
+            # دقائق السماح الشهري
+            grace = request.POST.get('hr_monthly_grace_minutes', '0')
+            SystemSetting.objects.filter(key='hr_monthly_grace_minutes').update(value=grace)
+
+            # تفعيل العمل الإضافي
+            overtime = 'true' if 'hr_overtime_enabled' in request.POST else 'false'
+            SystemSetting.objects.filter(key='hr_overtime_enabled').update(value=overtime)
+
+            # يوم بداية دورة الرواتب
+            start_day = request.POST.get('payroll_cycle_start_day', '1').strip()
+            if start_day.isdigit() and 1 <= int(start_day) <= 28:
+                SystemSetting.objects.update_or_create(
+                    key='payroll_cycle_start_day',
+                    defaults={'value': start_day, 'data_type': 'integer', 'group': 'hr', 'is_active': True}
+                )
+
+            messages.success(request, 'تم حفظ إعدادات الحضور بنجاح')
+            return redirect('hr:hr_settings')
+            
+        if action == 'permission_settings':
+            # حفظ إعدادات الأذونات
+            permission_settings = [
+                'hr_permission_max_count_monthly',
+                'hr_permission_max_hours_monthly',
+            ]
+            
+            for setting_key in permission_settings:
+                if setting_key in request.POST:
+                    value = request.POST.get(setting_key)
+                    SystemSetting.objects.filter(key=setting_key).update(value=value)
+                    
+            messages.success(request, 'تم حفظ إعدادات الأذونات بنجاح')
+            return redirect('hr:hr_settings')
+
+        # حفظ إعدادات الإجازات (الـ action الافتراضي)
         numeric_settings = [
             'leave_accrual_probation_months',
             'leave_accrual_partial_percentage',
             'leave_accrual_full_months',
             'leave_rollover_max_days',
+            # إعدادات سياسة الإجازات الجديدة
+            'leave_partial_after_months',
+            'leave_annual_partial_days',
+            'leave_emergency_partial_days',
+            'leave_annual_full_days',
+            'leave_emergency_full_days',
+            'leave_senior_age_threshold',
+            'leave_senior_service_years',
+            'leave_senior_annual_days',
+            'leave_senior_emergency_days',
         ]
-        
+
         for setting_key in numeric_settings:
             if setting_key in request.POST:
                 value = request.POST.get(setting_key)
                 SystemSetting.objects.filter(key=setting_key).update(value=value)
-        
+
         # الـ checkboxes
         checkbox_settings = [
             'leave_auto_create_balances',
             'leave_rollover_enabled',
+            'leave_encashment_enabled',
         ]
-        
+
         for setting_key in checkbox_settings:
             value = 'true' if setting_key in request.POST else 'false'
             SystemSetting.objects.filter(key=setting_key).update(value=value)
-        
-        # حفظ عدد أيام أنواع الإجازات
-        leave_types = LeaveType.objects.filter(is_active=True)
-        for leave_type in leave_types:
-            field_name = f'leave_type_{leave_type.id}_days'
-            if field_name in request.POST:
-                new_days = int(request.POST.get(field_name))
-                if new_days != leave_type.max_days_per_year:
-                    leave_type.max_days_per_year = new_days
-                    leave_type.save()
-        
+
+        # مرجع دورة الإجازات (string)
+        if 'leave_year_reference' in request.POST:
+            SystemSetting.objects.filter(key='leave_year_reference').update(
+                value=request.POST.get('leave_year_reference')
+            )
+
         messages.success(request, 'تم حفظ إعدادات الإجازات بنجاح')
-        return redirect('hr:hr_settings')
-    
+        return redirect('hr:hr_settings')    
+    # جلب إعدادات التأمينات
+    insurance_settings = {
+        'employee_share': SystemSetting.get_setting('hr_insurance_employee_share', 0),
+        'employer_share': SystemSetting.get_setting('hr_insurance_employer_share', 0),
+    }
+
     # جلب إعدادات الإجازات
     leave_settings = {
-        'probation_months': SystemSetting.get_setting('leave_accrual_probation_months', 3),
-        'partial_percentage': SystemSetting.get_setting('leave_accrual_partial_percentage', 25),
-        'full_months': SystemSetting.get_setting('leave_accrual_full_months', 6),
-        'auto_create': SystemSetting.get_setting('leave_auto_create_balances', True),
-        'rollover_enabled': SystemSetting.get_setting('leave_rollover_enabled', False),
-        'rollover_max_days': SystemSetting.get_setting('leave_rollover_max_days', 7),
+        # إعدادات قديمة (محتفظ بها للتوافق)
+        'probation_months':    SystemSetting.get_setting('leave_accrual_probation_months', 3),
+        'partial_percentage':  SystemSetting.get_setting('leave_accrual_partial_percentage', 25),
+        'full_months':         SystemSetting.get_setting('leave_accrual_full_months', 6),
+        'auto_create':         SystemSetting.get_setting('leave_auto_create_balances', True),
+        'rollover_enabled':    SystemSetting.get_setting('leave_rollover_enabled', False),
+        'rollover_max_days':   SystemSetting.get_setting('leave_rollover_max_days', 7),
+        # إعدادات الاستحقاق المرحلي الجديدة
+        'partial_after_months':    SystemSetting.get_setting('leave_partial_after_months', 6),
+        'annual_partial_days':     SystemSetting.get_setting('leave_annual_partial_days', 7),
+        'emergency_partial_days':  SystemSetting.get_setting('leave_emergency_partial_days', 3),
+        'annual_full_days':        SystemSetting.get_setting('leave_annual_full_days', 21),
+        'emergency_full_days':     SystemSetting.get_setting('leave_emergency_full_days', 7),
+        # إعدادات كبار الموظفين
+        'senior_age_threshold':    SystemSetting.get_setting('leave_senior_age_threshold', 50),
+        'senior_service_years':    SystemSetting.get_setting('leave_senior_service_years', 10),
+        'senior_annual_days':      SystemSetting.get_setting('leave_senior_annual_days', 30),
+        'senior_emergency_days':   SystemSetting.get_setting('leave_senior_emergency_days', 10),
+        # دورة الإجازات
+        'year_reference':          SystemSetting.get_setting('leave_year_reference', 'academic_year'),
+        # تحويل الرصيد لمالي
+        'encashment_enabled':      SystemSetting.get_setting('leave_encashment_enabled', False),
+    }
+
+    leave_types = LeaveType.objects.filter(is_active=True).order_by('code')
+
+    # جلب إعدادات الحضور
+    attendance_settings = {
+        'weekly_off_days': SystemSetting.get_setting('hr_weekly_off_days', [4]),
+        'monthly_grace_minutes': SystemSetting.get_setting('hr_monthly_grace_minutes', 0),
+        'overtime_enabled': SystemSetting.get_setting('hr_overtime_enabled', False),
+        'payroll_cycle_start_day': SystemSetting.get_setting('payroll_cycle_start_day', 1),
     }
     
-    leave_types = LeaveType.objects.filter(is_active=True).order_by('code')
+    # جلب إعدادات الأذونات
+    permission_settings = {
+        'max_count_monthly': SystemSetting.get_setting('hr_permission_max_count_monthly', 2),
+        'max_hours_monthly': SystemSetting.get_setting('hr_permission_max_hours_monthly', 2),
+    }
     
     # إحصائيات قوالب مكونات الراتب
     salary_templates_earnings = SalaryComponentTemplate.objects.filter(component_type='earning', is_active=True).count()
@@ -113,6 +216,8 @@ def hr_settings(request):
         'active_menu': 'hr',
         'leave_settings': leave_settings,
         'leave_types': leave_types,
+        'attendance_settings': attendance_settings,
+        'permission_settings': permission_settings,
         'departments_count': Department.objects.filter(is_active=True).count(),
         'total_departments': Department.objects.count(),
         'job_titles_count': JobTitle.objects.filter(is_active=True).count(),
@@ -125,6 +230,7 @@ def hr_settings(request):
         'employees_with_balance': LeaveBalance.objects.values('employee').distinct().count(),
         'salary_templates_earnings': salary_templates_earnings,
         'salary_templates_deductions': salary_templates_deductions,
+        'insurance_settings': insurance_settings,
         
         # بيانات الهيدر الموحد
         'page_title': 'إعدادات الموارد البشرية',
@@ -145,6 +251,102 @@ def hr_settings(request):
         ],
     }
     return render(request, 'hr/settings.html', context)
+
+
+# ==================== إعدادات سياسة الإجازات ====================
+
+@login_required
+def leave_policy_settings(request):
+    """صفحة إعدادات سياسة الإجازات المتكاملة"""
+
+    if request.method == 'POST':
+        # الأرقام
+        numeric_settings = [
+            'leave_accrual_probation_months',
+            'leave_accrual_partial_percentage',
+            'leave_accrual_full_months',
+            'leave_rollover_max_days',
+            'leave_partial_after_months',
+            'leave_annual_partial_days',
+            'leave_emergency_partial_days',
+            'leave_annual_full_days',
+            'leave_emergency_full_days',
+            'leave_senior_age_threshold',
+            'leave_senior_service_years',
+            'leave_senior_annual_days',
+            'leave_senior_emergency_days',
+        ]
+        for key in numeric_settings:
+            if key in request.POST:
+                SystemSetting.objects.filter(key=key).update(value=request.POST.get(key))
+
+        # الـ checkboxes
+        for key in ['leave_auto_create_balances', 'leave_rollover_enabled', 'leave_encashment_enabled']:
+            SystemSetting.objects.filter(key=key).update(
+                value='true' if key in request.POST else 'false'
+            )
+
+        # مرجع دورة الإجازات
+        if 'leave_year_reference' in request.POST:
+            SystemSetting.objects.filter(key='leave_year_reference').update(
+                value=request.POST.get('leave_year_reference')
+            )
+
+        messages.success(request, 'تم حفظ إعدادات سياسة الإجازات بنجاح')
+        return redirect('hr:leave_policy_settings')
+
+    # جلب الإعدادات
+    s = SystemSetting.get_setting
+    leave_settings = {
+        'probation_months':       s('leave_accrual_probation_months', 3),
+        'partial_percentage':     s('leave_accrual_partial_percentage', 25),
+        'full_months':            s('leave_accrual_full_months', 6),
+        'auto_create':            s('leave_auto_create_balances', True),
+        'rollover_enabled':       s('leave_rollover_enabled', False),
+        'rollover_max_days':      s('leave_rollover_max_days', 7),
+        'partial_after_months':   s('leave_partial_after_months', 6),
+        'annual_partial_days':    s('leave_annual_partial_days', 7),
+        'emergency_partial_days': s('leave_emergency_partial_days', 3),
+        'annual_full_days':       s('leave_annual_full_days', 21),
+        'emergency_full_days':    s('leave_emergency_full_days', 7),
+        'senior_age_threshold':   s('leave_senior_age_threshold', 50),
+        'senior_service_years':   s('leave_senior_service_years', 10),
+        'senior_annual_days':     s('leave_senior_annual_days', 30),
+        'senior_emergency_days':  s('leave_senior_emergency_days', 10),
+        'year_reference':         s('leave_year_reference', 'academic_year'),
+        'encashment_enabled':     s('leave_encashment_enabled', False),
+    }
+
+    leave_types = LeaveType.objects.filter(is_active=True).order_by('category', 'code')
+
+    context = {
+        'leave_settings': leave_settings,
+        'leave_types':    leave_types,
+        'page_title':     'إعدادات سياسة الإجازات',
+        'page_subtitle':  'تكوين قواعد الاستحقاق والترحيل والتحويل المالي',
+        'page_icon':      'fas fa-sliders-h',
+        'header_buttons': [
+            {
+                'form_id': 'leave-policy-form',
+                'icon':    'fa-save',
+                'text':    'حفظ الإعدادات',
+                'class':   'btn-primary',
+            },
+            {
+                'url':   reverse('hr:hr_settings'),
+                'icon':  'fa-arrow-right',
+                'text':  'رجوع',
+                'class': 'btn-outline-secondary',
+            },
+        ],
+        'breadcrumb_items': [
+            {'title': 'الرئيسية',       'url': reverse('core:dashboard'),   'icon': 'fas fa-home'},
+            {'title': 'الموارد البشرية', 'url': reverse('hr:employee_list'), 'icon': 'fas fa-users-cog'},
+            {'title': 'الإعدادات',       'url': reverse('hr:hr_settings'),   'icon': 'fas fa-cog'},
+            {'title': 'سياسة الإجازات', 'active': True},
+        ],
+    }
+    return render(request, 'hr/leave_policy_settings.html', context)
 
 
 # ==================== ربط الموظفين بالمستخدمين ====================
@@ -414,7 +616,7 @@ def employee_detail_api(request, pk):
     logger = logging.getLogger(__name__)
     
     try:
-        employee = Employee.objects.select_related('job_title', 'department').get(pk=pk)
+        employee = Employee.objects.select_related('job_title', 'department', 'shift').get(pk=pk)
         
         data = {
             'id': employee.id,
@@ -435,12 +637,95 @@ def employee_detail_api(request, pk):
         data['department'] = employee.department.id if employee.department else None
         data['department_name'] = str(employee.department) if employee.department else None
         
+        # الوردية
+        if employee.shift:
+            from hr.models.attendance import RamadanSettings
+            from datetime import date as date_cls, datetime
+            # استخدام perm_date من الـ query params إن وُجد
+            perm_date_str = request.GET.get('perm_date')
+            if perm_date_str:
+                try:
+                    target_date = datetime.strptime(perm_date_str, '%Y-%m-%d').date()
+                except ValueError:
+                    target_date = date_cls.today()
+            else:
+                target_date = date_cls.today()
+
+            ramadan = RamadanSettings.objects.filter(
+                start_date__lte=target_date,
+                end_date__gte=target_date
+            ).first()
+            if ramadan and employee.shift.ramadan_start_time and employee.shift.ramadan_end_time:
+                shift_start = employee.shift.ramadan_start_time.strftime('%H:%M')
+                shift_end = employee.shift.ramadan_end_time.strftime('%H:%M')
+            else:
+                shift_start = employee.shift.start_time.strftime('%H:%M')
+                shift_end = employee.shift.end_time.strftime('%H:%M')
+            data['shift'] = {
+                'id': employee.shift.id,
+                'name': employee.shift.name,
+                'start_time': shift_start,
+                'end_time': shift_end,
+            }
+        else:
+            data['shift'] = None
+        
         return JsonResponse(data)
         
     except Employee.DoesNotExist:
         return JsonResponse({'error': 'الموظف غير موجود'}, status=404)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def employee_shift_api(request, pk):
+    """API مخصص لجلب بيانات وردية الموظف لصفحة طلب الإذن"""
+    try:
+        employee = Employee.objects.select_related('shift').get(pk=pk, status='active')
+
+        if not employee.shift:
+            return JsonResponse({'success': True, 'shift': None})
+
+        from hr.models.attendance import RamadanSettings
+        from datetime import date as date_cls, datetime
+
+        perm_date_str = request.GET.get('perm_date')
+        if perm_date_str:
+            try:
+                target_date = datetime.strptime(perm_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                target_date = date_cls.today()
+        else:
+            target_date = date_cls.today()
+
+        ramadan = RamadanSettings.objects.filter(
+            start_date__lte=target_date,
+            end_date__gte=target_date
+        ).first()
+
+        if ramadan and employee.shift.ramadan_start_time and employee.shift.ramadan_end_time:
+            shift_start = employee.shift.ramadan_start_time.strftime('%H:%M')
+            shift_end = employee.shift.ramadan_end_time.strftime('%H:%M')
+        else:
+            shift_start = employee.shift.start_time.strftime('%H:%M')
+            shift_end = employee.shift.end_time.strftime('%H:%M')
+
+        return JsonResponse({
+            'success': True,
+            'shift': {
+                'id': employee.shift.id,
+                'name': employee.shift.name,
+                'start_time': shift_start,
+                'end_time': shift_end,
+            }
+        })
+
+    except Employee.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'الموظف غير موجود'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
 @login_required
@@ -455,6 +740,7 @@ def contract_check_overlap(request):
         start_date_str = request.POST.get('start_date')
         end_date_str = request.POST.get('end_date')
         contract_id = request.POST.get('contract_id')
+        old_contract_id = request.POST.get('old_contract_id')  # للتجديد
         
         if not employee_id or not start_date_str:
             return JsonResponse({'has_overlap': False, 'message': ''})
@@ -464,13 +750,18 @@ def contract_check_overlap(request):
         if end_date_str:
             end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
         
-        allowed_statuses = ['expired', 'terminated', 'suspended']
+        # إضافة "renewed" للحالات المسموح بها
+        allowed_statuses = ['expired', 'terminated', 'suspended', 'renewed', 'draft']
         overlapping_contracts = Contract.objects.filter(
             employee_id=employee_id
         ).exclude(status__in=allowed_statuses)
         
         if contract_id:
             overlapping_contracts = overlapping_contracts.exclude(pk=contract_id)
+        
+        # استثناء العقد القديم في حالة التجديد
+        if old_contract_id:
+            overlapping_contracts = overlapping_contracts.exclude(pk=old_contract_id)
         
         for contract in overlapping_contracts:
             if not contract.end_date:

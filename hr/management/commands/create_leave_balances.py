@@ -19,8 +19,8 @@ class Command(BaseCommand):
         parser.add_argument(
             '--year',
             type=int,
-            default=date.today().year,
-            help='السنة المراد إنشاء أرصدة لها (افتراضي: السنة الحالية)'
+            default=None,
+            help='السنة المراد إنشاء أرصدة لها (افتراضي: السنة الجديدة من دورة الإجازات)'
         )
         parser.add_argument(
             '--employee-id',
@@ -37,13 +37,18 @@ class Command(BaseCommand):
         year = options['year']
         employee_id = options.get('employee_id')
         overwrite = options['overwrite']
+
+        # لو لم يُحدَّد year، استخدم السنة الجديدة من دورة الإجازات
+        if year is None:
+            from hr.services.leave_accrual_service import LeaveAccrualService
+            year = LeaveAccrualService.get_new_cycle_year()
         
         self.stdout.write(self.style.SUCCESS(f'\n{"="*60}'))
         self.stdout.write(self.style.SUCCESS(f'إنشاء أرصدة الإجازات - السنة: {year}'))
         self.stdout.write(self.style.SUCCESS(f'{"="*60}\n'))
         
         # جلب أنواع الإجازات النشطة
-        leave_types = LeaveType.objects.filter(is_active=True)
+        leave_types = LeaveType.objects.filter(is_active=True, category__in=['annual', 'emergency'])
         if not leave_types.exists():
             self.stdout.write(self.style.ERROR('[X] لا توجد أنواع إجازات نشطة في النظام!'))
             self.stdout.write(self.style.WARNING('يرجى إضافة أنواع الإجازات أولاً من لوحة الإدارة.'))
@@ -75,67 +80,59 @@ class Command(BaseCommand):
         
         with transaction.atomic():
             for employee in employees:
-                # حساب مدة الخدمة ونسبة الاستحقاق
                 months_worked = LeaveAccrualService.calculate_months_worked(employee.hire_date)
-                accrual_percentage = LeaveAccrualService.get_accrual_percentage(months_worked)
-                
+
                 employee_created = 0
                 employee_updated = 0
-                
+
                 for leave_type in leave_types:
-                    # التحقق من وجود رصيد
                     existing_balance = LeaveBalance.objects.filter(
                         employee=employee,
                         leave_type=leave_type,
                         year=year
                     ).first()
-                    
+
                     if existing_balance and not overwrite:
                         skipped_count += 1
                         continue
-                    
-                    # حساب الأيام المستحقة
-                    total_days = leave_type.max_days_per_year
-                    accrued_days = int(total_days * accrual_percentage)
-                    
+
+                    # single source of truth
+                    total_days = LeaveAccrualService.get_entitlement_for_employee(employee, leave_type)
+
                     if existing_balance and overwrite:
-                        # تحديث الرصيد الموجود
-                        existing_balance.total_days = total_days
-                        existing_balance.accrued_days = accrued_days
-                        existing_balance.remaining_days = accrued_days - existing_balance.used_days
+                        existing_balance.total_days    = total_days
+                        existing_balance.accrued_days  = total_days
+                        existing_balance.remaining_days = max(0, total_days - existing_balance.used_days)
                         existing_balance.accrual_start_date = employee.hire_date
-                        existing_balance.last_accrual_date = date.today()
+                        existing_balance.last_accrual_date  = date.today()
                         existing_balance.save()
                         employee_updated += 1
                         updated_count += 1
                     else:
-                        # إنشاء رصيد جديد
                         LeaveBalance.objects.create(
                             employee=employee,
                             leave_type=leave_type,
                             year=year,
                             total_days=total_days,
-                            accrued_days=accrued_days,
+                            accrued_days=total_days,
                             used_days=0,
-                            remaining_days=accrued_days,
+                            remaining_days=total_days,
                             accrual_start_date=employee.hire_date,
                             last_accrual_date=date.today()
                         )
                         employee_created += 1
                         created_count += 1
-                
-                # عرض معلومات الموظف
+
                 status_icon = '[OK]' if (employee_created + employee_updated) > 0 else '[--]'
                 status_text = []
                 if employee_created > 0:
                     status_text.append(f'{employee_created} جديد')
                 if employee_updated > 0:
                     status_text.append(f'{employee_updated} محدث')
-                
+
                 self.stdout.write(
                     f'{status_icon} {employee.get_full_name_ar()} - '
                     f'{months_worked} شهر - '
-                    f'{int(accrual_percentage*100)}% - '
                     f'{", ".join(status_text) if status_text else "موجود مسبقاً"}'
                 )
         
@@ -150,7 +147,3 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING(f'  - أرصدة موجودة (تم تخطيها): {skipped_count}'))
         self.stdout.write(self.style.SUCCESS(f'{"="*60}\n'))
         
-        logger.info(
-            f'تم إنشاء أرصدة الإجازات: {created_count} رصيد جديد، '
-            f'{updated_count} محدث، {skipped_count} موجود مسبقاً'
-        )

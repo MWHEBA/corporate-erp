@@ -2,6 +2,7 @@
 {% load static %}
 {% load i18n %}
 {% load custom_filters %}
+{% load dict_tags %}
 
 {% block title %}{{ page_title }}{% endblock %}
 
@@ -39,7 +40,21 @@
                         <td><strong>{{ job_title.title_ar }}</strong></td>
                         <td>{{ job_title.title_en|default:"-" }}</td>
                         <td>{{ job_title.department.name_ar|default:"-" }}</td>
-                        <td><strong>{{ job_title.employees.count|default:0 }}</strong> موظف</td>
+                        <td>
+                            {% with names=jt_employees|get_item:job_title.pk %}
+                            {% if names %}
+                                <span class="employee-count-badge"
+                                      data-bs-toggle="tooltip"
+                                      data-bs-placement="top"
+                                      data-bs-html="true"
+                                      title="{% for n in names %}{{ n }}{% if not forloop.last %}<br>{% endif %}{% endfor %}">
+                                    <strong>{{ names|length }}</strong> موظف
+                                </span>
+                            {% else %}
+                                <span class="text-muted">0 موظف</span>
+                            {% endif %}
+                            {% endwith %}
+                        </td>
                         <td class="text-center">
                             {% if job_title.is_active %}
                                 <span class="badge bg-success">نشط</span>
@@ -73,6 +88,17 @@
 
 {% block extra_js %}
 <script src="{% static 'js/global-table.js' %}"></script>
+<style>
+.employee-count-badge {
+    cursor: pointer;
+    border-bottom: 1px dashed var(--primary-color);
+}
+.tooltip-employees .tooltip-inner {
+    white-space: nowrap;
+    max-width: none;
+    text-align: right;
+}
+</style>
 <script>
 $(document).ready(function() {
     if ($('#jobTitlesTable').length) {
@@ -86,6 +112,11 @@ $(document).ready(function() {
             ]
         });
     }
+
+    // تفعيل tooltips أسماء الموظفين
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
+        new bootstrap.Tooltip(el, { trigger: 'hover', customClass: 'tooltip-employees' });
+    });
 });
 </script>
 {% endblock %}

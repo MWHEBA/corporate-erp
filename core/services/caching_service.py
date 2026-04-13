@@ -32,8 +32,7 @@ class CachingService:
     
     # Cache key prefixes for different data types
     PREFIX_USER = "user"
-    PREFIX_STUDENT = "student"
-    PREFIX_PARENT = "parent"
+    PREFIX_CUSTOMER = "customer"
     PREFIX_FINANCIAL = "financial"
     PREFIX_ACADEMIC = "academic"
     PREFIX_REPORT = "report"
@@ -479,14 +478,9 @@ def cache_user_data(user_id: int, timeout: Optional[int] = None) -> str:
     return caching_service.generate_cache_key(caching_service.PREFIX_USER, user_id)
 
 
-def cache_student_data(student_id: int, timeout: Optional[int] = None) -> str:
-    """Cache student data"""
-    return caching_service.generate_cache_key(caching_service.PREFIX_STUDENT, student_id)
-
-
-def cache_parent_data(parent_id: int, timeout: Optional[int] = None) -> str:
-    """Cache parent data"""
-    return caching_service.generate_cache_key(caching_service.PREFIX_PARENT, parent_id)
+def cache_customer_data(customer_id: int, timeout: Optional[int] = None) -> str:
+    """Cache customer data"""
+    return caching_service.generate_cache_key(caching_service.PREFIX_CUSTOMER, customer_id)
 
 
 def cache_financial_data(account_id: int, timeout: Optional[int] = None) -> str:
@@ -500,13 +494,7 @@ def invalidate_user_cache(user_id: int) -> bool:
     return caching_service.delete(key)
 
 
-def invalidate_student_cache(student_id: int) -> bool:
-    """Invalidate student-related cache"""
-    key = cache_student_data(student_id)
-    return caching_service.delete(key)
-
-
-def invalidate_parent_cache(parent_id: int) -> bool:
-    """Invalidate parent-related cache"""
-    key = cache_parent_data(parent_id)
+def invalidate_customer_cache(customer_id: int) -> bool:
+    """Invalidate customer-related cache"""
+    key = cache_customer_data(customer_id)
     return caching_service.delete(key)

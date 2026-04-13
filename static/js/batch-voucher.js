@@ -33,12 +33,15 @@ const BatchVoucherForm = {
         
         // تحديث التكلفة عند اختيار المنتج
         $(document).on('change', '.product-select', function() {
+            // select2 بيطلق change تلقائياً
             self.loadProductCost($(this));
+            self.loadProductStock($(this));
             self.updateProductOptions();
         });
         
-        // تحديث الإجمالي عند تغيير الكمية أو التكلفة
-        $(document).on('input', '.quantity-input, .unit-cost-input', function() {
+        // التحقق من الكمية عند التغيير
+        $(document).on('input change', '.quantity-input', function() {
+            self.validateQuantity($(this));
             self.updateRowTotal($(this).closest('.formset-row'));
             self.updateTotals();
         });
@@ -270,15 +273,30 @@ const BatchVoucherForm = {
             return;
         }
         
+        // destroy select2 على الصف الأصلي قبل الـ clone عشان نحصل على select نظيف
+        const $origSelect = templateRow.find('.product-select');
+        if ($origSelect.hasClass('select2-hidden-accessible')) {
+            $origSelect.select2('destroy');
+        }
+        
         let newRow = templateRow.clone();
+        
+        // إعادة تهيئة select2 على الصف الأصلي
+        if (typeof ProductSelect2 !== 'undefined') {
+            ProductSelect2.initRow(templateRow);
+        }
         
         // تحديث الـ indices
         newRow.html(newRow.html().replace(/-\d+-/g, `-${formIdx}-`));
         newRow.attr('data-form-index', formIdx);
         
-        // مسح القيم
+        // مسح القيم - إزالة أي select2 artifacts من الـ clone
+        newRow.find('.select2-container').remove();
+        newRow.find('select.product-select')
+            .removeClass('select2-hidden-accessible')
+            .removeAttr('data-select2-id')
+            .val('');
         newRow.find('input[type="number"], input[type="text"]').val('');
-        newRow.find('select.product-select').val('');
         newRow.find('.item-total').val('0.00');
         newRow.find('input[name$="-DELETE"]').prop('checked', false).val('');
         newRow.find('input[name$="-id"]').val('');
@@ -286,6 +304,11 @@ const BatchVoucherForm = {
         
         // إضافة الصف
         container.append(newRow);
+        
+        // تهيئة select2 على الصف الجديد
+        if (typeof ProductSelect2 !== 'undefined') {
+            ProductSelect2.initRow(newRow);
+        }
         
         // تحديث عدد النماذج
         totalForms.val(formIdx + 1);
@@ -345,6 +368,68 @@ const BatchVoucherForm = {
         });
     },
     
+    /**
+     * تحميل الكمية المتاحة للمنتج في المخزن المصدر
+     * يعمل فقط في أذون الصرف والتحويل
+     */
+    loadProductStock: function(select) {
+        const productId = select.val();
+        const row = select.closest('.formset-row');
+        const stockInfo = row.find('.stock-info');
+        const quantityInput = row.find('.quantity-input');
+
+        // مسح المعلومات القديمة
+        stockInfo.text('');
+        quantityInput.removeAttr('data-max-stock');
+
+        if (!productId) return;
+
+        const voucherType = $('#id_voucher_type').val();
+        // الكمية المتاحة مهمة فقط في الصادر والتحويل
+        if (voucherType !== 'issue' && voucherType !== 'transfer') return;
+
+        const warehouseId = $('#id_warehouse').val();
+        if (!warehouseId) return;
+
+        $.ajax({
+            url: '/products/api/product-warehouses/',
+            data: { product_id: productId },
+            success: function(data) {
+                const wh = data.warehouses.find(w => String(w.id) === String(warehouseId));
+                const available = wh ? wh.quantity : 0;
+                const unit = data.unit || 'وحدة';
+
+                quantityInput.attr('data-max-stock', available);
+
+                if (available > 0) {
+                    stockInfo.html(`<i class="fas fa-box me-1"></i>متاح: <strong>${available}</strong> ${unit}`);
+                    stockInfo.removeClass('text-danger').addClass('text-muted');
+                } else {
+                    stockInfo.html(`<i class="fas fa-exclamation-triangle me-1"></i>لا يوجد مخزون في هذا المخزن`);
+                    stockInfo.removeClass('text-muted').addClass('text-danger');
+                }
+            }
+        });
+    },
+
+    /**
+     * التحقق من أن الكمية لا تتجاوز المتاح
+     */
+    validateQuantity: function(input) {
+        const voucherType = $('#id_voucher_type').val();
+        if (voucherType !== 'issue' && voucherType !== 'transfer') return;
+
+        const maxStock = parseFloat(input.attr('data-max-stock'));
+        if (isNaN(maxStock)) return;
+
+        const entered = parseFloat(input.val()) || 0;
+
+        if (entered > maxStock) {
+            input.val(maxStock);
+            toastr.warning(`الكمية المتاحة في المخزن هي ${maxStock} فقط`);
+        }
+    },
+
     /**
      * تحميل تكاليف جميع المنتجات عند تحميل الصفحة
      */

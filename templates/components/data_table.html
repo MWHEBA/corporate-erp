@@ -1,4 +1,4 @@
-{% load static %}
+﻿{% load static %}
 {% load i18n %}
 {% load pricing_filters %}
 {% load utils_extras %}
@@ -81,7 +81,7 @@
                                         <span class="transaction-amount {% if header.variant %}{{ header.variant }}{% endif %} text-center d-block fw-bold">
                                             {% if field_value|is_empty_value %}
                                                 <span class="text-muted">-</span>
-                                            {% elif field_value == 0 and header.key == 'balance' %}
+                                            {% elif field_value == 0 and header.key in 'balance,amount_due' %}
                                                 <span class="text-muted">-</span>
                                             {% else %}
                                                 <span class="currency-symbol">{{ currency_symbol|default:"ج.م" }}</span> {{ field_value|remove_trailing_zeros|default:"0" }}
@@ -294,11 +294,16 @@
                                     {% elif header.format == 'html' %}
                                         {{ field_value|safe }}
                                     {% elif header.key == 'actions' %}
-                                        <div class="d-flex justify-content-center">
-                                            {% for button in field_value %}
-                                                {% render_action_button button item primary_key %}
-                                            {% endfor %}
-                                        </div>
+                                        {% comment %}معالجة عمود الإجراءات - يدعم HTML جاهز أو list of buttons{% endcomment %}
+                                        {% if field_value|is_list %}
+                                            <div class="d-flex justify-content-center">
+                                                {% for button in field_value %}
+                                                    {% render_action_button button item primary_key %}
+                                                {% endfor %}
+                                            </div>
+                                        {% else %}
+                                            {{ field_value|safe }}
+                                        {% endif %}
                                     {% elif header.format == 'rating' %}
                                         <div class="rating-display text-center">
                                             <div class="rating-stars text-warning mb-1">
@@ -344,16 +349,16 @@
                                             <span class="badge bg-secondary">🔗 قيد مركب</span>
                                         {% elif field_value == 'تحويل' %}
                                             <span class="badge bg-info">🔄 تحويل</span>
-                                        {% elif field_value == 'رسوم دراسية' %}
-                                            <span class="badge bg-success">🎓 رسوم دراسية</span>
+                                        {% elif field_value == 'رسوم أساسية' %}
+                                            <span class="badge bg-success">📋 رسوم أساسية</span>
                                         {% elif field_value == 'رسوم مواد ومستلزمات' %}
                                             <span class="badge bg-info">📚 رسوم مواد ومستلزمات</span>
                                         {% elif field_value == 'رسوم خدمات' %}
                                             <span class="badge bg-primary">🔧 رسوم خدمات</span>
                                         {% elif field_value == 'رسوم إدارية' %}
                                             <span class="badge bg-warning">📋 رسوم إدارية</span>
-                                        {% elif field_value == 'دفعة ولي أمر' %}
-                                            <span class="badge bg-success">💰 دفعة ولي أمر</span>
+                                        {% elif field_value == 'دفعة عميل' %}
+                                            <span class="badge bg-success">💰 دفعة عميل</span>
                                         {% elif field_value == 'دفعة مورد' %}
                                             <span class="badge bg-danger">💳 دفعة مورد</span>
                                         {% elif field_value == 'مساهمة الشريك' %}

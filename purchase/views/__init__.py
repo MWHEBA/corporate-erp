@@ -11,6 +11,7 @@ from .purchase_views import (
     purchase_update,
     purchase_delete,
     purchase_print,
+    purchase_duplicate,
 )
 
 # Payment Views
@@ -46,6 +47,7 @@ __all__ = [
     'purchase_update',
     'purchase_delete',
     'purchase_print',
+    'purchase_duplicate',
     # Payment Views
     'payment_detail',
     'add_payment',

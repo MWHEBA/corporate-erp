@@ -344,12 +344,10 @@ class TransferService:
         """الحصول على حساب المخزون للمخزن"""
         from financial.models.chart_of_accounts import ChartOfAccounts
         
-        # محاولة الحصول على حساب مخزون خاص بالمخزن
-        # إذا لم يوجد، استخدام حساب المخزون العام
         try:
-            # البحث عن حساب مخزون بكود يحتوي على رقم المخزن
+            # البحث عن حساب مخزون خاص بالمخزن (سلسلة 10400)
             account = ChartOfAccounts.objects.filter(
-                code__startswith='1010',
+                code__startswith='10400',
                 name__icontains=warehouse.name,
                 is_active=True
             ).first()
@@ -358,7 +356,7 @@ class TransferService:
                 return account
             
             # استخدام حساب المخزون العام
-            return ChartOfAccounts.objects.get(code='10100')
+            return ChartOfAccounts.objects.get(code='10400')
             
         except ChartOfAccounts.DoesNotExist:
             raise ValueError('حساب المخزون غير موجود في الدليل المحاسبي')

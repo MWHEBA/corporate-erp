@@ -9,11 +9,7 @@ from django.db.models import Sum, Count, Q, Avg, F
 from django.utils import timezone
 from financial.models.chart_of_accounts import ChartOfAccounts
 from financial.models.journal_entry import JournalEntry, JournalEntryLine
-
-try:
-    from client.models import Customer
-except ImportError:
-    Customer = None
+from client.models import Customer
 
 
 class FinancialAnalyticsService:
@@ -134,11 +130,9 @@ class FinancialAnalyticsService:
             collection_rate = (collected / total_sales) * 100 if collected >= 0 else Decimal("0")
 
         # عدد العملاء الجدد
-        new_customers = 0
-        if Customer:
-            new_customers = Customer.objects.filter(
-                created_at__date__range=[self.date_from, self.date_to]
-            ).count()
+        new_clients = Customer.objects.filter(
+            created_at__date__range=[self.date_from, self.date_to]
+        ).count()
 
         # متوسط دورة المبيعات (من تاريخ القيد إلى التحصيل)
         # نحسبها من متوسط عمر أرصدة العملاء
@@ -149,7 +143,7 @@ class FinancialAnalyticsService:
 
         return {
             "collection_rate": collection_rate.quantize(Decimal("0.1")),
-            "new_parents": new_customers,
+            "new_clients": new_clients,
             "sales_cycle": avg_sales_cycle,
             "due_debt": due_debt,
             "total_receivables": total_receivables,

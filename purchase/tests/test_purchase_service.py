@@ -157,7 +157,7 @@ def chart_of_accounts(db):
             }
         )[0],
         'inventory': ChartOfAccounts.objects.get_or_create(
-            code='10300',
+            code='10400',
             defaults={
                 'name': 'المخزون',
                 'account_type': asset_type,
@@ -181,17 +181,17 @@ def chart_of_accounts(db):
             }
         )[0],
         'suppliers': ChartOfAccounts.objects.get_or_create(
-            code='21010',
+            code='20100',
             defaults={
-                'name': 'الموردين',
+                'name': 'الموردون',
                 'account_type': liability_type,
                 'is_active': True
             }
         )[0],
         'general_expenses': ChartOfAccounts.objects.get_or_create(
-            code='50200',
+            code='50300',
             defaults={
-                'name': 'مصروفات عامة',
+                'name': 'مصروفات إدارية',
                 'account_type': expense_type,
                 'is_active': True
             }

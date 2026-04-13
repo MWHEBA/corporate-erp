@@ -91,7 +91,7 @@
         </div>
         
         <!-- المنتجات -->
-        <div class="section-container mb-4">
+        <div class="section-container mb-4" id="products-section" style="display: none;">
             <h5 class="section-title"><i class="fas fa-boxes me-2"></i>المنتجات</h5>
             
             {{ formset.management_form }}
@@ -116,6 +116,7 @@
                                     {% endfor %}
                                 </select>
                             {% endwith %}
+                            <small class="stock-info text-muted mt-1 d-block"></small>
                             {% if item_form.product.errors %}
                                 <div class="text-danger">{{ item_form.product.errors.0 }}</div>
                             {% endif %}
@@ -125,7 +126,7 @@
                             <label class="form-label">الكمية</label>
                             {% with item_form.quantity as field %}
                                 <input type="number" name="{{ field.html_name }}" id="{{ field.id_for_label }}" 
-                                       class="form-control quantity-input" min="0" step="0.01" 
+                                       class="form-control quantity-input" min="1" step="1" 
                                        value="{{ field.value|default:'' }}">
                             {% endwith %}
                             {% if item_form.quantity.errors %}
@@ -137,8 +138,8 @@
                             <label class="form-label">تكلفة الوحدة</label>
                             {% with item_form.unit_cost as field %}
                                 <input type="number" name="{{ field.html_name }}" id="{{ field.id_for_label }}" 
-                                       class="form-control unit-cost-input" min="0" step="0.01" 
-                                       value="{{ field.value|default:'' }}">
+                                       class="form-control unit-cost-input bg-light" min="0" step="0.01" 
+                                       value="{{ field.value|default:'' }}" readonly>
                             {% endwith %}
                             {% if item_form.unit_cost.errors %}
                                 <div class="text-danger">{{ item_form.unit_cost.errors.0 }}</div>
@@ -166,7 +167,7 @@
         </div>
         
         <!-- الإجماليات -->
-        <div class="totals-box">
+        <div class="totals-box" id="totals-section" style="display: none;">
             <div class="total-item">
                 <span>عدد الأصناف:</span>
                 <span id="total-items">0</span>
@@ -182,7 +183,7 @@
         </div>
         
         <!-- الأزرار -->
-        <div class="mt-4 text-center">
+        <div class="mt-4 text-center" id="submit-section" style="display: none;">
             <button type="submit" class="btn btn-success btn-lg">
                 <i class="fas fa-save"></i> حفظ
             </button>
@@ -195,9 +196,13 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'js/product-select2.js' %}"></script>
 <script src="{% static 'js/batch-voucher.js' %}?v=2"></script>
 <script>
 $(document).ready(function() {
+    // تهيئة select2 على جميع حقول المنتجات
+    ProductSelect2.initAll();
+
     // تهيئة النموذج
     BatchVoucherForm.init();
     
@@ -210,21 +215,36 @@ $(document).ready(function() {
         if (voucherType === 'transfer') {
             $('#target-warehouse-field').show();
             $('#id_target_warehouse').prop('required', true);
-            
             $('#purpose-field').hide();
             $('#id_purpose_type').prop('required', false);
-            
-            // تعطيل تعديل التكلفة في أذون التحويل
-            $('.unit-cost-input').prop('readonly', true).addClass('bg-light');
         } else {
             $('#target-warehouse-field').hide();
             $('#id_target_warehouse').prop('required', false);
-            
             $('#purpose-field').show();
             $('#id_purpose_type').prop('required', true);
-            
-            // تفعيل تعديل التكلفة في أذون الاستلام/الصرف
-            $('.unit-cost-input').prop('readonly', false).removeClass('bg-light');
+        }
+        
+        toggleProductsSection();
+    }
+    
+    function toggleProductsSection() {
+        const voucherType = $('#id_voucher_type').val();
+        const warehouse = $('#id_warehouse').val();
+        const purposeType = $('#id_purpose_type').val();
+        const targetWarehouse = $('#id_target_warehouse').val();
+        
+        let ready = voucherType && warehouse;
+        
+        if (voucherType === 'transfer') {
+            ready = ready && targetWarehouse;
+        } else {
+            ready = ready && purposeType;
+        }
+        
+        if (ready) {
+            $('#products-section, #totals-section, #submit-section').slideDown(200);
+        } else {
+            $('#products-section, #totals-section, #submit-section').slideUp(200);
         }
     }
     
@@ -248,7 +268,17 @@ $(document).ready(function() {
     }
     
     $('#id_voucher_type').on('change', toggleFields);
-    $('#id_warehouse').on('change', filterTargetWarehouse);
+    $('#id_warehouse').on('change', function() {
+        filterTargetWarehouse();
+        toggleProductsSection();
+        // إعادة تحميل الكميات عند تغيير المخزن
+        $('.formset-row').not('.to-delete').each(function() {
+            const $select = $(this).find('.product-select');
+            if ($select.val()) BatchVoucherForm.loadProductStock($select);
+        });
+    });
+    $('#id_purpose_type').on('change', toggleProductsSection);
+    $('#id_target_warehouse').on('change', toggleProductsSection);
     
     toggleFields();
     filterTargetWarehouse();

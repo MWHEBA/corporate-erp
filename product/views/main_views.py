@@ -59,14 +59,14 @@ except ImportError:
 
 def get_product_sales_statistics(product):
     """
-    حساب إحصائيات التسليم للمنتج (من طلبات المنتجات)
+    حساب إحصائيات المبيعات للمنتج (من sale.models)
     """
     try:
-        from student_products.models import ProductRequest
+        from sale.models import SaleItem
         from decimal import Decimal
-        
-        # الحصول على الفترة المالية الحالية
         from financial.models import AccountingPeriod
+        from django.db.models import Count
+        from django.db.models.functions import TruncMonth
 
         current_period = (
             AccountingPeriod.objects.filter(status="open")
@@ -74,65 +74,50 @@ def get_product_sales_statistics(product):
             .first()
         )
 
-        # الحصول على جميع طلبات المنتجات المُسلمة
-        product_requests = ProductRequest.objects.filter(
-            product=product,
-            status='delivered'
-        ).select_related("student", "student__parent")
+        sale_items = SaleItem.objects.filter(product=product).select_related("sale", "sale__customer")
 
-        # تصفية حسب الفترة المالية الحالية إن وجدت
         if current_period:
-            product_requests = product_requests.filter(
-                delivered_at__gte=current_period.start_date,
-                delivered_at__lte=current_period.end_date,
+            sale_items = sale_items.filter(
+                sale__date__gte=current_period.start_date,
+                sale__date__lte=current_period.end_date,
             )
 
-        # إحصائيات أساسية
-        total_sold_quantity = (
-            product_requests.aggregate(Sum("quantity"))["quantity__sum"] or 0
-        )
-        total_sales_value = product_requests.aggregate(Sum("total_amount"))["total_amount__sum"] or Decimal('0')
-        total_sales_count = product_requests.count()
+        total_sold_quantity = sale_items.aggregate(Sum("quantity"))["quantity__sum"] or 0
+        total_sales_value = sale_items.aggregate(
+            total=Sum(F('quantity') * F('unit_price'))
+        )["total"] or Decimal('0')
+        total_sales_count = sale_items.count()
         average_sale_price = (
-            product_requests.aggregate(Avg("unit_price"))["unit_price__avg"] or Decimal('0')
+            sale_items.aggregate(Avg("unit_price"))["unit_price__avg"] or Decimal('0')
         )
 
-        # آخر 5 تسليمات
-        last_sales = product_requests.order_by("-delivered_at")[:5]
+        last_sales = sale_items.order_by("-sale__date")[:5]
 
-        # أفضل العملاء (حسب الكمية المشتراة)
-        from django.db.models import Count
         top_customers = (
-            product_requests.values("student__parent__name", "student__parent__id")
+            sale_items.values("sale__customer__id")
             .annotate(total_quantity=Sum("quantity"))
             .order_by("-total_quantity")[:5]
         )
 
-        # المبيعات الشهرية
-        from django.db.models.functions import TruncMonth
         monthly_sales = (
-            product_requests.annotate(month=TruncMonth("delivered_at"))
+            sale_items.annotate(month=TruncMonth("sale__date"))
             .values("month")
             .annotate(
                 total_quantity=Sum("quantity"),
-                total_value=Sum("total_amount")
+                total_value=Sum(F('quantity') * F('unit_price'))
             )
             .order_by("month")
         )
 
-        # أفضل شهر مبيعات
         best_selling_month = None
         if monthly_sales:
-            best_selling_month = max(
-                monthly_sales, key=lambda x: x["total_quantity"]
-            )
+            best_selling_month = max(monthly_sales, key=lambda x: x["total_quantity"])
 
-        # آخر تاريخ تسليم
         last_sale_date = None
-        if product_requests.exists():
-            last_request = product_requests.order_by("-delivered_at").first()
-            if last_request:
-                last_sale_date = last_request.delivered_at
+        if sale_items.exists():
+            last_item = sale_items.order_by("-sale__date").first()
+            if last_item:
+                last_sale_date = last_item.sale.date
 
         return {
             "total_sold_quantity": total_sold_quantity,
@@ -146,7 +131,7 @@ def get_product_sales_statistics(product):
             "last_sale_date": last_sale_date,
             "period_name": current_period.name if current_period else None,
         }
-        
+
     except ImportError:
         return {
             "total_sold_quantity": 0,
@@ -174,251 +159,304 @@ logger = logging.getLogger(__name__)
 
 
 @login_required
+def _calculate_bundle_stock_from_prefetch(bundle_product):
+    """
+    حساب مخزون المنتج المجمع من الـ prefetched data بدون queries إضافية
+    """
+    components = bundle_product.components.all()
+    if not components:
+        return 0
+    min_bundles = float('inf')
+    for component in components:
+        if not component.component_product.is_active:
+            return 0
+        comp_stock = sum(s.quantity for s in component.component_product.stocks.all())
+        if comp_stock <= 0:
+            return 0
+        min_bundles = min(min_bundles, comp_stock // component.required_quantity)
+    return int(min_bundles) if min_bundles != float('inf') else 0
+
+
 def product_list(request):
     """
-    عرض قائمة المنتجات (بدون الخدمات)
+    عرض قائمة المنتجات (بدون الخدمات) - مع Ajax search و DB-level pagination
     """
     try:
-        # استرجاع المنتجات فقط (بدون الخدمات)
+        # استرجاع المنتجات مع كل البيانات المطلوبة في query واحدة
         products = (
-            Product.objects.select_related("category", "unit")
-            .prefetch_related("stocks")
-            .filter(is_service=False)  # ✨ فلترة المنتجات فقط
-            .all()
+            Product.objects.select_related("category", "unit", "created_by", "updated_by")
+            .prefetch_related(
+                "stocks",
+                "images",
+                "components__component_product__stocks",  # للـ bundles
+            )
+            .filter(is_service=False)
+            .annotate(
+                total_stock=Sum("stocks__quantity"),
+                components_count=Count("components", distinct=True),
+            )
+            .order_by("name")
         )
 
-        # البحث البسيط
-        search_query = request.GET.get("search", "")
-        if search_query:
-            products = products.filter(name__icontains=search_query)
+        # قراءة معاملات البحث والفلترة
+        search_query = request.GET.get("search", "").strip()
+        category_id  = request.GET.get("category", "")
+        product_type = request.GET.get("product_type", "")
+        min_price    = request.GET.get("min_price", "")
+        max_price    = request.GET.get("max_price", "")
+        in_stock     = request.GET.get("in_stock", "")
 
-        # تطبيق التصفية
-        filter_form = ProductSearchForm(request.GET)
-        
-        # تطبيق الفلاتر على المنتجات
-        if filter_form.is_valid():
-            # فلتر اسم المنتج
-            if filter_form.cleaned_data.get('name'):
-                products = products.filter(name__icontains=filter_form.cleaned_data['name'])
-            
-            # فلتر التصنيف
-            if filter_form.cleaned_data.get('category'):
-                products = products.filter(category=filter_form.cleaned_data['category'])
-            
-            # فلتر نوع المنتج (عادي أو مجمع)
-            if filter_form.cleaned_data.get('product_type'):
-                product_type = filter_form.cleaned_data['product_type']
-                if product_type == 'regular':
-                    products = products.filter(is_bundle=False)
-                elif product_type == 'bundle':
-                    products = products.filter(is_bundle=True)
-            
-            # فلتر السعر الأدنى
-            if filter_form.cleaned_data.get('min_price'):
-                products = products.filter(selling_price__gte=filter_form.cleaned_data['min_price'])
-            
-            # فلتر السعر الأقصى
-            if filter_form.cleaned_data.get('max_price'):
-                products = products.filter(selling_price__lte=filter_form.cleaned_data['max_price'])
-            
-            # فلتر نشط
-            if filter_form.cleaned_data.get('is_active'):
-                products = products.filter(is_active=True)
-            
-            # فلتر متوفر في المخزون
-            if filter_form.cleaned_data.get('in_stock'):
-                products = products.filter(stocks__quantity__gt=0).distinct()
-        
-        # معالجة تصدير PDF (بعد تطبيق الفلاتر)
+        # is_active: افتراضي "active" لو مفيش أي params
+        status = request.GET.get("status", "active" if not request.GET else "")
+
+        # تطبيق الفلاتر
+        if search_query:
+            products = products.filter(
+                Q(name__icontains=search_query) |
+                Q(sku__icontains=search_query) |
+                Q(description__icontains=search_query)
+            )
+        if status == "active":
+            products = products.filter(is_active=True)
+        elif status == "inactive":
+            products = products.filter(is_active=False)
+        if category_id:
+            products = products.filter(category_id=category_id)
+        if product_type == "regular":
+            products = products.filter(is_bundle=False)
+        elif product_type == "bundle":
+            products = products.filter(is_bundle=True)
+        if min_price:
+            try:
+                products = products.filter(selling_price__gte=Decimal(min_price))
+            except Exception:
+                pass
+        if max_price:
+            try:
+                products = products.filter(selling_price__lte=Decimal(max_price))
+            except Exception:
+                pass
+        if in_stock:
+            products = products.filter(stocks__quantity__gt=0).distinct()
+
+        # معالجة تصدير PDF
         if request.GET.get('export') == 'pdf':
-            # استخدام WeasyPrint للحل الجذري للعربي
             return export_products_pdf_weasy(request, products)
 
         # تعريف أعمدة جدول المنتجات
         product_headers = [
-            {
-                "key": "image",
-                "label": "الصورة",
-                "sortable": False,
-                "class": "text-center",
-                "template": "components/cells/product_image.html",
-                "width": "80px",
-            },
-            {
-                "key": "name_with_sku",
-                "label": "اسم المنتج",
-                "sortable": True,
-                "class": "text-start",
-                "template": "components/cells/product_name_with_sku.html",
-            },
-            {
-                "key": "product_type",
-                "label": "النوع",
-                "sortable": True,
-                "class": "text-center",
-                "format": "html",
-                "width": "100px",
-            },
-            {
-                "key": "category",
-                "label": "التصنيف",
-                "sortable": True,
-                "class": "text-center",
-                "template": "components/cells/product_category.html",
-                "width": "120px",
-            },
-            {
-                "key": "sale_price",
-                "label": "سعر البيع",
-                "sortable": True,
-                "class": "text-center",
-                "template": "components/cells/product_price.html",
-                "width": "120px",
-            },
-            {
-                "key": "current_stock",
-                "label": "المخزون",
-                "sortable": True,
-                "class": "text-center",
-                "template": "components/cells/stock_level.html",
-                "width": "120px",
-            },
-            {
-                "key": "is_active",
-                "label": "الحالة",
-                "sortable": True,
-                "class": "text-center",
-                "template": "components/cells/product_status.html",
-                "width": "90px",
-            },
+            {"key": "bulk_checkbox", "label": "☑", "sortable": False, "class": "text-center bulk-checkbox-col", "format": "html", "width": "40px"},
+            {"key": "image", "label": "الصورة", "sortable": False, "class": "text-center", "format": "html", "width": "80px"},
+            {"key": "name_with_sku", "label": "اسم المنتج", "sortable": True, "class": "text-start", "format": "html"},
+            {"key": "product_type", "label": "النوع", "sortable": True, "class": "text-center", "format": "html", "width": "100px"},
+            {"key": "category", "label": "التصنيف", "sortable": True, "class": "text-center", "format": "html", "width": "120px"},
+            {"key": "sale_price", "label": "سعر البيع", "sortable": True, "class": "text-center", "format": "html", "width": "120px"},
+            {"key": "current_stock", "label": "المخزون", "sortable": True, "class": "text-center", "format": "html", "width": "120px"},
+            {"key": "is_active", "label": "الحالة", "sortable": True, "class": "text-center", "format": "html", "width": "90px"},
         ]
 
-        # تحضير بيانات الجدول
-        table_data = []
-        action_buttons = []  # أزرار الإجراءات المشتركة لجميع الصفوف
-        
-        for product in products:
-            # تحديد نوع المنتج
-            if product.is_bundle:
-                product_type_badge = '<span class="badge bg-info"><i class="fas fa-boxes me-1"></i>مجمع</span>'
-                components_count = product.components.count()
-                product_type_title = f"منتج مجمع يحتوي على {components_count} مكون"
-                detail_url = reverse("product:bundle_detail", args=[product.pk])
-            else:
-                product_type_badge = '<span class="badge bg-secondary"><i class="fas fa-box me-1"></i>عادي</span>'
-                product_type_title = "منتج عادي"
-                detail_url = reverse("product:product_detail", args=[product.pk])
-
-            row_data = {
-                "id": product.id,
-                "image": product,
-                "name_with_sku": product,  # سيتم عرض الاسم والكود معاً
-                "name": product.name,  # للترتيب والبحث
-                "sku": product.sku,  # للترتيب والبحث
-                "product_type": f'<span title="{product_type_title}">{product_type_badge}</span>',
-                "category": product.category,
-                "sale_price": product.selling_price,
-                "current_stock": product.calculated_stock if product.is_bundle else product.current_stock,
-                "is_active": product.is_active,
-                "row_click_url": detail_url,  # URL للنقر على الصف
-            }
-            table_data.append(row_data)
-        
-        # تعريف أزرار الإجراءات المشتركة
         action_buttons = [
-            {
-                "url": "product:product_detail",  # URL name - سيتم تمرير ID تلقائياً
-                "icon": "fa-eye",
-                "label": "عرض التفاصيل",
-                "class": "action-view",
-                "title": "عرض تفاصيل المنتج"
-            },
-            {
-                "url": "product:product_edit",  # URL name - سيتم تمرير ID تلقائياً
-                "icon": "fa-edit",
-                "label": "تعديل",
-                "class": "action-edit",
-                "title": "تعديل المنتج"
-            },
+            {"url": "product:product_detail", "icon": "fa-eye", "label": "عرض التفاصيل", "class": "action-view", "title": "عرض تفاصيل المنتج"},
+            {"url": "product:product_edit", "icon": "fa-edit", "label": "تعديل", "class": "action-edit", "title": "تعديل المنتج"},
         ]
 
-        # حساب الإحصائيات - إزالة هذا القسم
-        # total_products = products.count()
-        # regular_products = products.filter(is_bundle=False).count()
-        # bundle_products = products.filter(is_bundle=True).count()
-        # active_products = products.filter(is_active=True).count()
-        # inactive_products = products.filter(is_active=False).count()
+        # DB-level pagination
+        paginator = Paginator(products, 25)
+        page_number = request.GET.get('page', 1)
+        page_obj = paginator.get_page(page_number)
+
+        def build_table_data(page):
+            rows = []
+            for product in page:
+                if product.is_bundle:
+                    components_count = product.components_count
+                    product_type_html = f'<span class="badge bg-info" title="منتج مجمع يحتوي على {components_count} مكون"><i class="fas fa-boxes me-1"></i>مجمع</span>'
+                    detail_url = reverse("product:bundle_detail", args=[product.pk])
+                else:
+                    product_type_html = '<span class="badge bg-secondary"><i class="fas fa-box me-1"></i>عادي</span>'
+                    detail_url = reverse("product:product_detail", args=[product.pk])
+
+                primary_image = None
+                for img in product.images.all():
+                    if img.is_primary:
+                        primary_image = img
+                        break
+                if primary_image is None:
+                    for img in product.images.all():
+                        primary_image = img
+                        break
+
+                image_html = (
+                    f'<img src="{primary_image.image.url}" alt="{product.name}" style="width:50px;height:50px;object-fit:cover;border-radius:8px;border:1px solid #dee2e6;">'
+                    if primary_image else
+                    '<div style="width:50px;height:50px;background:#f8f9fa;border-radius:8px;border:1px solid #dee2e6;display:flex;align-items:center;justify-content:center;margin:auto;"><i class="fas fa-image text-muted"></i></div>'
+                )
+                sku_html = f'<div style="font-size:0.75rem;color:var(--text-muted);"><i class="fas fa-barcode me-1" style="font-size:0.7rem;"></i>{product.sku}</div>' if product.sku else ''
+                name_html = f'<div style="font-weight:500;">{product.name}</div>{sku_html}'
+                category_html = f'<span class="badge bg-light text-dark">{product.category.name}</span>' if product.category else '-'
+                price_html = f'<span style="font-weight:600;">{product.selling_price:,.2f}</span> <small class="text-muted">ج.م</small>'
+
+                stock_val = product.total_stock or 0
+                if product.is_bundle:
+                    stock_val = _calculate_bundle_stock_from_prefetch(product)
+
+                if stock_val <= 0:
+                    stock_html = '<span class="badge bg-secondary-subtle text-secondary border border-secondary opacity-50 fw-bold"><i class="fas fa-boxes me-1"></i>0</span>'
+                elif stock_val <= (product.min_stock or 0):
+                    stock_html = f'<span class="badge bg-warning text-dark">{stock_val}</span>'
+                else:
+                    stock_html = f'<span class="badge bg-success">{stock_val}</span>'
+
+                status_html = '<span class="badge bg-success">نشط</span>' if product.is_active else '<span class="badge bg-danger">غير نشط</span>'
+
+                rows.append({
+                    "id": product.id,
+                    "bulk_checkbox": f'<input type="checkbox" class="row-checkbox" value="{product.id}">',
+                    "image": image_html,
+                    "name_with_sku": name_html,
+                    "product_type": f'<span>{product_type_html}</span>',
+                    "category": category_html,
+                    "sale_price": price_html,
+                    "current_stock": stock_html,
+                    "is_active": status_html,
+                    "row_click_url": detail_url,
+                })
+            return rows
+
+        table_data = build_table_data(page_obj)
+
+        # Ajax response
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            table_html = render_to_string('product/partials/product_table.html', {
+                'table_data': table_data,
+                'product_headers': product_headers,
+                'action_buttons': action_buttons,
+            }, request=request)
+            pagination_html = render_to_string('partials/pagination.html', {
+                'page_obj': page_obj,
+                'align': 'center',
+            }, request=request) if paginator.num_pages > 1 else ''
+            return JsonResponse({
+                'table_html': table_html,
+                'pagination_html': pagination_html,
+                'count': paginator.count,
+            })
 
         context = {
-            "products": products,
+            "products": page_obj,
+            "page_obj": page_obj,
+            "paginator": paginator,
             "table_data": table_data,
-            "filter_form": filter_form,
             "product_headers": product_headers,
-            "action_buttons": action_buttons,  # إضافة أزرار الإجراءات
-            "primary_key": "id",  # المفتاح الأساسي للجدول
-            
+            "action_buttons": action_buttons,
+            "primary_key": "id",
+            "categories": Category.objects.filter(is_active=True).order_by('name'),
+            "current_search": search_query,
+            "current_status": status,
+            "current_category": category_id,
+            "current_product_type": product_type,
+            "current_min_price": min_price,
+            "current_max_price": max_price,
+            "current_in_stock": in_stock,
             "page_title": "قائمة المنتجات",
             "page_subtitle": "إدارة منتجات النظام وتصنيفاتها وأسعارها",
             "page_icon": "fas fa-boxes",
             "header_buttons": [
-                {
-                    "url": reverse("product:product_create"),
-                    "icon": "fa-plus",
-                    "text": "إضافة منتج عادي",
-                    "class": "btn-success",
-                },
-                {
-                    "url": reverse("product:bundle_create"),
-                    "icon": "fa-boxes",
-                    "text": "إنشاء منتج مجمع",
-                    "class": "btn-info",
-                },
-                {
-                    "url": reverse("product:service_list"),
-                    "icon": "fa-concierge-bell",
-                    "text": "الخدمات",
-                    "class": "btn-outline-success",
-                },
-                {
-                    "url": reverse("product:bundle_list"),
-                    "icon": "fa-list",
-                    "text": "المنتجات المجمعة",
-                    "class": "btn-outline-primary",
-                },
+                {"url": reverse("product:product_create"), "icon": "fa-plus", "text": "إضافة منتج عادي", "class": "btn-success"},
+                {"url": reverse("product:bundle_create"), "icon": "fa-boxes", "text": "إنشاء منتج مجمع", "class": "btn-info"},
+                {"url": reverse("product:service_list"), "icon": "fa-concierge-bell", "text": "الخدمات", "class": "btn-outline-success"},
+                {"url": reverse("product:bundle_list"), "icon": "fa-list", "text": "المنتجات المجمعة", "class": "btn-outline-primary"},
             ],
             "breadcrumb_items": [
-                {
-                    "title": "الرئيسية",
-                    "url": reverse("core:dashboard"),
-                    "icon": "fas fa-home",
-                },
+                {"title": "الرئيسية", "url": reverse("core:dashboard"), "icon": "fas fa-home"},
                 {"title": "المنتجات", "active": True},
             ],
         }
 
         return render(request, "product/product_list.html", context)
     except Exception as e:
-        # في حالة حدوث أي خطأ، نعرض صفحة بسيطة مع رسالة الخطأ
         messages.error(request, f"حدث خطأ أثناء تحميل المنتجات: {str(e)}")
         return render(
             request,
             "product/product_list.html",
             {
-                "products": Product.objects.none(),
-                "filter_form": ProductSearchForm(),
+                "products": [],
                 "page_title": "قائمة المنتجات - خطأ",
                 "page_icon": "fas fa-exclamation-triangle",
                 "breadcrumb_items": [
-                    {
-                        "title": "الرئيسية",
-                        "url": reverse("core:dashboard"),
-                        "icon": "fas fa-home",
-                    },
+                    {"title": "الرئيسية", "url": reverse("core:dashboard"), "icon": "fas fa-home"},
                     {"title": "المنتجات", "active": True},
                 ],
                 "error_message": str(e),
             },
         )
+
+
+@login_required
+@require_POST
+def product_bulk_edit(request):
+    """
+    تعديل جماعي للمنتجات - الأسعار والحالة والتصنيف
+    """
+    product_ids = request.POST.getlist('product_ids')
+    field = request.POST.get('field')
+    value = request.POST.get('value', '').strip()
+
+    if not product_ids:
+        return JsonResponse({'success': False, 'error': 'لم يتم تحديد أي منتجات'})
+
+    if not field:
+        return JsonResponse({'success': False, 'error': 'لم يتم تحديد الحقل المراد تعديله'})
+
+    allowed_fields = {
+        'selling_price', 'cost_price',
+        'is_active', 'category',
+    }
+    if field not in allowed_fields:
+        return JsonResponse({'success': False, 'error': 'حقل غير مسموح بتعديله'})
+
+    products = Product.objects.filter(id__in=product_ids, is_service=False)
+    count = products.count()
+
+    if count == 0:
+        return JsonResponse({'success': False, 'error': 'لم يتم العثور على المنتجات المحددة'})
+
+    try:
+        with transaction.atomic():
+            if field in ('selling_price', 'cost_price'):
+                try:
+                    decimal_value = Decimal(value)
+                    if decimal_value < 0:
+                        return JsonResponse({'success': False, 'error': 'القيمة يجب أن تكون موجبة'})
+                except Exception:
+                    return JsonResponse({'success': False, 'error': 'قيمة السعر غير صحيحة'})
+                products.update(**{field: decimal_value})
+
+            elif field == 'is_active':
+                if value not in ('true', 'false'):
+                    return JsonResponse({'success': False, 'error': 'قيمة الحالة غير صحيحة'})
+                products.update(is_active=(value == 'true'))
+
+            elif field == 'category':
+                try:
+                    category = Category.objects.get(pk=int(value), is_active=True)
+                except (Category.DoesNotExist, ValueError):
+                    return JsonResponse({'success': False, 'error': 'التصنيف غير موجود'})
+                products.update(category=category)
+
+        field_labels = {
+            'selling_price': 'سعر البيع',
+            'cost_price': 'سعر التكلفة',
+            'is_active': 'الحالة',
+            'category': 'التصنيف',
+        }
+        return JsonResponse({
+            'success': True,
+            'message': f'تم تحديث {field_labels.get(field, field)} لـ {count} منتج بنجاح'
+        })
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'حدث خطأ: {str(e)}'})
 
 
 @login_required
@@ -965,14 +1003,6 @@ def product_delete(request, pk):
     # فحص المعاملات المرتبطة
     has_movements = InventoryMovement.objects.filter(product=product).exists()
     
-    # التحقق من وجود طلبات منتجات
-    has_product_requests = False
-    try:
-        from student_products.models import ProductRequest
-        has_product_requests = ProductRequest.objects.filter(product=product).exists()
-    except ImportError:
-        pass
-    
     has_purchase_items = (
         PurchaseItem is not None
         and PurchaseItem.objects.filter(product=product).exists()
@@ -1006,7 +1036,7 @@ def product_delete(request, pk):
 
     # تحديد إذا كان المنتج مرتبط بأي معاملات
     has_transactions = (
-        has_movements or has_product_requests or has_purchase_items or 
+        has_movements or has_purchase_items or 
         has_bundle_components or has_supplier_prices or has_reservations
     )
     can_delete_permanently = not has_transactions
@@ -1032,10 +1062,6 @@ def product_delete(request, pk):
     if has_movements:
         movements_count = InventoryMovement.objects.filter(product=product).count()
         transactions_info.append(f"{movements_count} حركة مخزنية")
-    if has_product_requests:
-        from student_products.models import ProductRequest
-        requests_count = ProductRequest.objects.filter(product=product).count()
-        transactions_info.append(f"{requests_count} طلب منتج")
     if has_purchase_items:
         purchases_count = PurchaseItem.objects.filter(product=product).count()
         transactions_info.append(f"{purchases_count} فاتورة مشتريات")
@@ -1097,7 +1123,6 @@ def bundle_detail(request, pk):
     from ..services.stock_calculation_engine import StockCalculationEngine
     
     # الحصول على المنتج المجمع بشكل محسن
-    logger.info(f"محاولة تحميل المنتج المجمع رقم: {pk}")
     bundle = BundleQueryOptimizer.get_bundle_with_stock_info(pk)
     
     if not bundle:
@@ -1105,7 +1130,6 @@ def bundle_detail(request, pk):
         messages.error(request, "المنتج المجمع غير موجود")
         return redirect("product:bundle_list")
     
-    logger.info(f"تم تحميل المنتج المجمع: {bundle.name} (ID: {bundle.id})")
     
     try:
         
@@ -2006,7 +2030,10 @@ def warehouse_list(request):
     """
     عرض قائمة المخازن
     """
-    warehouses = Warehouse.objects.all().prefetch_related("stocks")
+    warehouses = Warehouse.objects.all().prefetch_related("stocks").annotate(
+        product_count=Count("stocks"),
+        total_quantity=Sum("stocks__quantity")
+    )
 
     # بحث
     search_query = request.GET.get("search", "")
@@ -2028,28 +2055,20 @@ def warehouse_list(request):
     total_warehouses = Warehouse.objects.count()
     active_warehouses = Warehouse.objects.filter(is_active=True).count()
 
-    # حساب إحصائيات المخازن
-    from django.db.models import Count, Sum, F, DecimalField, ExpressionWrapper
-    from django.db.models.functions import Coalesce
-    from core.utils import get_default_currency
-    
-    currency_symbol = get_default_currency()
-    
-    # إضافة إحصائيات لكل مخزن
-    warehouses = warehouses.annotate(
-        products_count=Count('stocks', distinct=True),
-        total_stock_value=Coalesce(
-            Sum(
-                ExpressionWrapper(
-                    F('stocks__quantity') * F('stocks__average_cost'),
-                    output_field=DecimalField(max_digits=15, decimal_places=2)
-                )
-            ),
-            0,
-            output_field=DecimalField(max_digits=15, decimal_places=2)
-        )
-    )
-    
+    # تحويل QuerySet إلى list of dicts للجدول الموحد
+    warehouses_data = []
+    for w in warehouses:
+        warehouses_data.append({
+            'id': w.id,
+            'code': w.code,
+            'name': w.name,
+            'location': w.location or '-',
+            'manager_name': str(w.manager) if w.manager else '-',
+            'product_count': f'<span class="badge bg-info">{w.product_count or 0}</span>',
+            'total_quantity': f'<span class="badge bg-secondary">{w.total_quantity or 0}</span>',
+            'is_active': w.is_active,
+        })
+
     # تعريف أعمدة جدول المخازن
     warehouse_headers = [
         {
@@ -2057,43 +2076,44 @@ def warehouse_list(request):
             "label": "كود المخزن",
             "sortable": True,
             "class": "text-center",
-            "width": "120px",
+            "width": "10%",
         },
         {
             "key": "name",
             "label": "اسم المخزن",
             "sortable": True,
             "class": "text-start",
+            "width": "25%",
         },
         {
             "key": "location",
             "label": "الموقع",
             "sortable": True,
             "class": "text-center",
-            "width": "150px",
+            "width": "20%",
         },
         {
             "key": "manager_name",
-            "label": "المدير المسؤول",
+            "label": "الشخص المسؤول",
             "sortable": True,
             "class": "text-center",
-            "width": "120px",
+            "width": "20%",
         },
         {
-            "key": "products_count",
+            "key": "product_count",
             "label": "عدد المنتجات",
             "sortable": True,
             "class": "text-center",
-            "width": "120px",
-            "format": "number",
+            "width": "10%",
+            "format": "html",
         },
         {
-            "key": "stock_value",
-            "label": f"قيمة المخزون ({currency_symbol})",
+            "key": "total_quantity",
+            "label": "إجمالي الكمية",
             "sortable": True,
             "class": "text-center",
-            "width": "150px",
-            "format": "currency",
+            "width": "10%",
+            "format": "html",
         },
         {
             "key": "is_active",
@@ -2101,42 +2121,16 @@ def warehouse_list(request):
             "sortable": True,
             "class": "text-center",
             "template": "components/cells/product_status.html",
-            "width": "90px",
+            "width": "5%",
         },
     ]
-
-    # أزرار الإجراءات
-    warehouse_actions = [
-        {
-            "url": "product:warehouse_detail",
-            "icon": "fa-eye",
-            "label": "عرض",
-            "class": "action-view",
-        },
-    ]
-    
-    # تحضير بيانات الجدول
-    warehouse_data = []
-    for warehouse in warehouses:
-        warehouse_data.append({
-            'id': warehouse.id,
-            'code': warehouse.code,
-            'name': warehouse.name,
-            'location': warehouse.location or '-',
-            'manager_name': warehouse.manager.get_full_name() if warehouse.manager else '-',
-            'products_count': warehouse.products_count,
-            'stock_value': warehouse.total_stock_value,
-            'is_active': warehouse.is_active,
-        })
 
     context = {
-        "warehouses": warehouse_data,
+        "warehouses": warehouses_data,
         "warehouse_headers": warehouse_headers,
-        "warehouse_actions": warehouse_actions,
         "primary_key": "id",
         "total_warehouses": total_warehouses,
         "active_warehouses": active_warehouses,
-        "currency_symbol": currency_symbol,
         "page_title": "المخازن",
         "page_subtitle": "إدارة المخازن ومواقع التخزين",
         "page_icon": "fas fa-warehouse",
@@ -2246,101 +2240,23 @@ def warehouse_edit(request, pk):
 
 
 @login_required
-def warehouse_delete(request, pk):
+def warehouse_toggle_active(request, pk):
     """
-    حذف مخزن مع معالجة الارتباطات
+    تفعيل أو تعطيل مخزن
     """
+    if request.method != "POST":
+        return redirect("product:warehouse_detail", pk=pk)
+
     warehouse = get_object_or_404(Warehouse, pk=pk)
+    warehouse.is_active = not warehouse.is_active
+    warehouse.save()
 
-    # التحقق من الارتباطات
-    dependencies = _check_warehouse_dependencies(warehouse)
+    if warehouse.is_active:
+        messages.success(request, f'تم تفعيل المخزن "{warehouse.name}" بنجاح')
+    else:
+        messages.warning(request, f'تم تعطيل المخزن "{warehouse.name}" بنجاح')
 
-    if request.method == "POST":
-        action = request.POST.get("action", "cancel")
-        name = warehouse.name
-
-        try:
-            if action == "deactivate":
-                # إلغاء تنشيط المخزن
-                warehouse.is_active = False
-                warehouse.save()
-                messages.success(
-                    request,
-                    f'تم إلغاء تنشيط المخزن "{name}" بنجاح. المخزن لا يزال موجود في النظام لكن غير نشط',
-                )
-                return redirect("product:warehouse_list")
-
-            elif action == "transfer" and dependencies["has_dependencies"]:
-                # نقل البيانات إلى مخزن آخر
-                target_warehouse_id = request.POST.get("target_warehouse")
-                if target_warehouse_id:
-                    target_warehouse = get_object_or_404(
-                        Warehouse, pk=target_warehouse_id
-                    )
-                    success = _transfer_warehouse_data(
-                        warehouse, target_warehouse, request.user
-                    )
-                    if success:
-                        warehouse.delete()
-                        messages.success(
-                            request,
-                            f'تم نقل بيانات المخزن "{name}" إلى "{target_warehouse.name}" وحذف المخزن بنجاح',
-                        )
-                    else:
-                        messages.error(
-                            request,
-                            f'فشل في نقل بيانات المخزن "{name}". يرجى المحاولة مرة أخرى',
-                        )
-                else:
-                    messages.error(request, "يجب اختيار مخزن لنقل البيانات إليه")
-                return redirect("product:warehouse_list")
-
-            elif action == "force_delete":
-                # حذف قسري (خطير - يحذف جميع البيانات المرتبطة)
-                _force_delete_warehouse(warehouse)
-                messages.warning(
-                    request,
-                    f'تم حذف المخزن "{name}" وجميع البيانات المرتبطة به نهائياً',
-                )
-                return redirect("product:warehouse_list")
-
-            elif action == "delete" and not dependencies["has_dependencies"]:
-                # حذف عادي إذا لم توجد ارتباطات
-                warehouse.delete()
-                messages.success(request, f'تم حذف المخزن "{name}" بنجاح')
-                return redirect("product:warehouse_list")
-            else:
-                messages.error(request, "إجراء غير صالح")
-
-        except Exception as e:
-            messages.error(request, f"حدث خطأ أثناء معالجة طلب الحذف: {str(e)}")
-
-    # الحصول على المخازن الأخرى للنقل
-    other_warehouses = Warehouse.objects.filter(is_active=True).exclude(pk=warehouse.pk)
-
-    context = {
-        "warehouse": warehouse,
-        "dependencies": dependencies,
-        "other_warehouses": other_warehouses,
-        "page_title": f"حذف المخزن: {warehouse.name}",
-        "page_icon": "fas fa-trash-alt",
-        "breadcrumb_items": [
-            {
-                "title": "الرئيسية",
-                "url": reverse("core:dashboard"),
-                "icon": "fas fa-home",
-            },
-            {"title": "المخزون", "url": "#", "icon": "fas fa-boxes"},
-            {
-                "title": "المخازن",
-                "url": reverse("product:warehouse_list"),
-                "icon": "fas fa-warehouse",
-            },
-            {"title": f"حذف: {warehouse.name}", "active": True},
-        ],
-    }
-
-    return render(request, "product/warehouse_confirm_delete.html", context)
+    return redirect("product:warehouse_detail", pk=pk)
 
 
 @login_required
@@ -2383,7 +2299,7 @@ def warehouse_detail(request, pk):
     for stock in stocks:
         # تحديد حالة المخزون
         if stock.quantity <= 0:
-            status = "نفد"
+            status = "نفذ"
             status_class = "danger"
         elif stock.quantity < stock.product.min_stock:
             status = "منخفض"
@@ -2443,13 +2359,16 @@ def warehouse_detail(request, pk):
         "page_icon": "fas fa-warehouse",
         "header_buttons": [
             {
-                "url": "#",
-                "icon": "fa-ellipsis-v",
-                "text": "",
-                "class": "btn-outline-secondary",
-                "id": "actions-menu-btn",
-                "toggle": "modal",
-                "target": "#actionsModal",
+                "url": reverse("product:warehouse_edit", args=[warehouse.pk]),
+                "icon": "fa-edit",
+                "text": "تعديل",
+                "class": "btn-primary",
+            },
+            {
+                "onclick": f"toggleWarehouseActive({warehouse.pk}, {'true' if warehouse.is_active else 'false'})",
+                "icon": "fa-ban" if warehouse.is_active else "fa-check-circle",
+                "text": "تعطيل" if warehouse.is_active else "تفعيل",
+                "class": "btn-warning" if warehouse.is_active else "btn-success",
             },
         ],
         "breadcrumb_items": [
@@ -2676,7 +2595,7 @@ def stock_detail(request, pk):
 @login_required
 def stock_adjust(request, pk):
     """
-    تسوية المخزون - محدث لاستخدام MovementService
+    تسوية المخزون
     """
     try:
         stock = get_object_or_404(Stock, pk=pk)
@@ -2693,22 +2612,22 @@ def stock_adjust(request, pk):
                 
                 # حفظ الكمية القديمة
                 old_quantity = stock.quantity
-                quantity_diff = new_quantity - old_quantity
 
-                # ✅ استخدام MovementService بدلاً من التحديث المباشر
-                from governance.services import MovementService
-                
-                movement_service = MovementService()
-                movement = movement_service.process_movement(
-                    product_id=stock.product.id,
-                    quantity_change=quantity_diff,
-                    movement_type='adjustment',
-                    source_reference=f"ADJ-{timezone.now().strftime('%Y%m%d%H%M%S')}",
-                    idempotency_key=f"stock_adjust_{stock.id}_{timezone.now().timestamp()}",
-                    user=request.user,
-                    document_number=f"ADJ-{stock.id}",
-                    notes=notes or f"تسوية مخزون من {old_quantity} إلى {new_quantity}"
+                # إنشاء حركة تسوية
+                movement = StockMovement.objects.create(
+                    product=stock.product,
+                    warehouse=stock.warehouse,
+                    movement_type="adjustment",
+                    quantity=new_quantity,
+                    quantity_before=old_quantity,
+                    quantity_after=new_quantity,
+                    notes=notes,
+                    created_by=request.user,
                 )
+
+                # تحديث المخزون
+                stock.quantity = new_quantity
+                stock.save()
 
                 messages.success(request, "تم تسوية المخزون بنجاح")
                 return redirect("product:stock_detail", pk=stock.pk)
@@ -3077,6 +2996,19 @@ def stock_movement_detail(request, pk):
                 "text": "طباعة",
                 "class": "btn-outline-secondary",
             },
+        ] if not movement.document_type or movement.document_type == 'adjustment' else [
+            {
+                "url": reverse("product:stock_movement_delete", kwargs={"pk": movement.pk}),
+                "icon": "fa-trash",
+                "text": "حذف",
+                "class": "btn-danger",
+            },
+            {
+                "onclick": "window.print()",
+                "icon": "fa-print",
+                "text": "طباعة",
+                "class": "btn-outline-secondary",
+            },
         ],
         "breadcrumb_items": [
             {
@@ -3099,9 +3031,7 @@ def stock_movement_detail(request, pk):
 @login_required
 def stock_movement_delete(request, pk):
     """
-    حذف حركة مخزون - محدث لاستخدام MovementService
-    
-    ⚠️ ملاحظة: حذف حركة المخزون يتم عن طريق إنشاء حركة معاكسة
+    حذف حركة مخزون
     """
     movement = get_object_or_404(StockMovement, pk=pk)
 
@@ -3109,54 +3039,39 @@ def stock_movement_delete(request, pk):
     related_objects = {}
 
     if request.method == "POST":
-        try:
-            # ✅ استخدام MovementService لإنشاء حركة معاكسة
-            from governance.services import MovementService
-            
-            movement_service = MovementService()
-            
-            # تحديد نوع الحركة المعاكسة والكمية
-            if movement.movement_type == "in":
-                # حركة إضافة → حركة سحب معاكسة
-                reversal_type = 'out'
-                quantity_change = -Decimal(str(movement.quantity))
-            elif movement.movement_type == "out":
-                # حركة سحب → حركة إضافة معاكسة
-                reversal_type = 'in'
-                quantity_change = Decimal(str(movement.quantity))
-            elif movement.movement_type == "transfer":
-                # حركة تحويل → عكس التحويل
-                # سنتعامل معها بشكل خاص
-                reversal_type = 'transfer'
-                quantity_change = Decimal(str(movement.quantity))
-            else:
-                # adjustment أو أي نوع آخر
-                reversal_type = 'adjustment'
-                quantity_change = -Decimal(str(movement.quantity))
-            
-            # إنشاء حركة معاكسة
-            reversal_movement = movement_service.process_movement(
-                product_id=movement.product.id,
-                quantity_change=quantity_change,
-                movement_type=reversal_type,
-                source_reference=f"REV-{movement.reference_number or movement.id}",
-                idempotency_key=f"movement_delete_{movement.id}_{timezone.now().timestamp()}",
-                user=request.user,
-                document_number=f"REV-{movement.id}",
-                notes=f"عكس حركة المخزون رقم {movement.id}"
-            )
-            
-            # حذف حركة المخزون الأصلية
-            movement.delete()
+        # استرجاع معلومات المخزن والمنتج قبل الحذف
+        warehouse = movement.warehouse
+        product = movement.product
 
-            messages.success(request, _("تم حذف حركة المخزون بنجاح"))
-            return redirect("product:stock_movement_list")
-            
-        except Exception as e:
-            logger = logging.getLogger(__name__)
-            logger.error(f"Error deleting stock movement {pk}: {str(e)}")
-            messages.error(request, f"حدث خطأ أثناء حذف حركة المخزون: {str(e)}")
-            return redirect("product:stock_movement_list")
+        # الغاء تأثير حركة المخزون
+        if movement.movement_type == "in":
+            # إذا كانت حركة إضافة، نقوم بخصم الكمية
+            stock = Stock.objects.get(warehouse=warehouse, product=product)
+            stock.quantity -= Decimal(movement.quantity)
+            stock.save()
+        elif movement.movement_type == "out":
+            # إذا كانت حركة سحب، نقوم بإضافة الكمية
+            stock = Stock.objects.get(warehouse=warehouse, product=product)
+            stock.quantity += Decimal(movement.quantity)
+            stock.save()
+        elif movement.movement_type == "transfer" and movement.destination_warehouse:
+            # إذا كانت حركة تحويل، نقوم بعكس التحويل
+            source_stock = Stock.objects.get(warehouse=warehouse, product=product)
+            dest_stock = Stock.objects.get(
+                warehouse=movement.destination_warehouse, product=product
+            )
+
+            source_stock.quantity += Decimal(movement.quantity)
+            dest_stock.quantity -= Decimal(movement.quantity)
+
+            source_stock.save()
+            dest_stock.save()
+
+        # حذف حركة المخزون
+        movement.delete()
+
+        messages.success(request, _("تم حذف حركة المخزون بنجاح"))
+        return redirect("product:stock_movement_list")
 
     context = {
         "object": movement,
@@ -3173,7 +3088,6 @@ def stock_movement_delete(request, pk):
 def add_stock_movement(request):
     """
     واجهة برمجة لإضافة حركة مخزون (إضافة/سحب/تعديل/تحويل)
-    محدث لاستخدام MovementService
 
     معلمات الطلب:
     - product_id: معرف المنتج
@@ -3242,32 +3156,49 @@ def add_stock_movement(request):
                 }
             )
 
-        # ✅ استخدام MovementService بدلاً من التحديث المباشر
-        from governance.services import MovementService
-        
-        movement_service = MovementService()
-        
-        # تحديد quantity_change حسب نوع الحركة
+        # الحصول على المخزون الحالي أو إنشاء سجل جديد
+        stock, created = Stock.objects.get_or_create(
+            product=product, warehouse=warehouse, defaults={"quantity": 0}
+        )
+
+        # حفظ المخزون الحالي قبل التعديل
+        current_stock = stock.quantity
+
+        # تنفيذ عملية المخزون
         if movement_type == "in":
-            quantity_change = quantity
+            # إضافة مخزون
+            stock.quantity += Decimal(quantity)
             message = _("تمت إضافة {} وحدة من {} إلى المخزون").format(
                 quantity, product.name
             )
+
         elif movement_type == "out":
-            quantity_change = -quantity
+            # سحب مخزون
+            if stock.quantity < Decimal(quantity):
+                return JsonResponse(
+                    {
+                        "success": False,
+                        "error": _(
+                            "الكمية غير كافية في المخزون. المتاح حالياً: {}"
+                        ).format(stock.quantity),
+                    }
+                )
+
+            stock.quantity -= Decimal(quantity)
             message = _("تم سحب {} وحدة من {} من المخزون").format(
                 quantity, product.name
             )
+
         elif movement_type == "adjustment":
-            # للتعديل، نحتاج المخزون الحالي لحساب الفرق
-            stock = Stock.objects.filter(product=product, warehouse=warehouse).first()
-            current_quantity = stock.quantity if stock else Decimal('0')
-            quantity_change = quantity - current_quantity
+            # تعديل المخزون (تعيين قيمة محددة)
+            old_quantity = stock.quantity
+            stock.quantity = Decimal(quantity)
             message = _("تم تعديل مخزون {} من {} إلى {}").format(
-                product.name, current_quantity, quantity
+                product.name, old_quantity, quantity
             )
+
         elif movement_type == "transfer":
-            # التحويل يحتاج معالجة خاصة
+            # تحويل مخزون بين المخازن
             destination_warehouse_id = request.POST.get("destination_warehouse")
 
             if not destination_warehouse_id:
@@ -3289,56 +3220,77 @@ def add_stock_movement(request):
                     {"success": False, "error": _("المخزن المستلم غير موجود")}
                 )
 
-            quantity_change = -quantity  # خصم من المصدر
+            # التحقق من كفاية المخزون
+            if stock.quantity < Decimal(quantity):
+                return JsonResponse(
+                    {
+                        "success": False,
+                        "error": _(
+                            "الكمية غير كافية للتحويل. المتاح حالياً: {}"
+                        ).format(stock.quantity),
+                    }
+                )
+
+            # خصم من المخزن المصدر
+            stock.quantity -= Decimal(quantity)
+
+            # إضافة إلى المخزن المستلم
+            dest_stock, created = Stock.objects.get_or_create(
+                product=product,
+                warehouse=destination_warehouse,
+                defaults={"quantity": Decimal("0")},
+            )
+
+            dest_before = dest_stock.quantity
+            dest_stock.quantity += Decimal(quantity)
+            dest_stock.save()
+
             message = _("تم تحويل {} وحدة من {} من {} إلى {}").format(
                 quantity, product.name, warehouse.name, destination_warehouse.name
             )
-        
-        # إنشاء الحركة عبر MovementService
-        movement = movement_service.process_movement(
-            product_id=product.id,
-            quantity_change=quantity_change,
+
+        # حفظ التغييرات
+        stock.save()
+
+        # إنشاء سجل حركة المخزون
+        movement = StockMovement.objects.create(
+            product=product,
+            warehouse=warehouse,
             movement_type=movement_type,
-            source_reference=request.POST.get("reference_number", f"API-{timezone.now().strftime('%Y%m%d%H%M%S')}"),
-            idempotency_key=f"api_movement_{product.id}_{warehouse.id}_{timezone.now().timestamp()}",
-            user=request.user,
-            document_number=request.POST.get("reference_number", ""),
-            notes=request.POST.get("notes", "")
+            quantity=quantity,
+            quantity_before=current_stock,
+            quantity_after=stock.quantity,
+            reference_number=request.POST.get("reference_number", ""),
+            notes=request.POST.get("notes", ""),
+            created_by=request.user,
         )
-        
-        # إذا كانت حركة تحويل، نحتاج إنشاء حركة إضافة للمخزن المستلم
+
+        # إذا كانت حركة تحويل، حفظ المخزن المستلم
         if movement_type == "transfer" and "destination_warehouse" in locals():
-            dest_movement = movement_service.process_movement(
-                product_id=product.id,
-                quantity_change=quantity,  # إضافة للوجهة
-                movement_type='in',
-                source_reference=f"TRANSFER-IN-{movement.id}",
-                idempotency_key=f"transfer_in_{movement.id}_{timezone.now().timestamp()}",
-                user=request.user,
-                document_number=request.POST.get("reference_number", ""),
-                notes=_("تحويل من مخزن {}").format(warehouse.name)
+            movement.destination_warehouse = destination_warehouse
+            movement.save()
+
+            # إنشاء سجل حركة للمخزن المستلم
+            StockMovement.objects.create(
+                product=product,
+                warehouse=destination_warehouse,
+                movement_type="transfer_in",
+                quantity=quantity,
+                quantity_before=dest_before,
+                quantity_after=dest_stock.quantity,
+                reference_number=request.POST.get("reference_number", ""),
+                notes=_("تحويل من مخزن {}").format(warehouse.name),
+                created_by=request.user,
             )
 
-        # الحصول على المخزون الحالي بعد التحديث
-        stock = Stock.objects.filter(product=product, warehouse=warehouse).first()
-        current_stock = stock.quantity if stock else Decimal('0')
-
         # تسجيل الحركة في سجل النظام
-        logger.info(
-            "Stock movement created via API: %s %s units of %s in %s by %s",
-            movement_type,
-            quantity,
-            product.name,
-            warehouse.name,
-            request.user.username,
-        )
 
         return JsonResponse(
             {
                 "success": True,
                 "message": message,
                 "movement_id": movement.id,
-                "current_stock": float(current_stock),
+                "current_stock": stock.quantity,
             }
         )
 
@@ -3907,9 +3859,6 @@ def get_stock_by_warehouse(request):
     warehouse_id = request.GET.get("warehouse")
 
     # تسجيل معلومات الطلب للتشخيص
-    logger.info(
-        f"طلب API للمخزون - المخزن: {warehouse_id}, الطريقة: {request.method}"
-    )
 
     if not warehouse_id:
         logger.warning("API المخزون: لم يتم توفير معرف المخزن")
@@ -3929,13 +3878,66 @@ def get_stock_by_warehouse(request):
         for stock in stocks:
             stock_data[str(stock["product_id"])] = stock["quantity"]
 
-        logger.info(
-            f"API المخزون: تم استرجاع {len(stock_data)} من المنتجات للمخزن {warehouse.name}"
-        )
         return JsonResponse(stock_data)
 
     except Exception as e:
         logger.error(f"خطأ في API المخزون: {str(e)}")
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@login_required
+def get_products_for_invoice(request):
+    """
+    API لجلب المنتجات المناسبة لفاتورة البيع أو الشراء
+    - show_all=false (افتراضي): المنتجات اللي ليها stock > 0 في المخزن المحدد فقط
+    - show_all=true: كل المنتجات النشطة
+    - type=sale: منتجات البيع (مش خدمات، مش bundles)
+    - type=purchase: منتجات الشراء (مش bundles)
+    - type=service: خدمات فقط
+    """
+    warehouse_id = request.GET.get("warehouse")
+    show_all = request.GET.get("show_all", "false") == "true"
+    product_type = request.GET.get("type", "sale")
+
+    try:
+        # فلترة المنتجات حسب النوع
+        if product_type == "service":
+            qs = Product.objects.filter(is_active=True, is_service=True)
+        elif product_type == "purchase":
+            qs = Product.objects.filter(is_active=True, is_service=False, is_bundle=False)
+        else:  # sale
+            qs = Product.objects.filter(is_active=True, is_service=False, is_bundle=False)
+
+        # جلب بيانات المخزون
+        stock_map = {}
+        if warehouse_id:
+            stocks = Stock.objects.filter(
+                warehouse_id=warehouse_id,
+                product__in=qs
+            ).values("product_id", "quantity")
+            stock_map = {str(s["product_id"]): float(s["quantity"]) for s in stocks}
+
+        # فلترة حسب المخزون لو مش show_all
+        if not show_all and warehouse_id and product_type != "service":
+            product_ids_with_stock = [pid for pid, qty in stock_map.items() if qty > 0]
+            qs = qs.filter(id__in=product_ids_with_stock)
+
+        products = []
+        for p in qs.select_related('category').order_by("name"):
+            products.append({
+                "id": p.id,
+                "name": p.name,
+                "selling_price": float(p.selling_price) if hasattr(p, 'selling_price') and p.selling_price else 0,
+                "cost_price": float(p.cost_price) if hasattr(p, 'cost_price') and p.cost_price else 0,
+                "stock": stock_map.get(str(p.id), 0),
+                "category_id": p.category_id,
+                "category_name": p.category.name if p.category else "",
+            })
+
+        return JsonResponse({"products": products})
+
+    except Exception as e:
+        logger.error(f"خطأ في API المنتجات: {str(e)}")
         return JsonResponse({"error": str(e)}, status=500)
 
 
@@ -3995,45 +3997,37 @@ def _check_warehouse_dependencies(warehouse):
 def _transfer_warehouse_data(source_warehouse, target_warehouse, user):
     """
     نقل بيانات المخزن من مخزن إلى آخر
-    ✅ UNIFIED: Uses MovementService for all stock movements
     """
     try:
         from django.db import transaction
-        from governance.services.movement_service import MovementService
 
         with transaction.atomic():
-            movement_service = MovementService()
-            
             # نقل المخزون
             stocks = Stock.objects.filter(warehouse=source_warehouse)
             for stock in stocks:
+                target_stock, created = Stock.objects.get_or_create(
+                    product=stock.product,
+                    warehouse=target_warehouse,
+                    defaults={"quantity": 0},
+                )
+
                 if stock.quantity > 0:
-                    # ✅ استخدام MovementService لإنشاء حركة النقل
-                    # خروج من المخزن المصدر
-                    movement_service.process_movement(
-                        product_id=stock.product.id,
-                        quantity_change=stock.quantity,
-                        movement_type='out',
-                        source_reference=f"WAREHOUSE_TRANSFER:{source_warehouse.code}:{target_warehouse.code}",
-                        idempotency_key=f"SM:warehouse_transfer:{source_warehouse.id}:{stock.product.id}:out",
-                        user=user,
-                        warehouse_id=source_warehouse.id,
+                    # إنشاء حركة نقل
+                    StockMovement.objects.create(
+                        product=stock.product,
+                        warehouse=source_warehouse,
+                        destination_warehouse=target_warehouse,
+                        movement_type="transfer",
+                        quantity=stock.quantity,
                         notes=f"نقل من المخزن المحذوف: {source_warehouse.name}",
-                        document_number=f"TRANSFER-{source_warehouse.code}-{target_warehouse.code}"
+                        created_by=user,
+                        document_type="transfer",
+                        reference_number=f"TRANSFER-{source_warehouse.code}-{target_warehouse.code}",
                     )
-                    
-                    # دخول إلى المخزن المستهدف
-                    movement_service.process_movement(
-                        product_id=stock.product.id,
-                        quantity_change=stock.quantity,
-                        movement_type='in',
-                        source_reference=f"WAREHOUSE_TRANSFER:{source_warehouse.code}:{target_warehouse.code}",
-                        idempotency_key=f"SM:warehouse_transfer:{target_warehouse.id}:{stock.product.id}:in",
-                        user=user,
-                        warehouse_id=target_warehouse.id,
-                        notes=f"نقل من المخزن المحذوف: {source_warehouse.name}",
-                        document_number=f"TRANSFER-{source_warehouse.code}-{target_warehouse.code}"
-                    )
+
+                    # تحديث المخزون في المخزن المستهدف
+                    target_stock.quantity += stock.quantity
+                    target_stock.save()
 
                 # حذف المخزون من المخزن المصدر
                 stock.delete()
@@ -4044,6 +4038,7 @@ def _transfer_warehouse_data(source_warehouse, target_warehouse, user):
             )
 
             # تحديث المشتريات لتشير للمخزن الجديد (تم إزالة Sale module)
+
             try:
                 from purchase.models import Purchase
 
@@ -4053,9 +4048,6 @@ def _transfer_warehouse_data(source_warehouse, target_warehouse, user):
                 if purchases_count > 0:
                     Purchase.objects.filter(warehouse=source_warehouse).update(
                         warehouse=target_warehouse
-                    )
-                    logger.info(
-                        f"تم نقل {purchases_count} فاتورة مشتريات من {source_warehouse.name} إلى {target_warehouse.name}"
                     )
             except ImportError:
                 pass
@@ -5009,42 +5001,30 @@ def _check_warehouse_dependencies(warehouse):
 def _transfer_warehouse_data(source_warehouse, target_warehouse, user):
     """
     نقل بيانات المخزن من مخزن إلى آخر
-    ✅ UNIFIED: Uses MovementService for all stock movements
     """
     try:
-        from governance.services.movement_service import MovementService
-        
         with transaction.atomic():
-            movement_service = MovementService()
-            
             # نقل المخزون
             stocks = Stock.objects.filter(warehouse=source_warehouse)
             for stock in stocks:
-                if stock.quantity > 0:
-                    # ✅ استخدام MovementService لإنشاء حركة النقل
-                    # خروج من المخزن المصدر
-                    movement_service.process_movement(
-                        product_id=stock.product.id,
-                        quantity_change=stock.quantity,
-                        movement_type='out',
-                        source_reference=f"WAREHOUSE_TRANSFER:{source_warehouse.code}:{target_warehouse.code}",
-                        idempotency_key=f"SM:warehouse_transfer_v2:{source_warehouse.id}:{stock.product.id}:out",
-                        user=user,
-                        warehouse_id=source_warehouse.id,
-                        notes=f"تحويل من مخزن محذوف: {source_warehouse.name}"
-                    )
-                    
-                    # دخول إلى المخزن المستهدف
-                    movement_service.process_movement(
-                        product_id=stock.product.id,
-                        quantity_change=stock.quantity,
-                        movement_type='in',
-                        source_reference=f"WAREHOUSE_TRANSFER:{source_warehouse.code}:{target_warehouse.code}",
-                        idempotency_key=f"SM:warehouse_transfer_v2:{target_warehouse.id}:{stock.product.id}:in",
-                        user=user,
-                        warehouse_id=target_warehouse.id,
-                        notes=f"تحويل من مخزن محذوف: {source_warehouse.name}"
-                    )
+                target_stock, created = Stock.objects.get_or_create(
+                    product=stock.product,
+                    warehouse=target_warehouse,
+                    defaults={"quantity": 0, "created_by": user},
+                )
+                target_stock.quantity += stock.quantity
+                target_stock.save()
+
+                # إنشاء حركة تحويل
+                StockMovement.objects.create(
+                    product=stock.product,
+                    warehouse=source_warehouse,
+                    destination_warehouse=target_warehouse,
+                    movement_type="transfer",
+                    quantity=stock.quantity,
+                    notes=f"تحويل من مخزن محذوف: {source_warehouse.name}",
+                    created_by=user,
+                )
 
             return True
 

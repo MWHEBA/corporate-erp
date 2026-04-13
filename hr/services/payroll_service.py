@@ -42,7 +42,8 @@ class PayrollService:
             Exception: For unexpected errors during calculation
         """
         try:
-            logger.info(f"بدء حساب راتب {employee.get_full_name_ar()} لشهر {month.strftime('%Y-%m')}")
+            if employee.is_insurance_only:
+                raise ValueError('موظفو التأمين فقط لا يُعالجون في كشف الرواتب')
             
             return PayrollService._calculate_payroll_new_system(employee, month, processed_by)
             
@@ -82,16 +83,35 @@ class PayrollService:
         from ..models import PayrollLine
         from django.db.models import Q
         
-        # 1. الحصول على العقد النشط
-        contract = employee.contracts.filter(status='active').first()
+        # 1. الحصول على العقد النشط للشهر المحدد (مع دعم الدورة المرنة)
+        from hr.utils.payroll_helpers import get_payroll_period
+        _, period_end, _ = get_payroll_period(month)
+        contract = employee.contracts.filter(
+            status='active',
+            start_date__lte=period_end
+        ).filter(
+            Q(end_date__isnull=True) | Q(end_date__gte=month)
+        ).order_by('-start_date').first()
         if not contract:
             logger.error(f"لا يوجد عقد نشط للموظف {employee.get_full_name_ar()}")
             raise ValueError('لا يوجد عقد نشط للموظف')
-        
+
+        # 1b. Attendance approval gate — applies to all employees including exempt ones
+        from ..models import AttendanceSummary as _AttSummary
+        _att_summary = _AttSummary.objects.filter(employee=employee, month=month).first()
+        if not _att_summary:
+            raise ValueError(
+                f'لم يتم حساب ملخص الحضور للموظف {employee.get_full_name_ar()} '
+                f'لشهر {month.strftime("%Y-%m")} — يجب حساب الملخص واعتماده أولاً'
+            )
+        if not _att_summary.is_approved:
+            raise ValueError(
+                f'لم يتم اعتماد ملخص الحضور للموظف {employee.get_full_name_ar()} '
+                f'لشهر {month.strftime("%Y-%m")} — يجب اعتماد الملخص قبل حساب الراتب'
+            )
+
         # 2. الحصول على بنود الراتب النشطة (يدعم الموظفين المعينين في منتصف الشهر)
-        from calendar import monthrange
-        last_day = monthrange(month.year, month.month)[1]
-        month_end_date = month.replace(day=last_day)
+        _, month_end_date, _ = get_payroll_period(month)
         
         components = employee.salary_components.filter(
             is_active=True,
@@ -110,35 +130,41 @@ class PayrollService:
                 logger.error(f"      - {comp.name}: is_active={comp.is_active}, effective_from={comp.effective_from}, effective_to={comp.effective_to}")
             raise ValueError('لا توجد بنود راتب نشطة للموظف')
         
-        # 3. حساب الراتب الأساسي من العقد أولاً مع تجبير الكسور
+        # 3. حساب الأجر الأساسي من العقد أولاً مع تجبير الكسور
         if contract.basic_salary:
             basic_salary = Decimal(str(contract.basic_salary))
-            # تجبير الراتب الأساسي لأقرب رقم صحيح
+            # تجبير الأجر الأساسي لأقرب رقم صحيح
             from decimal import ROUND_HALF_UP
             basic_salary = basic_salary.quantize(Decimal('1'), rounding=ROUND_HALF_UP)
         else:
             # إذا لم يكن موجود في العقد، جربه من البند
             basic_component = components.filter(is_basic=True).first()
             basic_salary = basic_component.amount if basic_component else Decimal('0')
-            # تجبير الراتب الأساسي لأقرب رقم صحيح
+            # تجبير الأجر الأساسي لأقرب رقم صحيح
             from decimal import ROUND_HALF_UP
             basic_salary = basic_salary.quantize(Decimal('1'), rounding=ROUND_HALF_UP)
         
-        # 4. حساب الحضور وأيام العمل الفعلية
-        attendance_stats = AttendanceService.calculate_monthly_attendance(employee, month)
+        # 4. استخدام بيانات الحضور من AttendanceSummary المعتمد (بدون إعادة حساب)
+        # الـ AttendanceSummary معتمد ومحسوب مسبقاً، نستخدم بياناته مباشرة
+        attendance_stats = {
+            'present_days': _att_summary.present_days,
+            'absent_days': _att_summary.absent_days,
+            'total_overtime_hours': 0,  # يتم حسابه من الـ summary لو موجود
+        }
         
-        # حساب أيام العمل الفعلية بناءً على تاريخ التعيين (استخدام last_day من أعلى)
-        total_days_in_month = last_day
+        # حساب أيام العمل الفعلية بناءً على تاريخ التعيين
+        from hr.utils.payroll_helpers import get_payroll_period, calculate_cycle_days
+        period_start, period_end, _ = get_payroll_period(month)
+        cycle_days = calculate_cycle_days(period_start, period_end)
         
-        # إذا كان الموظف معين في منتصف الشهر، احسب الأيام من تاريخ التعيين
+        # إذا كان الموظف معين في منتصف الدورة، احسب الأيام من تاريخ التعيين
         contract_start = contract.start_date
-        if contract_start.year == month.year and contract_start.month == month.month:
-            # معين في نفس الشهر - راتب جزئي
-            days_from_start = total_days_in_month - contract_start.day + 1
+        if period_start <= contract_start <= period_end:
+            # معين في نفس الدورة - راتب جزئي
+            days_from_start = (period_end - contract_start).days + 1
             worked_days = days_from_start
-            logger.info(f"راتب جزئي: الموظف {employee.get_full_name_ar()} معين من {contract_start} - أيام العمل: {worked_days}/{total_days_in_month}")
         else:
-            # الشهر كامل - استخدام أيام الحضور الفعلية
+            # الدورة كاملة - استخدام أيام الحضور الفعلية
             worked_days = attendance_stats.get('present_days', 0)
             if worked_days == 0:
                 # التحقق من إعداد النظام لسلوك عدم وجود بيانات حضور
@@ -153,7 +179,7 @@ class PayrollService:
                     raise ValueError(f'لا توجد بيانات حضور للموظف {employee.get_full_name_ar()} في شهر {month.strftime("%Y-%m")}')
                 else:  # 'full_salary' (افتراضي)
                     logger.warning(f"⚠️ لا توجد بيانات حضور للموظف {employee.get_full_name_ar()} في شهر {month.strftime('%Y-%m')} - سيتم احتساب راتب كامل افتراضياً")
-                    worked_days = total_days_in_month
+                    worked_days = cycle_days
         
         # 5. التحقق من وجود راتب سابق لنفس الموظف والشهر
         existing_payroll = Payroll.objects.filter(
@@ -166,6 +192,10 @@ class PayrollService:
             raise ValueError(f'يوجد راتب سابق للموظف لشهر {month.strftime("%Y-%m")}')
         
         # 6. إنشاء قسيمة الراتب
+        dept = getattr(employee, 'department', None)
+        fin_subcategory = getattr(dept, 'financial_subcategory', None) if dept else None
+        fin_category = fin_subcategory.parent_category if fin_subcategory else None
+
         payroll = Payroll.objects.create(
             employee=employee,
             month=month,
@@ -173,6 +203,8 @@ class PayrollService:
             basic_salary=basic_salary,
             processed_by=processed_by,
             status='draft',
+            financial_subcategory=fin_subcategory,
+            financial_category=fin_category,
             # حقول قديمة للتوافق
             allowances=Decimal('0'),
             overtime_hours=Decimal(str(attendance_stats.get('total_overtime_hours', 0))),
@@ -189,7 +221,7 @@ class PayrollService:
             net_salary=basic_salary,
         )
         
-        # 7. إنشاء PayrollLine لكل بند (ماعدا الراتب الأساسي لأنه محفوظ في basic_salary)
+        # 7. إنشاء PayrollLine لكل بند (ماعدا الأجر الأساسي لأنه محفوظ في basic_salary)
         context = {
             'basic_salary': basic_salary,
             'worked_days': worked_days,
@@ -197,8 +229,15 @@ class PayrollService:
             'gross_salary': Decimal('0'),  # سيتم تحديثه
         }
         
-        # استبعاد بند الراتب الأساسي لأنه محفوظ بالفعل في payroll.basic_salary
-        non_basic_components = components.exclude(is_basic=True)
+        # استبعاد بند الأجر الأساسي لأنه محفوظ بالفعل في payroll.basic_salary
+        # Extract insurable salary for social insurance calculation (no PayrollLine created)
+        insurable_component = components.filter(code='INSURABLE_SALARY').first()
+        context['insurable_salary'] = (
+            insurable_component.amount if insurable_component else basic_salary
+        )
+
+        # Exclude INSURABLE_SALARY from PayrollLine — it's a reference value only, not an earning
+        non_basic_components = components.exclude(is_basic=True).exclude(code='INSURABLE_SALARY')
         
         for component in non_basic_components:
             amount = component.calculate_amount(context)
@@ -243,23 +282,237 @@ class PayrollService:
                 order=200
             )
         
-        # 8. حساب الإجماليات من PayrollLine
+        # 8. حساب خصومات الحضور من AttendanceSummary
+        from ..models import AttendanceSummary
+        attendance_summary = AttendanceSummary.objects.filter(
+            employee=employee,
+            month=month
+        ).first()
+
+        if attendance_summary:
+            # خصم الغياب
+            if attendance_summary.absence_deduction_amount > 0:
+                absence_deduction = attendance_summary.absence_deduction_amount.quantize(
+                    Decimal('1'), rounding=ROUND_HALF_UP
+                )
+                
+                # بناء الوصف — فقط أيام الغياب الفعلية (الإجازات غير المدفوعة لها سطر منفصل)
+                name = f'خصم غياب ({attendance_summary.absent_days} يوم)'
+                
+                # حساب الراتب اليومي للتفاصيل (استخدام نفس العقد المجلوب في السطر 87)
+                # contract متغير موجود بالفعل من بداية الدالة
+                daily_salary = (contract.basic_salary / Decimal('30')).quantize(Decimal('0.01')) if contract else Decimal('0')
+                
+                # إزالة الأصفار غير الضرورية وتجنب التنسيق العلمي
+                def format_decimal(d):
+                    try:
+                        # تحويل القيمة إلى Decimal أولاً للتأكد
+                        d = Decimal(str(d))
+                        # التخلص من الأصفار العشرية غير الضرورية (مثل 100.00 -> 100)
+                        if d == d.to_integral_value():
+                            return str(d.to_integral_value())
+                        
+                        s = str(d.normalize())
+                        return s if 'E' not in s else f"{d:f}"
+                    except:
+                        return str(d)
+                
+                daily_salary_str = format_decimal(daily_salary)
+                
+                # بناء نص الحساب بتفصيل كل يوم بمعامله
+                from hr.models import Attendance
+                from hr.utils.payroll_helpers import get_payroll_period
+                
+                start_date, end_date, _ = get_payroll_period(attendance_summary.month)
+                
+                absent_records = Attendance.objects.filter(
+                    employee=attendance_summary.employee,
+                    date__gte=start_date,
+                    date__lte=end_date,
+                    status='absent'
+                ).order_by('date')
+                
+                # تجميع الأيام حسب المعامل
+                multiplier_groups = {}
+                for record in absent_records:
+                    multiplier = record.absence_multiplier
+                    if multiplier not in multiplier_groups:
+                        multiplier_groups[multiplier] = 0
+                    multiplier_groups[multiplier] += 1
+                
+                # بناء النص
+                calc_parts = []
+                for multiplier in sorted(multiplier_groups.keys()):
+                    days_count = multiplier_groups[multiplier]
+                    multiplier_str = format_decimal(multiplier)
+                    calc_parts.append(f'({days_count} يوم × {daily_salary_str} × {multiplier_str})')
+                
+                calc_text = ' + '.join(calc_parts)
+                
+                # ملاحظة: الإجازات غير المدفوعة لها سطر PayrollLine منفصل من LeaveSummary
+                
+                PayrollLine.objects.create(
+                    payroll=payroll,
+                    code='ABSENCE_DEDUCTION',
+                    name=name,
+                    component_type='deduction',
+                    source='attendance',
+                    amount=absence_deduction,
+                    calculation_details={
+                        'source': 'attendance_summary',
+                        'absent_days': attendance_summary.absent_days,
+                        'absence_multiplier': str(attendance_summary.absence_multiplier),
+                        'daily_salary': str(daily_salary),
+                        'calculation': calc_text,
+                        'attendance_summary_id': attendance_summary.id,
+                    },
+                    order=205
+                )
+
+            # خصم التأخير
+            if attendance_summary.late_deduction_amount > 0:
+                late_deduction = attendance_summary.late_deduction_amount.quantize(
+                    Decimal('1'), rounding=ROUND_HALF_UP
+                )
+                
+                # إحضار تفاصيل الجزاء ليكون الوصف مطابقاً لملخص الحضور
+                from hr.models import AttendancePenalty
+                penalty = AttendancePenalty.objects.filter(
+                    is_active=True,
+                    max_minutes__gte=attendance_summary.net_penalizable_minutes
+                ).order_by('max_minutes').first()
+                
+                if not penalty:
+                    penalty = AttendancePenalty.objects.filter(is_active=True, max_minutes=0).first()
+                
+                # إزالة الأصفار غير الضرورية وتجنب التنسيق العلمي
+                def format_decimal(d):
+                    try:
+                        d = Decimal(str(d))
+                        if d == d.to_integral_value():
+                            return str(d.to_integral_value())
+                        s = str(d.normalize())
+                        return s if 'E' not in s else f"{d:f}"
+                    except:
+                        return str(d)
+                    
+                calc_text = f"جزاء: {penalty.name} ({format_decimal(penalty.penalty_days)} يوم)" if penalty else ""
+                
+                # بناء الوصف من ملخص الحضور
+                name = f'خصم تأخير ({attendance_summary.net_penalizable_minutes} دقيقة)'
+                
+                PayrollLine.objects.create(
+                    payroll=payroll,
+                    code='LATE_DEDUCTION',
+                    name=name,
+                    component_type='deduction',
+                    source='attendance',
+                    amount=late_deduction,
+                    calculation_details={
+                        'source': 'attendance_summary',
+                        'net_penalizable_minutes': attendance_summary.net_penalizable_minutes,
+                        'calculation': calc_text,
+                        'attendance_summary_id': attendance_summary.id,
+                    },
+                    order=210
+                )
+
+        # 9. خصم الإجازات غير المدفوعة من LeaveSummary
+        from ..models import LeaveSummary
+        try:
+            leave_summary_payroll, _ = LeaveSummary.objects.get_or_create(
+                employee=employee,
+                month=month
+            )
+            # دايماً نعيد الحساب عشان نضمن إن البيانات محدثة وقت حساب الراتب
+            leave_summary_payroll.calculate()
+        except Exception:
+            leave_summary_payroll = None
+
+        if leave_summary_payroll and leave_summary_payroll.deduction_amount and leave_summary_payroll.deduction_amount > 0:
+            unpaid_deduction = leave_summary_payroll.deduction_amount.quantize(
+                Decimal('0.01'), rounding=ROUND_HALF_UP
+            )
+            daily_salary_leave = (contract.basic_salary / Decimal('30')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP) if contract else Decimal('0')
+
+            def _fmt_leave(d):
+                try:
+                    d = Decimal(str(d))
+                    return str(d.to_integral_value()) if d == d.to_integral_value() else str(d.normalize())
+                except Exception:
+                    return str(d)
+
+            calc_parts_leave = []
+            if leave_summary_payroll.details:
+                for detail in leave_summary_payroll.details:
+                    if not detail.get('is_paid', True):
+                        multiplier = Decimal(detail.get('deduction_multiplier', '1.0'))
+                        days = detail.get('days_in_month', 0)
+                        leave_type = detail.get('leave_type', '')
+                        part = f'{leave_type}: {days} يوم × {_fmt_leave(daily_salary_leave)}'
+                        if multiplier != Decimal('1.0'):
+                            part += f' × {_fmt_leave(multiplier)}'
+                        calc_parts_leave.append(part)
+            calc_text_leave = ' + '.join(calc_parts_leave) if calc_parts_leave else f'{leave_summary_payroll.total_unpaid_days} يوم × {_fmt_leave(daily_salary_leave)}'
+
+            PayrollLine.objects.create(
+                payroll=payroll,
+                code='UNPAID_LEAVE_DEDUCTION',
+                name=f'خصم إجازات غير مدفوعة ({leave_summary_payroll.total_unpaid_days} يوم)',
+                component_type='deduction',
+                source='attendance',
+                amount=unpaid_deduction,
+                calculation_details={
+                    'source': 'leave_summary',
+                    'total_unpaid_days': leave_summary_payroll.total_unpaid_days,
+                    'daily_salary': str(daily_salary_leave),
+                    'calculation': calc_text_leave,
+                    'leave_summary_id': leave_summary_payroll.id,
+                },
+                order=207
+            )
+
+        # 10. خصم الأذونات الإضافية من AttendanceSummary
+        if attendance_summary and attendance_summary.extra_permissions_deduction_amount > 0:
+            extra_perm_deduction = attendance_summary.extra_permissions_deduction_amount.quantize(
+                Decimal('1'), rounding=ROUND_HALF_UP
+            )
+            
+            # بناء الوصف من ملخص الحضور
+            name = f'خصم أذونات إضافية ({attendance_summary.extra_permissions_hours} ساعة)'
+            
+            PayrollLine.objects.create(
+                payroll=payroll,
+                code='EXTRA_PERM_DEDUCTION',
+                name=name,
+                component_type='deduction',
+                source='attendance',
+                amount=extra_perm_deduction,
+                calculation_details={
+                    'source': 'attendance_summary',
+                    'extra_permissions_hours': str(attendance_summary.extra_permissions_hours),
+                    'attendance_summary_id': attendance_summary.id,
+                },
+                order=215
+            )
+
+        # 11. حساب الإجماليات من PayrollLine
         payroll.calculate_totals_from_lines()
         payroll.status = 'calculated'
         payroll.save()
         
-        # 9. تسجيل أقساط السلف (بعد حفظ الـ payroll)
+        # Update social_insurance field from SOCIAL_INSURANCE_EMP line
+        insurance_line = payroll.lines.filter(code='SOCIAL_INSURANCE_EMP').first()
+        if insurance_line:
+            payroll.social_insurance = insurance_line.amount
+            payroll.save(update_fields=['social_insurance'])
+        
+        # 12. تسجيل أقساط السلف (بعد حفظ الـ payroll)
         if advance_deduction > 0:
             AdvanceService.process_payroll_advances(payroll)
             # إعادة حساب الإجماليات بعد تسجيل الأقساط
             payroll.calculate_totals_from_lines()
             payroll.save()
-        
-        logger.info(
-            f"تم حساب الراتب بنجاح (النظام الجديد) - الموظف: {employee.get_full_name_ar()}, "
-            f"عدد البنود: {payroll.lines.count()}, "
-            f"الإجمالي: {payroll.gross_salary}, الصافي: {payroll.net_salary}"
-        )
         
         return payroll
     
@@ -288,10 +541,6 @@ class PayrollService:
             payroll_month=month
         )
         
-        logger.info(
-            f"إجمالي خصم السلف للموظف {employee.get_full_name_ar()} في شهر {month}: "
-            f"{total_deduction} ج.م من {len(advances_list)} سلفة"
-        )
         
         # Debug logging
         if total_deduction == 0:
@@ -336,11 +585,10 @@ class PayrollService:
             Exception: Critical errors are logged but not raised to allow
                       processing of remaining employees
         """
-        logger.info(f"بدء معالجة رواتب شهر {month.strftime('%Y-%m')} بواسطة {processed_by.username}")
         
         # إذا لم يتم تمرير قائمة موظفين، جلب جميع الموظفين النشطين
         if employees is None:
-            employees = Employee.objects.filter(status='active')
+            employees = Employee.objects.filter(status='active', is_insurance_only=False)
             # استبعاد الموظفين اللي عندهم راتب في نفس الشهر
             processed_employee_ids = Payroll.objects.filter(
                 month=month
@@ -369,10 +617,6 @@ class PayrollService:
                 })
                 fail_count += 1
         
-        logger.info(
-            f"انتهت معالجة الرواتب - النجاح: {success_count}, الفشل: {fail_count}, "
-            f"الإجمالي: {len(results)}"
-        )
         
         return results
     
@@ -404,17 +648,61 @@ class PayrollService:
         # التحقق من الحالة
         if payroll.status != 'calculated':
             raise ValueError('يجب أن تكون قسيمة الراتب محسوبة للاعتماد')
-        
+
+        # Attendance approval gate — second safety layer
+        from ..models import AttendanceSummary
+        _att_summary = AttendanceSummary.objects.filter(
+            employee=payroll.employee,
+            month=payroll.month
+        ).first()
+        if not _att_summary or not _att_summary.is_approved:
+            raise ValueError(
+                f'لا يمكن اعتماد راتب {payroll.employee.get_full_name_ar()} — '
+                f'ملخص الحضور لشهر {payroll.month.strftime("%Y-%m")} غير معتمد'
+            )
+
         # ✅ الاعتماد فقط - بدون قيد محاسبي
         payroll.status = 'approved'
         payroll.approved_by = approved_by
         payroll.approved_at = timezone.now()
         payroll.save()
-        
-        logger.info(f"تم اعتماد قسيمة راتب {payroll.employee.get_full_name_ar()} - {payroll.month}")
+
+        # ✅ تسجيل audit
+        from .payroll_audit_service import PayrollAuditService
+        PayrollAuditService.log_approved(payroll, approved_by)
         
         return payroll
-    
+
+    @staticmethod
+    def unapprove_payroll(payroll, unapproved_by):
+        """
+        Unapprove an approved payroll record (superuser only).
+        Reverts status from 'approved' back to 'calculated'.
+        Only works if payroll has not been paid yet.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        if payroll.status != 'approved':
+            raise ValueError('يمكن إلغاء الاعتماد فقط للقسائم المعتمدة وغير المدفوعة')
+
+        payroll.status = 'calculated'
+        payroll.approved_by = None
+        payroll.approved_at = None
+        payroll.save()
+
+        logger.info(
+            f"تم إلغاء اعتماد قسيمة الراتب {payroll.pk} "
+            f"للموظف {payroll.employee.get_full_name_ar()} "
+            f"بواسطة {unapproved_by.username}"
+        )
+
+        # ✅ تسجيل audit
+        from .payroll_audit_service import PayrollAuditService
+        PayrollAuditService.log_unapproved(payroll, unapproved_by)
+
+        return payroll
+
     @staticmethod
     def _create_journal_entry(payroll):
         """
@@ -448,7 +736,7 @@ class PayrollService:
         # إنشاء القيد
         entry = JournalEntry.objects.create(
                 debit=0,
-                credit=payroll.net_salary
+                credit=payroll.correct_net_salary
             )
         
         # إلى حـ/ التأمينات
@@ -507,6 +795,7 @@ class PayrollService:
             stacklevel=2
         )
         
+        from django.utils import timezone
         from financial.models import JournalEntry, JournalEntryLine, ChartOfAccounts
         from decimal import Decimal
         
@@ -521,7 +810,7 @@ class PayrollService:
         
         # إنشاء القيد
         entry = JournalEntry.objects.create(
-            date=payroll.month,
+            date=timezone.now().date(),
             description=f'راتب {payroll.employee.get_full_name_ar()} - {payroll.month.strftime("%Y-%m")}',
             created_by=created_by,
             financial_category=financial_category
@@ -533,11 +822,14 @@ class PayrollService:
             raise ValueError('حساب الرواتب والأجور (50200) غير موجود في دليل الحسابات')
         
         # ✅ استخدام gross_salary بدلاً من basic_salary لتجنب المضاعفة
-        # gross_salary يشمل الراتب الأساسي + جميع البدلات والإضافات
+        # gross_salary يشمل الأجر الأساسي + جميع البدلات والإضافات — مع استبعاد INSURABLE_SALARY
+        correct_gross_ps = payroll.correct_gross_salary
+        correct_net_ps = payroll.correct_net_salary
+
         JournalEntryLine.objects.create(
             journal_entry=entry,
             account=salary_expense_account,
-            debit=payroll.gross_salary,
+            debit=correct_gross_ps,
             credit=Decimal('0'),
             description=f'إجمالي راتب - {payroll.employee.get_full_name_ar()}'
         )
@@ -548,7 +840,7 @@ class PayrollService:
                 journal_entry=entry,
                 account=payroll.payment_account,
                 debit=Decimal('0'),
-                credit=payroll.net_salary,
+                credit=correct_net_ps,
                 description=f'صافي راتب {payroll.employee.get_full_name_ar()}'
             )
         
@@ -662,7 +954,6 @@ class PayrollService:
         # التحقق من أن الحساب مسموح
         if account_code not in SecurePayrollService.ALLOWED_PAYROLL_ACCOUNTS:
             logger.error(f"❌ محاولة استخدام حساب غير مسموح: {account_code}")
-            logger.info(f"الحسابات المسموحة: {list(SecurePayrollService.ALLOWED_PAYROLL_ACCOUNTS.keys())}")
             return None
         
         # البحث عن الحساب الموجود فقط
@@ -673,7 +964,6 @@ class PayrollService:
             logger.warning("⚠️ النظام الآمن لا ينشئ حسابات جديدة تلقائياً")
             return None
         
-        logger.info(f"✅ تم العثور على حساب آمن: {account_code} - {account.name}")
         return account
     
     @staticmethod
@@ -714,7 +1004,6 @@ class PayrollService:
                         credit=Decimal('0'),
                         description=f"{line.name} - {payroll.employee.get_full_name_ar()}"
                     )
-                    logger.info(f"تم إضافة مستحق ديناميكي: {line.name} - {line.amount} ج.م")
                 else:
                     logger.warning(f"لم يتم العثور على حساب محاسبي للمستحق: {line.name}")
 
@@ -756,7 +1045,6 @@ class PayrollService:
                         credit=line.amount,
                         description=f"{line.name} - {payroll.employee.get_full_name_ar()}"
                     )
-                    logger.info(f"تم إضافة خصم ديناميكي: {line.name} - {line.amount} ج.م")
                 else:
                     logger.warning(f"لم يتم العثور على حساب محاسبي للخصم: {line.name}")
     
@@ -804,7 +1092,6 @@ class PayrollService:
                 return account
         
         # 3. الافتراضي: حساب مستحقات الرواتب
-        logger.info(f"استخدام الحساب الافتراضي للخصم: {payroll_line.name}")
         return PayrollService._get_safe_account_only('20200')
     
     @staticmethod
@@ -822,34 +1109,46 @@ class PayrollService:
                 - account_name: The account name
         """
         return {
-            # التأمينات
-            'insurance': {
-                'account_code': '2103',
-                'account_name': 'التأمينات الاجتماعية'
-            },
+            # التأمينات الاجتماعية
             'social': {
-                'account_code': '2103',
+                'account_code': '20210',
                 'account_name': 'التأمينات الاجتماعية'
             },
-            'تأمين': {
-                'account_code': '2103',
-                'account_name': 'التأمينات الاجتماعية'
-            },
-            
+
             # الضرائب
             'tax': {
-                'account_code': '2104',
+                'account_code': '20220',
                 'account_name': 'ضرائب الدخل'
             },
             'ضريبة': {
-                'account_code': '2104',
+                'account_code': '20220',
                 'account_name': 'ضرائب الدخل'
             },
             'ضرائب': {
-                'account_code': '2104',
+                'account_code': '20220',
                 'account_name': 'ضرائب الدخل'
             },
-            
+
+            # التأمين الطبي (قبل 'تأمين' العام حتى يأخذ الأولوية)
+            'medical': {
+                'account_code': '21034',
+                'account_name': 'التأمين الطبي'
+            },
+            'طبي': {
+                'account_code': '21034',
+                'account_name': 'التأمين الطبي'
+            },
+
+            # التأمينات العامة (fallback بعد الطبي)
+            'insurance': {
+                'account_code': '20210',
+                'account_name': 'التأمينات الاجتماعية'
+            },
+            'تأمين': {
+                'account_code': '20210',
+                'account_name': 'التأمينات الاجتماعية'
+            },
+
             # السلف
             'advance': {
                 'account_code': '10350',
@@ -871,7 +1170,7 @@ class PayrollService:
                 'account_code': '10350',
                 'account_name': 'سلف الموظفين'
             },
-            
+
             # الغياب والتأخير
             'absence': {
                 'account_code': '20200',
@@ -889,25 +1188,15 @@ class PayrollService:
                 'account_code': '20200',
                 'account_name': 'مستحقات الرواتب'
             },
-            
+
             # النقابة
             'union': {
-                'account_code': '2105',
+                'account_code': '21033',
                 'account_name': 'اشتراكات النقابة'
             },
             'نقابة': {
-                'account_code': '2105',
+                'account_code': '21033',
                 'account_name': 'اشتراكات النقابة'
-            },
-            
-            # التأمين الطبي
-            'medical': {
-                'account_code': '2106',
-                'account_name': 'التأمين الطبي'
-            },
-            'طبي': {
-                'account_code': '2106',
-                'account_name': 'التأمين الطبي'
             },
         }
     
@@ -947,8 +1236,8 @@ class PayrollService:
         }
         
         for payroll in paid_payrolls:
-            totals['total_gross'] += payroll.gross_salary or Decimal('0')
-            totals['total_net'] += payroll.net_salary or Decimal('0')
+            totals['total_gross'] += payroll.correct_gross_salary
+            totals['total_net'] += payroll.correct_net_salary
             totals['total_social_insurance'] += payroll.social_insurance or Decimal('0')
             totals['total_tax'] += payroll.tax or Decimal('0')
             totals['total_absence_deduction'] += payroll.absence_deduction or Decimal('0')
@@ -1077,7 +1366,7 @@ class PayrollService:
             transaction_date=payroll.month,
             entity_type='employee',
             transaction_type='salary_payment',
-            transaction_amount=payroll.net_salary,
+            transaction_amount=payroll.correct_net_salary,
             user=paid_by,
             module='hr',
             view_name='pay_payroll',
@@ -1085,47 +1374,41 @@ class PayrollService:
             log_failures=True
         )
         
-        logger.info(
-            f"نجح التحقق من المعاملة المالية لدفع راتب {payroll.employee.get_full_name_ar()} "
-            f"- الفترة المحاسبية: {validation_result.get('period')}"
-        )
         
         # ✅ تسجيل الدفع
         payroll.status = 'paid'
         payroll.paid_by = paid_by
         payroll.paid_at = timezone.now()
-        payroll.payment_date = payroll.month  # تاريخ الدفع = تاريخ الراتب
+        payroll.payment_date = timezone.now().date()  # تاريخ الدفع = تاريخ اليوم الفعلي
         payroll.payment_account = payment_account
         payroll.payment_reference = payment_reference or ''
         payroll.save()
         
-        # ✅ إنشاء القيد المحاسبي للدفعة الفردية
+        # ✅ إنشاء القيد المحاسبي (متوازن دائماً مع rounding line)
         try:
-            journal_entry = PayrollService._create_individual_journal_entry(payroll, paid_by)
-            payroll.journal_entry = journal_entry
-            payroll.save()
-            
+            from hr.services.payroll_accounting_service import PayrollAccountingService
+            accounting_service = PayrollAccountingService()
+            journal_entry = accounting_service.create_payroll_journal_entry(payroll, paid_by)
+
             # ✅ ترحيل القيد تلقائياً
-            try:
-                from financial.services.expense_income_service import ExpenseIncomeService
-                ExpenseIncomeService.post_journal_entry(journal_entry, paid_by)
-                
-                logger.info(
-                    f"تم دفع راتب {payroll.employee.get_full_name_ar()} - {payroll.month} "
-                    f"من حساب {payment_account.name} وإنشاء وترحيل القيد المحاسبي رقم {journal_entry.id}"
-                )
-            except Exception as post_error:
-                logger.warning(
-                    f"تم إنشاء القيد المحاسبي رقم {journal_entry.id} لكن فشل ترحيله: {str(post_error)}"
-                )
-                # لا نرفع الخطأ لأن القيد تم إنشاؤه بنجاح
-                
+            if journal_entry:
+                try:
+                    from financial.services.expense_income_service import ExpenseIncomeService
+                    ExpenseIncomeService.post_journal_entry(journal_entry, paid_by)
+                except Exception as post_error:
+                    logger.warning(
+                        f"تم إنشاء القيد المحاسبي رقم {journal_entry.id} لكن فشل ترحيله: {str(post_error)}"
+                    )
+
         except Exception as e:
             logger.error(
                 f"تم دفع الراتب بنجاح لكن فشل إنشاء القيد المحاسبي: {str(e)}"
             )
-            # لا نرفع الخطأ لأن الدفع تم بنجاح
         
+        # ✅ تسجيل audit
+        from .payroll_audit_service import PayrollAuditService
+        PayrollAuditService.log_paid(payroll, paid_by)
+
         return payroll
     
     @staticmethod
@@ -1218,10 +1501,6 @@ class PayrollService:
             from financial.services.expense_income_service import ExpenseIncomeService
             ExpenseIncomeService.post_journal_entry(entry, created_by)
             
-            logger.info(
-                f"تم إنشاء وترحيل قيد محاسبي عام لمرتبات {month.strftime('%Y-%m')} - "
-                f"عدد الموظفين: {paid_payrolls.count()}, الإجمالي: {totals['total_gross']}"
-            )
         except Exception as post_error:
             logger.warning(
                 f"تم إنشاء القيد المحاسبي رقم {entry.id} لكن فشل ترحيله: {str(post_error)}"

@@ -210,7 +210,7 @@ class APIIntegrationSecurityService:
             request_headers['Authorization'] = f'Bearer {auth_token}'
         
         request_headers.setdefault('Content-Type', 'application/json')
-        request_headers.setdefault('User-Agent', 'SchoolManagement/1.0')
+        request_headers.setdefault('User-Agent', 'CorporateERP/1.0')
         
         # معلومات الطلب للتسجيل
         request_info = {

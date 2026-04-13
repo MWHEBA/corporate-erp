@@ -35,16 +35,19 @@ class BridgeAgentAuthentication(BaseAuthentication):
     Replaces @csrf_exempt with proper token-based authentication
     """
     def authenticate(self, request):
-        auth_header = request.headers.get('Authorization', '')
+        auth_header = request.headers.get('Authorization', '') or request.META.get('HTTP_AUTHORIZATION', '')
         agent_code = request.data.get('agent_code')
-        
-        if not auth_header.startswith('Bearer '):
+
+        # Support secret in body as fallback (when proxy strips Authorization header)
+        body_secret = request.data.get('agent_secret', '')
+
+        if not auth_header.startswith('Bearer ') and not body_secret:
             raise AuthenticationFailed('Invalid authorization header format')
-        
+
         if not agent_code:
             raise AuthenticationFailed('Agent code is required')
-        
-        agent_secret = auth_header.replace('Bearer ', '')
+
+        agent_secret = auth_header[7:] if auth_header.startswith('Bearer ') else body_secret
         
         # Validate agent credentials
         valid_agents = getattr(settings, 'BRIDGE_AGENTS', {})
@@ -79,11 +82,6 @@ def biometric_bridge_sync(request):
     ✅ SECURITY: Now uses token-based authentication instead of @csrf_exempt
     """
     # Logging بدلاً من print
-    logger.info("=" * 60)
-    logger.info("Bridge Sync Request Received!")
-    logger.info(f"Authenticated User: {request.user.username}")
-    logger.info(f"Agent Code: {request.auth}")
-    logger.info("=" * 60)
     
     # Authentication is already handled by BridgeAgentAuthentication
     agent_code = request.auth  # This is set by our custom authentication
@@ -106,7 +104,7 @@ def biometric_bridge_sync(request):
         try:
             deleted = BiometricSyncLog.cleanup_old_logs(days=30)
             if deleted > 0:
-                logger.info(f"Cleaned up {deleted} old sync logs")
+                pass
         except Exception as e:
             logger.warning(f"Failed to cleanup old logs: {e}")
     
@@ -124,7 +122,6 @@ def biometric_bridge_sync(request):
         sync_log.completed_at = timezone.now()
         sync_log.status = 'success'
         sync_log.save()
-        logger.info(f"Heartbeat received from {agent_code} - No records")
         return Response({
             'success': True,
             'message': 'Heartbeat received - No new records',

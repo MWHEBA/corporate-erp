@@ -80,7 +80,6 @@ class ExpiryService:
                 # فحص التنبيهات فوراً
                 ExpiryService._check_batch_alerts(batch)
 
-                logger.info(f"تم إنشاء دفعة جديدة: {batch}")
                 return batch
 
         except Exception as e:
@@ -141,9 +140,6 @@ class ExpiryService:
                         f"تم استهلاك {quantity - remaining_quantity} فقط"
                     )
 
-                logger.info(
-                    f"تم استهلاك {quantity} من {product.name} من {len(consumed_batches)} دفعة"
-                )
                 return consumed_batches
 
         except Exception as e:
@@ -192,7 +188,6 @@ class ExpiryService:
             for batch in active_batches:
                 alerts_created += ExpiryService._check_batch_alerts(batch)
 
-            logger.info(f"تم فحص التنبيهات وإنشاء {alerts_created} تنبيه جديد")
             return alerts_created
 
         except Exception as e:
@@ -430,7 +425,6 @@ class ExpiryService:
 
                 expired_count += 1
 
-            logger.info(f"تم تحديث حالة {expired_count} دفعة منتهية الصلاحية")
             return expired_count
 
         except Exception as e:

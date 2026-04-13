@@ -43,9 +43,9 @@ class PaymentIntegrationService:
     DEFAULT_ACCOUNTS = {
         "cash": "10100",  # الخزنة
         "bank": "10200",  # البنك
-        "accounts_receivable": "10300",  # العملاء
+        "accounts_receivable": "10300",  # ذمم العملاء
         "accounts_payable": "20100",  # الموردون
-        "sales_revenue": "40100",  # إيرادات الرسوم الدراسية
+        "sales_revenue": "40100",  # إيرادات الرسوم الأساسية
         "purchase_expense": "50100",  # تكلفة الخدمات المقدمة
     }
 
@@ -63,8 +63,8 @@ class PaymentIntegrationService:
         معالجة شاملة للدفعة وربطها بالنظام المالي
 
         Args:
-            payment: كائن الدفعة (PurchasePayment أو FeePayment)
-            payment_type: نوع الدفعة ('purchase' أو 'fee')
+            payment: كائن الدفعة (PurchasePayment أو CustomerPayment)
+            payment_type: نوع الدفعة ('purchase' أو 'customer')
             user: المستخدم المنفذ للعملية
             force_sync: إجبار التزامن حتى لو كانت الدفعة مربوطة مسبقاً
 
@@ -76,7 +76,6 @@ class PaymentIntegrationService:
         )
 
         try:
-            logger.info(f"بدء معالجة الدفعة - العملية: {operation_id}")
 
             # التحقق من صحة البيانات
             cls._validate_payment_data(payment, payment_type)
@@ -97,7 +96,6 @@ class PaymentIntegrationService:
                 )
 
                 # تسجيل نجاح العملية
-                logger.info(f"تم ربط الدفعة بنجاح - العملية: {operation_id}")
 
                 return result
 
@@ -192,8 +190,6 @@ class PaymentIntegrationService:
                 end_date=date(year, 12, 31),
                 defaults={"name": f"السنة المالية {year}", "status": "open"},
             )
-            if created:
-                logger.info(f"تم إنشاء فترة محاسبية تلقائية: {period.name}")
 
         return period
 
@@ -212,58 +208,31 @@ class PaymentIntegrationService:
         if payment_type == "sale":
             # دفعة مبيعات: مدين الخزينة/البنك، دائن حساب العميل المحدد
 
-            # استخدام الحساب المالي للعميل المحدد بدلاً من الحساب العام
-            customer = payment.sale.customer
-            if customer.financial_account:
-                customer_account = customer.financial_account
-                logger.info(
-                    f"استخدام حساب العميل المحدد: {customer_account.code} - {customer_account.name}"
-                )
+            # استخدام الحساب المالي لولي الأمر المحدد بدلاً من الحساب العام
+            parent = payment.sale.parent
+            if parent.financial_account:
+                parent_account = parent.financial_account
             else:
-                # إذا لم يكن للعميل حساب محدد، رفض العملية
-                error_msg = f"❌ العميل {customer.name} ليس له حساب محاسبي. يجب إنشاء حساب محاسبي للعميل أولاً."
+                # إذا لم يكن لولي الأمر حساب محدد، رفض العملية
+                error_msg = f"❌ ولي الأمر {parent.name} ليس له حساب محاسبي. يجب إنشاء حساب محاسبي لولي الأمر أولاً."
                 logger.error(error_msg)
                 raise PaymentIntegrationError(error_msg)
 
             # التحقق من أن الحساب يمكن إدراج قيود عليه
-            if not customer_account.can_post_entries():
+            if not parent_account.can_post_entries():
                 raise PaymentIntegrationError(
-                    f"لا يمكن إدراج قيود على حساب العميل {customer_account.code} - {customer_account.name}"
+                    f"لا يمكن إدراج قيود على حساب ولي الأمر {parent_account.code} - {parent_account.name}"
                 )
 
-            # إنشاء القيد عبر AccountingGateway مباشرة مع source_info صحيح
-            from governance.services.accounting_gateway import AccountingGateway, JournalEntryLineData
-            
-            gateway = AccountingGateway()
-            
-            # تحضير بنود القيد
-            lines = [
-                JournalEntryLineData(
-                    account_code=cash_account_code,
-                    debit=payment.amount,
-                    credit=Decimal('0.00'),
-                    description=f"دفعة من العميل {payment.sale.customer.name}"
-                ),
-                JournalEntryLineData(
-                    account_code=customer_account.code,
-                    debit=Decimal('0.00'),
-                    credit=payment.amount,
-                    description=f"دفعة من العميل {payment.sale.customer.name}"
-                )
-            ]
-            
-            # إنشاء القيد مع source_info صحيح
-            journal_entry = gateway.create_journal_entry(
-                source_module='sale',
-                source_model='SalePayment',
-                source_id=payment.id,
-                lines=lines,
-                idempotency_key=f"JE:sale:SalePayment:{payment.id}:create",
-                user=user or payment.created_by,
-                entry_type='payment',
-                description=f"دفعة من العميل {payment.sale.customer.name} - فاتورة {payment.sale.number}",
-                reference=f"SALE-PAY-{payment.id}",
+            # إنشاء القيد
+            journal_entry = JournalEntryService.create_simple_entry(
+                debit_account=cash_account_code,
+                credit_account=parent_account.code,
+                amount=payment.amount,
+                description=f"دفعة من ولي الأمر {payment.sale.parent.name} - فاتورة {payment.sale.number}",
                 date=payment.payment_date,
+                reference=f"SALE-PAY-{payment.id}",
+                user=user or payment.created_by,
                 financial_category=payment.sale.financial_category if hasattr(payment.sale, 'financial_category') else None,
             )
 
@@ -274,9 +243,6 @@ class PaymentIntegrationService:
             supplier = payment.purchase.supplier
             if supplier.financial_account:
                 supplier_account = supplier.financial_account
-                logger.info(
-                    f"استخدام حساب المورد المحدد: {supplier_account.code} - {supplier_account.name}"
-                )
             else:
                 # إذا لم يكن للمورد حساب محدد، رفض العملية
                 error_msg = f"❌ المورد {supplier.name} ليس له حساب محاسبي. يجب إنشاء حساب محاسبي للمورد أولاً."
@@ -289,39 +255,15 @@ class PaymentIntegrationService:
                     f"لا يمكن إدراج قيود على حساب المورد {supplier_account.code} - {supplier_account.name}"
                 )
 
-            # إنشاء القيد عبر AccountingGateway مباشرة مع source_info صحيح
-            from governance.services.accounting_gateway import AccountingGateway, JournalEntryLineData
-            
-            gateway = AccountingGateway()
-            
-            # تحضير بنود القيد
-            lines = [
-                JournalEntryLineData(
-                    account_code=supplier_account.code,
-                    debit=payment.amount,
-                    credit=Decimal('0.00'),
-                    description=f"دفعة للمورد {payment.purchase.supplier.name}"
-                ),
-                JournalEntryLineData(
-                    account_code=cash_account_code,
-                    debit=Decimal('0.00'),
-                    credit=payment.amount,
-                    description=f"دفعة للمورد {payment.purchase.supplier.name}"
-                )
-            ]
-            
-            # إنشاء القيد مع source_info صحيح
-            journal_entry = gateway.create_journal_entry(
-                source_module='purchase',
-                source_model='PurchasePayment',
-                source_id=payment.id,
-                lines=lines,
-                idempotency_key=f"JE:purchase:PurchasePayment:{payment.id}:create",
-                user=user or payment.created_by,
-                entry_type='payment',
+            # إنشاء القيد
+            journal_entry = JournalEntryService.create_simple_entry(
+                debit_account=supplier_account.code,
+                credit_account=cash_account_code,
+                amount=payment.amount,
                 description=f"دفعة للمورد {payment.purchase.supplier.name} - فاتورة {payment.purchase.number}",
-                reference=f"PURCH-PAY-{payment.id}",
                 date=payment.payment_date,
+                reference=f"PURCH-PAY-{payment.id}",
+                user=user or payment.created_by,
                 financial_category=payment.purchase.financial_category if hasattr(payment.purchase, 'financial_category') else None,
             )
 
@@ -336,7 +278,6 @@ class PaymentIntegrationService:
         # ملاحظة: تم تعطيل استدعاء payment_sync_service لتجنب إنشاء قيود مكررة
         # الخدمة الحالية (PaymentIntegrationService) تقوم بكل العمليات المطلوبة
 
-        logger.info(f"تم تخطي التزامن مع الخدمات القديمة - الخدمة الجديدة تتولى كل شيء")
 
         # يمكن إضافة تزامن مع خدمات أخرى هنا إذا لزم الأمر
         # مثل: تحديث الإحصائيات، إرسال إشعارات، إلخ

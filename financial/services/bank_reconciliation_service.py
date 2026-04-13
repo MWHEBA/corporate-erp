@@ -88,8 +88,7 @@ class BankReconciliationService:
                 user=user or reconciliation.created_by if hasattr(reconciliation, 'created_by') else None,
                 date=reconciliation.reconciliation_date,
                 description=f"تسوية بنكية - {reconciliation.account.name} - فرق {reconciliation.difference}",
-                reference=f"RECON-{reconciliation.id}",
-                auto_post=True
+                reference=f"RECON-{reconciliation.id}"
             )
             
             return entry

@@ -241,43 +241,31 @@ class AuditService:
             logger.error(f"Error logging financial transaction: {str(e)}")
             return {}
     
-    def log_academic_action(self, user: User, action: str, student_id: str = None,
-                          academic_year: str = None, details: Dict = None,
+    def log_customer_action(self, user: User, action: str, customer_id: str = None,
+                          details: Dict = None,
                           ip_address: str = None) -> Dict:
         """
-        Log academic-related actions
-        
-        Args:
-            user: User performing the action
-            action: Academic action being performed
-            student_id: ID of the student involved
-            academic_year: Academic year context
-            details: Additional details
-            ip_address: User's IP address
-            
-        Returns:
-            dict: Academic audit log entry
+        Log customer-related actions
         """
         try:
-            academic_details = {
-                'academic_action': action,
-                'student_id': student_id,
-                'academic_year': academic_year,
+            customer_details = {
+                'action': action,
+                'customer_id': customer_id,
                 'additional_details': details or {}
             }
             
             return self.log_user_action(
                 user=user,
                 action=self.EVENT_ACADEMIC,
-                model_name='AcademicAction',
-                object_id=student_id,
-                details=academic_details,
+                model_name='CustomerAction',
+                object_id=customer_id,
+                details=customer_details,
                 ip_address=ip_address,
-                risk_level=self.RISK_MEDIUM if action in ['enrollment', 'transfer', 'withdrawal'] else self.RISK_LOW
+                risk_level=self.RISK_MEDIUM if action in ['payment', 'refund'] else self.RISK_LOW
             )
             
         except Exception as e:
-            logger.error(f"Error logging academic action: {str(e)}")
+            logger.error(f"Error logging customer action: {str(e)}")
             return {}
     
     def log_security_event(self, event_type: str, user: User = None, 

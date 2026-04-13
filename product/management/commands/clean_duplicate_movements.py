@@ -1,25 +1,12 @@
-"""
-⚠️ DEPRECATED: Legacy cleanup command
-This command is for one-time data cleanup only.
-All new stock movements should use MovementService directly.
-"""
 from django.core.management.base import BaseCommand
 from product.models import StockMovement, Stock
 import re
 
 
 class Command(BaseCommand):
-    help = "⚠️ DEPRECATED: تنظيف حركات المخزون المكررة وإعادة حساب كميات المخزون (legacy cleanup only)"
+    help = "تنظيف حركات المخزون المكررة وإعادة حساب كميات المخزون"
 
     def handle(self, *args, **options):
-        self.stdout.write(self.style.WARNING(
-            '⚠️ WARNING: This command is deprecated and should only be used for one-time legacy data cleanup.'
-        ))
-        self.stdout.write(self.style.WARNING(
-            'All new stock movements should use MovementService directly.'
-        ))
-        self.stdout.write('')
-        
         # البحث عن حركات المخزون المكررة
         all_movements = StockMovement.objects.all()
         movements_to_delete = []

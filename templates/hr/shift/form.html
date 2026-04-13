@@ -65,11 +65,10 @@
                         <div class="col-md-4">
                             <div class="mb-3 work-hours-container">
                                 <label class="form-label">ساعات العمل</label>
-                                {{ form.work_hours }}
-                                <small class="text-muted d-block">{{ form.work_hours.help_text }}</small>
-                                {% if form.work_hours.errors %}
-                                    <div class="text-danger">{{ form.work_hours.errors }}</div>
-                                {% endif %}
+                                <input type="number" id="id_work_hours" name="work_hours"
+                                       class="form-control" step="0.01" min="0"
+                                       placeholder="يُحسب تلقائياً" readonly>
+                                <small class="text-muted d-block">يُحسب تلقائياً من وقت البداية والنهاية</small>
                             </div>
                         </div>
                     </div>
@@ -111,6 +110,35 @@
                                 </label>
                                 {% if form.is_active.errors %}
                                     <div class="text-danger">{{ form.is_active.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- أوقات رمضان -->
+                    <hr>
+                    <h6 class="mb-3 text-muted">
+                        <i class="fas fa-moon me-2"></i>أوقات رمضان
+                        <small class="d-block fw-normal mt-1">اتركهما فارغين لاستخدام الأوقات العادية في رمضان</small>
+                    </h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">{{ form.ramadan_start_time.label }}</label>
+                                {{ form.ramadan_start_time }}
+                                <small class="text-muted d-block">{{ form.ramadan_start_time.help_text }}</small>
+                                {% if form.ramadan_start_time.errors %}
+                                    <div class="text-danger">{{ form.ramadan_start_time.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">{{ form.ramadan_end_time.label }}</label>
+                                {{ form.ramadan_end_time }}
+                                <small class="text-muted d-block">{{ form.ramadan_end_time.help_text }}</small>
+                                {% if form.ramadan_end_time.errors %}
+                                    <div class="text-danger">{{ form.ramadan_end_time.errors }}</div>
                                 {% endif %}
                             </div>
                         </div>

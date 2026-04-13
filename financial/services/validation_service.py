@@ -51,7 +51,7 @@ class FinancialValidationService:
         3. الحساب المحاسبي نهائي (is_leaf=True)
         
         Args:
-            entity: الكيان المالي (طالب، مورد، موظف، إلخ)
+            entity: الكيان المالي (عميل، مورد، موظف، إلخ)
             entity_type: نوع الكيان (اختياري، يُستنتج تلقائياً)
             raise_exception: رفع استثناء عند الفشل (افتراضي False)
             
@@ -62,8 +62,8 @@ class FinancialValidationService:
             ChartOfAccountsValidationError: إذا كان raise_exception=True وفشل التحقق
             
         Examples:
-            >>> student = Student.objects.get(id=1)
-            >>> is_valid, error_msg, account = FinancialValidationService.validate_chart_of_accounts(student)
+            >>> customer = Customer.objects.get(id=1)
+            >>> is_valid, error_msg, account = FinancialValidationService.validate_chart_of_accounts(customer)
             >>> if not is_valid:
             ...     print(error_msg)
         """
@@ -93,7 +93,6 @@ class FinancialValidationService:
                 entity_name=entity_name,
                 entity_type=entity_type
             )
-            logger.info(f"فشل التحقق من الحساب المحاسبي: {error_msg}")
             
             if raise_exception:
                 raise ChartOfAccountsValidationError(
@@ -113,7 +112,6 @@ class FinancialValidationService:
                 entity_name=entity_name,
                 entity_type=entity_type
             )
-            logger.info(f"فشل التحقق من الحساب المحاسبي: {error_msg}")
             
             if raise_exception:
                 raise ChartOfAccountsValidationError(
@@ -133,7 +131,6 @@ class FinancialValidationService:
                 entity_name=entity_name,
                 entity_type=entity_type
             )
-            logger.info(f"فشل التحقق من الحساب المحاسبي: {error_msg}")
             
             if raise_exception:
                 raise ChartOfAccountsValidationError(
@@ -214,7 +211,6 @@ class FinancialValidationService:
                 entity_name=entity_name,
                 entity_type=entity_type
             )
-            logger.info(f"فشل التحقق من الفترة المحاسبية: {error_msg}")
             
             if raise_exception:
                 raise AccountingPeriodValidationError(
@@ -235,7 +231,6 @@ class FinancialValidationService:
                 entity_name=entity_name,
                 entity_type=entity_type
             )
-            logger.info(f"فشل التحقق من الفترة المحاسبية: {error_msg}")
             
             if raise_exception:
                 raise AccountingPeriodValidationError(
@@ -278,7 +273,7 @@ class FinancialValidationService:
             transaction_type: نوع المعاملة (اختياري، مثل: opening, adjustment)
             transaction_amount: مبلغ المعاملة (اختياري)
             user: المستخدم الذي يحاول المعاملة (اختياري)
-            module: الوحدة (students, financial, etc.)
+            module: الوحدة (client, financial, etc.)
             view_name: اسم الـ view (اختياري)
             request: كائن الطلب HTTP (اختياري)
             raise_exception: رفع استثناء عند الفشل (افتراضي False)
@@ -295,13 +290,13 @@ class FinancialValidationService:
             }
             
         Examples:
-            >>> student = Student.objects.get(id=1)
+            >>> customer = Customer.objects.get(id=1)
             >>> result = FinancialValidationService.validate_transaction(
-            ...     entity=student,
+            ...     entity=customer,
             ...     transaction_date=date(2024, 6, 15),
             ...     transaction_type='payment',
             ...     user=request.user,
-            ...     module='students'
+            ...     module='client'
             ... )
             >>> if not result['is_valid']:
             ...     for error in result['errors']:
@@ -337,7 +332,6 @@ class FinancialValidationService:
             )
             result['validation_details']['special_transaction'] = True
             result['validation_details']['bypass_applied'] = True
-            logger.info(f"قيد افتتاحي - تم تجاوز التحقق من الفترة المحاسبية للكيان: {entity_name}")
             
             # التحقق من الحساب المحاسبي فقط
             account_valid, account_error, account = FinancialValidationService.validate_chart_of_accounts(
@@ -385,7 +379,6 @@ class FinancialValidationService:
             )
             result['validation_details']['special_transaction'] = True
             result['validation_details']['bypass_applied'] = True
-            logger.info(f"دفع راتب - تم تجاوز التحقق من الحساب المحاسبي للموظف: {entity_name}")
             
             # التحقق من الفترة المحاسبية فقط
             period_valid, period_error, period = FinancialValidationService.validate_accounting_period(
@@ -433,7 +426,6 @@ class FinancialValidationService:
                 )
                 result['validation_details']['special_transaction'] = True
                 result['validation_details']['bypass_applied'] = True
-                logger.info(f"تسوية محاسبية - تم التجاوز بصلاحيات خاصة للمستخدم: {user.username}")
                 
                 # التحقق من الحساب المحاسبي فقط
                 account_valid, account_error, account = FinancialValidationService.validate_chart_of_accounts(

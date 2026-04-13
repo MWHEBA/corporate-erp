@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
 النماذج الأساسية للمنتجات
 يحتوي على: Category, Unit, Product, ProductImage, ProductVariant
@@ -23,7 +23,7 @@ class Category(models.Model):
         unique=True,
         blank=True,
         null=True,
-        help_text=_("رمز مختصر للتصنيف (مثل: EDU للمواد التعليمية)")
+        help_text=_("رمز مختصر للتصنيف (مثل: SUP للمواد والمستلزمات)")
     )
     parent = models.ForeignKey(
         "self",
@@ -50,33 +50,35 @@ class Category(models.Model):
     
     @classmethod
     def create_default_categories(cls):
-        """إنشاء تصنيفات المنتجات الافتراضية"""
+        """إنشاء تصنيفات المنتجات الافتراضية للشركة"""
         from django.db import transaction
         
         default_categories = [
             # التصنيفات الرئيسية
-            {'name': 'المنتجات', 'parent': None, 'code': 'PRD'},
-            {'name': 'الخدمات', 'parent': None, 'code': 'SRV'},
-            {'name': 'المستلزمات المكتبية', 'parent': None, 'code': 'OFF'},
-            {'name': 'المعدات', 'parent': None, 'code': 'EQP'},
-            {'name': 'المواد الخام', 'parent': None, 'code': 'RAW'},
+            {'name': 'المواد والمستلزمات', 'parent': None, 'code': 'SUP'},
+            {'name': 'الزي الرسمي', 'parent': None, 'code': 'UNI'},
+            {'name': 'القرطاسية والمكتبية', 'parent': None, 'code': 'STA'},
+            {'name': 'الأنشطة والفعاليات', 'parent': None, 'code': 'ACT'},
+            {'name': 'مستلزمات المطبخ', 'parent': None, 'code': 'KIT'},
             {'name': 'مستلزمات النظافة', 'parent': None, 'code': 'CLN'},
             {'name': 'المستلزمات الطبية', 'parent': None, 'code': 'MED'},
             
-            # تصنيفات فرعية للمنتجات
-            {'name': 'منتجات جاهزة', 'parent': 'المنتجات', 'code': 'PRD-FIN'},
-            {'name': 'منتجات نصف مصنعة', 'parent': 'المنتجات', 'code': 'PRD-SEM'},
-            {'name': 'قطع غيار', 'parent': 'المنتجات', 'code': 'PRD-PAR'},
+            # تصنيفات فرعية للمواد والمستلزمات
+            {'name': 'مواد الإنتاج', 'parent': 'المواد والمستلزمات', 'code': 'SUP-PRD'},
+            {'name': 'أدوات العمل', 'parent': 'المواد والمستلزمات', 'code': 'SUP-TLS'},
+            {'name': 'معدات التشغيل', 'parent': 'المواد والمستلزمات', 'code': 'SUP-EQP'},
+            {'name': 'مواد التغليف', 'parent': 'المواد والمستلزمات', 'code': 'SUP-PKG'},
             
-            # تصنيفات فرعية للخدمات
-            {'name': 'خدمات استشارية', 'parent': 'الخدمات', 'code': 'SRV-CON'},
-            {'name': 'خدمات صيانة', 'parent': 'الخدمات', 'code': 'SRV-MNT'},
-            {'name': 'خدمات تدريب', 'parent': 'الخدمات', 'code': 'SRV-TRN'},
+            # تصنيفات فرعية للزي الرسمي
+            {'name': 'الزي الصيفي', 'parent': 'الزي الرسمي', 'code': 'UNI-SUM'},
+            {'name': 'الزي الشتوي', 'parent': 'الزي الرسمي', 'code': 'UNI-WIN'},
+            {'name': 'الأحذية', 'parent': 'الزي الرسمي', 'code': 'UNI-SHO'},
+            {'name': 'الحقائب', 'parent': 'الزي الرسمي', 'code': 'UNI-BAG'},
             
-            # تصنيفات فرعية للمستلزمات المكتبية
-            {'name': 'أدوات الكتابة', 'parent': 'المستلزمات المكتبية', 'code': 'OFF-WRT'},
-            {'name': 'أدوات الطباعة', 'parent': 'المستلزمات المكتبية', 'code': 'OFF-PRT'},
-            {'name': 'مستلزمات التنظيم', 'parent': 'المستلزمات المكتبية', 'code': 'OFF-ORG'},
+            # تصنيفات فرعية للقرطاسية
+            {'name': 'أدوات الكتابة', 'parent': 'القرطاسية والمكتبية', 'code': 'STA-PEN'},
+            {'name': 'أدوات الرسم', 'parent': 'القرطاسية والمكتبية', 'code': 'STA-DRA'},
+            {'name': 'المستلزمات المكتبية', 'parent': 'القرطاسية والمكتبية', 'code': 'STA-OFF'},
         ]
         
         try:
@@ -90,8 +92,7 @@ class Category(models.Model):
                             name=cat_data['name'],
                             defaults={
                                 'description': f'تصنيف {cat_data["name"]}',
-                                'is_active': True,
-                                'code': cat_data.get('code')
+                                'is_active': True
                             }
                         )
                         created_categories[cat_data['name']] = category
@@ -106,8 +107,7 @@ class Category(models.Model):
                                 defaults={
                                     'parent': parent_category,
                                     'description': f'تصنيف فرعي: {cat_data["name"]}',
-                                    'is_active': True,
-                                    'code': cat_data.get('code')
+                                    'is_active': True
                                 }
                             )
                             created_categories[cat_data['name']] = category
@@ -117,7 +117,7 @@ class Category(models.Model):
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
-            logger.error(f"فشل في إنشاء التصنيفات الافتراضية: {e}")
+            logger.error(f"فشل في إنشاء تصنيفات الشركة: {e}")
             return False
 
 
@@ -126,8 +126,8 @@ class Unit(models.Model):
     نموذج وحدات القياس
     """
 
-    code = models.CharField(_("الكود"), max_length=10, unique=True, editable=False)
     name = models.CharField(_("اسم الوحدة"), max_length=50)
+    symbol = models.CharField(_("الرمز"), max_length=10)
     is_active = models.BooleanField(_("نشط"), default=True)
     created_at = models.DateTimeField(_("تاريخ الإنشاء"), auto_now_add=True)
     updated_at = models.DateTimeField(_("تاريخ التحديث"), auto_now=True)
@@ -137,32 +137,8 @@ class Unit(models.Model):
         verbose_name_plural = _("وحدات القياس")
         ordering = ["name"]
 
-    def save(self, *args, **kwargs):
-        """Generate automatic unit code if not provided"""
-        if not self.code:
-            # Get the last unit
-            last_unit = Unit.objects.order_by('-code').first()
-
-            if last_unit and last_unit.code:
-                try:
-                    # Extract number from last code (assuming format UNIT0001)
-                    if last_unit.code.startswith('UNIT'):
-                        last_number = int(last_unit.code.replace('UNIT', ''))
-                        new_number = last_number + 1
-                    else:
-                        new_number = 1
-                except (ValueError, AttributeError):
-                    new_number = 1
-            else:
-                new_number = 1
-
-            # Generate new code
-            self.code = f"UNIT{new_number:04d}"
-
-        super().save(*args, **kwargs)
-
     def __str__(self):
-        return self.name
+        return f"{self.name} ({self.symbol})"
 
 
 class Product(models.Model):
@@ -224,6 +200,14 @@ class Product(models.Model):
         verbose_name=_("أنشئ بواسطة"),
         related_name="products_created",
     )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name=_("عُدل بواسطة"),
+        related_name="products_updated",
+    )
 
     # المورد الافتراضي
     default_supplier = models.ForeignKey(
@@ -236,13 +220,13 @@ class Product(models.Model):
         help_text=_("المورد الافتراضي لهذا المنتج"),
     )
     
-    # حقول تصنيف المنتج
+    # أنواع المنتجات حسب الاستخدام
     ITEM_TYPES = [
-        ('product', _('منتج')),
-        ('service', _('خدمة')),
-        ('raw_material', _('مادة خام')),
-        ('equipment', _('معدات')),
-        ('office_supply', _('مستلزمات مكتبية')),
+        ('educational', _('مادة متخصصة')),
+        ('uniform', _('زي رسمي')),
+        ('stationery', _('قرطاسية')),
+        ('activity', _('نشاط')),
+        ('kitchen', _('مطبخ')),
         ('cleaning', _('نظافة')),
         ('medical', _('طبي')),
         ('general', _('عام')),
@@ -253,56 +237,51 @@ class Product(models.Model):
         max_length=20,
         choices=ITEM_TYPES,
         default='general',
-        help_text=_("تصنيف المنتج حسب النوع")
+        help_text=_("تصنيف المنتج حسب الاستخدام"),
     )
     
-    # معلومات إضافية للمنتج
-    product_size = models.CharField(
-        _("المقاس/الحجم"),
-        max_length=50,
+    # الفئة المستهدفة
+    suitable_for_grades = models.CharField(
+        _("الفئة المستهدفة"),
+        max_length=200,
         blank=True,
-        help_text=_("مقاس أو حجم المنتج (S, M, L, XL, إلخ)")
+        help_text=_("الفئة أو القسم المستهدف بهذا المنتج")
     )
-    product_color = models.CharField(
-        _("اللون"),
-        max_length=50,
+    
+    # معلومات إضافية للزي الرسمي
+    uniform_size = models.CharField(
+        _("مقاس الزي"),
+        max_length=20,
         blank=True,
-        help_text=_("لون المنتج")
+        help_text=_("مقاس الزي الرسمي (S, M, L, XL, إلخ)")
     )
-    product_material = models.CharField(
-        _("المادة/الخامة"),
+    uniform_gender = models.CharField(
+        _("جنس الزي"),
+        max_length=10,
+        choices=[('boys', _('رجالي')), ('girls', _('نسائي')), ('unisex', _('مشترك'))],
+        blank=True,
+        help_text=_("الجنس المخصص له الزي")
+    )
+    
+    # معلومات إضافية للمواد المتخصصة
+    educational_subject = models.CharField(
+        _("التخصص"),
         max_length=100,
         blank=True,
-        help_text=_("المادة أو الخامة المصنوع منها المنتج")
+        help_text=_("التخصص أو القسم المرتبط بهذا المنتج")
     )
     
     # معلومات السلامة والجودة
-    is_safe = models.BooleanField(
+    is_child_safe = models.BooleanField(
         _("آمن للاستخدام"),
         default=True,
-        help_text=_("هل المنتج آمن للاستخدام؟")
+        help_text=_("هل المنتج آمن للاستخدام العام؟")
     )
     quality_certificate = models.CharField(
         _("شهادة الجودة"),
         max_length=100,
         blank=True,
         help_text=_("شهادة الجودة أو المطابقة للمنتج")
-    )
-    
-    # معلومات البيع للعملاء
-    is_sold_to_customers = models.BooleanField(
-        _("يُباع للعملاء"),
-        default=True,
-        help_text=_("هل يمكن بيع هذا المنتج للعملاء؟")
-    )
-    customer_selling_price = models.DecimalField(
-        _("سعر البيع للعملاء"),
-        max_digits=12,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        validators=[MinValueValidator(0)],
-        help_text=_("سعر بيع المنتج للعملاء (إذا كان مختلفاً عن سعر البيع العادي)")
     )
     
     # حقل المنتجات المجمعة
@@ -349,6 +328,14 @@ class Product(models.Model):
         else:
             return "fa-box"
 
+    @property
+    def user(self):
+        """
+        Backward compatibility property for code that accesses product.user
+        Returns created_by for compatibility
+        """
+        return self.created_by
+    
     @property
     def current_stock(self):
         """
@@ -429,24 +416,47 @@ class Product(models.Model):
         from .supplier_pricing import SupplierProductPrice
         return SupplierProductPrice.objects.filter(product=self, is_active=True)
     
-    def get_customer_profit_margin(self):
-        """حساب هامش الربح من بيع المنتج للعملاء"""
-        if self.customer_selling_price and self.cost_price > 0:
-            return (self.customer_selling_price - self.cost_price) / self.cost_price * 100
-        return 0
+    # دوال خاصة بأنواع المنتجات
+    def is_educational_item(self):
+        """التحقق من كون المنتج مادة متخصصة (للتوافق مع الكود القديم)"""
+        return self.item_type == 'educational'
+    
+    def is_uniform_item(self):
+        """التحقق من كون المنتج زي رسمي (للتوافق مع الكود القديم)"""
+        return self.item_type == 'uniform'
+    
+    def is_suitable_for_grade(self, grade_level):
+        """التحقق من مناسبة المنتج لفئة معينة (للتوافق مع الكود القديم)"""
+        if not self.suitable_for_grades:
+            return True
+        return grade_level.lower() in self.suitable_for_grades.lower()
     
     def get_item_type_display_ar(self):
         """عرض نوع المنتج بالعربية"""
         return dict(self.ITEM_TYPES).get(self.item_type, self.item_type)
     
-    def get_product_info(self):
-        """الحصول على معلومات المنتج الإضافية"""
+    def get_uniform_info(self):
+        """الحصول على معلومات الزي الرسمي"""
+        if not self.is_uniform_item():
+            return None
+        
         return {
-            'size': self.product_size,
-            'color': self.product_color,
-            'material': self.product_material,
-            'is_safe': self.is_safe,
+            'size': self.uniform_size,
+            'gender': self.get_uniform_gender_display() if self.uniform_gender else None,
+            'suitable_for': self.suitable_for_grades,
             'quality_certificate': self.quality_certificate
+        }
+    
+    def get_educational_info(self):
+        """الحصول على معلومات المادة المتخصصة"""
+        if not self.is_educational_item():
+            return None
+        
+        return {
+            'subject': self.educational_subject,
+            'suitable_for': self.suitable_for_grades,
+            'quality_certificate': self.quality_certificate,
+            'is_safe': self.is_child_safe
         }
     
     @classmethod
@@ -458,10 +468,12 @@ class Product(models.Model):
         )
     
     @classmethod
-    def get_products_for_customers(cls):
-        """الحصول على المنتجات المتاحة للبيع للعملاء"""
+    def get_products_for_grade(cls, grade_level):
+        """الحصول على المنتجات المناسبة لفئة معينة"""
         return cls.objects.filter(
-            is_sold_to_customers=True,
+            models.Q(suitable_for_grades__icontains=grade_level) | 
+            models.Q(suitable_for_grades='') | 
+            models.Q(suitable_for_grades__isnull=True),
             is_active=True
         )
     
@@ -483,17 +495,17 @@ class Product(models.Model):
             
             # mapping للتصنيفات الموجودة
             arabic_to_english = {
-                'كتب ومواد تعليمية': 'EDU',
+                'كتب ومواد متخصصة': 'EDU',
                 'مستلزمات مكتبية': 'STA',
-                'الزي المدرسي': 'UNI',
-                'ألعاب تعليمية': 'TOY',
+                'الزي الرسمي': 'UNI',
+                'ألعاب وترفيه': 'TOY',
                 'خدمات': 'SRV',
                 'أخرى': 'OTH',
                 'سبلايز': 'SUP',
                 # إضافات للكلمات الشائعة
                 'كتب': 'BOO',
                 'مواد': 'MAT',
-                'تعليمية': 'EDU',
+                'متخصصة': 'EDU',
                 'مكتبية': 'OFF',
                 'الزي': 'UNI',
                 'ألعاب': 'TOY',
@@ -652,13 +664,8 @@ class ProductImage(models.Model):
         verbose_name = _("صورة منتج")
         verbose_name_plural = _("صور المنتجات")
         ordering = ["-is_primary", "created_at"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["product"],
-                condition=models.Q(is_primary=True),
-                name="unique_primary_image_per_product",
-            )
-        ]
+        # Note: UniqueConstraint with condition not supported in MariaDB
+        # Uniqueness is enforced in save() method instead
 
     def save(self, *args, **kwargs):
         # إذا كانت هذه الصورة رئيسية، تأكد من عدم وجود صورة رئيسية أخرى

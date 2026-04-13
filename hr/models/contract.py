@@ -4,6 +4,7 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.core.validators import FileExtensionValidator, MinValueValidator
+from django.utils import timezone
 from datetime import date, timedelta
 
 User = get_user_model()
@@ -26,6 +27,7 @@ class Contract(models.Model):
         ('suspended', 'موقوف'),
         ('expired', 'منتهي'),
         ('terminated', 'منهي'),
+        ('renewed', 'مجدد'),
     ]
     
     # معلومات العقد الأساسية
@@ -95,8 +97,28 @@ class Contract(models.Model):
     basic_salary = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        verbose_name='الراتب الأساسي',
-        validators=[MinValueValidator(0, message='الراتب الأساسي يجب أن يكون أكبر من أو يساوي صفر')]
+        verbose_name='الأجر الأساسي',
+        validators=[MinValueValidator(0, message='الأجر الأساسي يجب أن يكون أكبر من أو يساوي صفر')]
+    )
+    
+    # Social Insurance
+    is_social_insurance_enrolled = models.BooleanField(
+        default=False,
+        verbose_name='مسجل في التأمينات الاجتماعية'
+    )
+    social_insurance_number = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name='الرقم التأميني'
+    )
+    insurance_salary = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name='الأجر التأميني',
+        validators=[MinValueValidator(0)],
+        help_text='الأجر المسجل في التأمينات الاجتماعية'
     )
     
     # الزيادة السنوية التلقائية
@@ -111,11 +133,23 @@ class Contract(models.Model):
         ('contract_date', 'تاريخ العقد'),
         ('january', 'يناير'),
         ('july', 'يوليو'),
+        ('fiscal_year', 'بداية السنة المالية'),
+    ]
+    
+    INCREASE_TYPE_CHOICES = [
+        ('percentage', 'نسبة من الأجر الأساسي (%)'),
+        ('fixed', 'قيمة ثابتة (مبلغ)'),
     ]
     
     has_annual_increase = models.BooleanField(
         default=False,
         verbose_name='يستحق زيادة سنوية'
+    )
+    increase_type = models.CharField(
+        max_length=20,
+        choices=INCREASE_TYPE_CHOICES,
+        default='fixed',
+        verbose_name='نوع الزيادة'
     )
     annual_increase_percentage = models.DecimalField(
         max_digits=5,
@@ -124,6 +158,14 @@ class Contract(models.Model):
         blank=True,
         verbose_name='نسبة الزيادة السنوية (%)',
         help_text='مثال: 10 تعني 10% سنوياً'
+    )
+    annual_increase_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name='قيمة الزيادة الثابتة',
+        help_text='مثال: 500 تعني زيادة 500 جنيه'
     )
     increase_frequency = models.CharField(
         max_length=20,
@@ -194,8 +236,8 @@ class Contract(models.Model):
     notes = models.TextField(blank=True, verbose_name='ملاحظات')
     
     # التواريخ والمستخدمين
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name='تاريخ الإنشاء')
-    updated_at = models.DateTimeField(auto_now=True, verbose_name='تاريخ التحديث')
+    created_at = models.DateTimeField(default=timezone.now, verbose_name='تاريخ الإنشاء')
+    updated_at = models.DateTimeField(default=timezone.now, verbose_name='تاريخ التحديث')
     created_by = models.ForeignKey(
         User,
         on_delete=models.PROTECT,
@@ -257,15 +299,19 @@ class Contract(models.Model):
         
         # Validate basic salary > 0
         if self.basic_salary and self.basic_salary <= 0:
-            errors['basic_salary'] = 'الراتب الأساسي يجب أن يكون أكبر من صفر'
+            errors['basic_salary'] = 'الأجر الأساسي يجب أن يكون أكبر من صفر'
         
         if errors:
             raise ValidationError(errors)
         
+        # تخطي validation التداخل في حالة التجديد
+        if hasattr(self, '_skip_overlap_validation') and self._skip_overlap_validation:
+            return
+        
         # منع تداخل العقود (إلا إذا كان العقد الحالي منتهي أو منهي أو موقوف)
         if self.employee_id and self.start_date:
             # الحالات المسموح بها للعقود المتداخلة
-            allowed_statuses = ['expired', 'terminated', 'suspended']
+            allowed_statuses = ['expired', 'terminated', 'suspended', 'renewed']
             
             # البحث عن عقود متداخلة
             overlapping_contracts = Contract.objects.filter(
@@ -307,7 +353,13 @@ class Contract(models.Model):
     
     def calculate_next_increase_date(self):
         """حساب تاريخ الزيادة القادمة"""
-        if not self.has_annual_increase or not self.annual_increase_percentage:
+        if not self.has_annual_increase:
+            return None
+        
+        # التحقق من وجود نسبة أو مبلغ حسب النوع
+        if self.increase_type == 'percentage' and not self.annual_increase_percentage:
+            return None
+        if self.increase_type == 'fixed' and not self.annual_increase_amount:
             return None
         
         if not self.start_date:
@@ -322,12 +374,15 @@ class Contract(models.Model):
             # إذا كان يناير فات، استخدم السنة الجاية
             if base_date < self.start_date:
                 base_date = date(current_year + 1, 1, 1)
-        else:  # july
+        elif self.increase_start_reference == 'july':
             current_year = date.today().year
             base_date = date(current_year, 7, 1)
             # إذا كان يوليو فات، استخدم السنة الجاية
             if base_date < self.start_date:
                 base_date = date(current_year + 1, 7, 1)
+        else:  # fiscal_year
+            # fallback: استخدم تاريخ العقد (السنة المالية غير متوفرة)
+            base_date = self.start_date
         
         # حساب الفترة بالأشهر
         months_map = {
@@ -373,8 +428,11 @@ class Contract(models.Model):
             return next_date
     
     def save(self, *args, **kwargs):
-        # التحقق من صحة البيانات
-        self.clean()
+        # تخطي validation إذا كنا بنحدث حقول محددة فقط
+        # هذا مهم عند تحويل العقد لحالة "renewed" في التجديد
+        if 'update_fields' not in kwargs or kwargs.get('update_fields') is None:
+            # التحقق من صحة البيانات فقط إذا لم نحدد update_fields
+            self.clean()
         
         # حساب تاريخ انتهاء التجربة
         if self.start_date and self.probation_period_months:
@@ -441,32 +499,41 @@ class Contract(models.Model):
     
     @property
     def total_earnings(self):
-        """إجمالي المستحقات - محسن لمنع التكرار"""
+        """إجمالي المستحقات - للعقود النشطة من بنود الموظف، للمسودات من بنود العقد مباشرة"""
         from decimal import Decimal
-        # جلب البنود النشطة فقط
-        earnings = self.employee.salary_components.filter(
-            component_type='earning',
-            is_active=True
-        )
-        # لا حاجة للتحقق من التكرار لأنه مستحيل الآن مع UniqueConstraint
-        return sum(Decimal(str(component.amount)) for component in earnings)
-    
+        if self.status == 'active':
+            # العقد مفعّل: اقرأ من بنود الموظف المنسوخة
+            earnings = self.employee.salary_components.filter(
+                component_type='earning',
+                is_active=True
+            ).exclude(code='INSURABLE_SALARY')
+            return sum(Decimal(str(component.amount)) for component in earnings)
+        else:
+            # مسودة أو غير مفعّل: احسب من بنود العقد مباشرة
+            earnings = self.salary_components.filter(
+                component_type='earning'
+            ).exclude(code='INSURABLE_SALARY')
+            return sum(Decimal(str(component.amount)) for component in earnings)
+
     @property
     def total_deductions(self):
-        """إجمالي الاستقطاعات - محسن لمنع التكرار"""
+        """إجمالي الاستقطاعات - للعقود النشطة من بنود الموظف، للمسودات من بنود العقد مباشرة"""
         from decimal import Decimal
-        # جلب البنود النشطة فقط
-        deductions = self.employee.salary_components.filter(
-            component_type='deduction',
-            is_active=True
-        )
-        return sum(Decimal(str(component.amount)) for component in deductions)
-    
+        if self.status == 'active':
+            deductions = self.employee.salary_components.filter(
+                component_type='deduction',
+                is_active=True
+            )
+            return sum(Decimal(str(component.amount)) for component in deductions)
+        else:
+            deductions = self.salary_components.filter(component_type='deduction')
+            return sum(Decimal(str(component.amount)) for component in deductions)
+
     @property
     def net_salary(self):
         """صافي الراتب"""
         return self.total_earnings - self.total_deductions
-    
+
     def terminate(self, termination_date=None):
         """إنهاء العقد"""
         self.status = 'terminated'
@@ -828,10 +895,6 @@ class ContractIncrease(models.Model):
                     'increase': increase_amount
                 })
                 
-                logger.info(
-                    f"✅ Updated {component.name}: {old_amount} → {new_amount} "
-                    f"(+{increase_amount})"
-                )
             
             # Update basic salary (for backward compatibility)
             old_basic = self.contract.basic_salary
@@ -872,10 +935,6 @@ class ContractIncrease(models.Model):
             self.amendment = amendment
             self.save()
             
-            logger.info(
-                f"✅ Increase applied successfully: {total_increase} جنيه "
-                f"on total earnings {total_earnings_before}"
-            )
             
             return True, f"تم تطبيق الزيادة بنجاح: {total_increase} جنيه على جميع المستحقات"
     

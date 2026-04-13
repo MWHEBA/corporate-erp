@@ -22,17 +22,18 @@ class EntityAccountMapper:
     # خريطة أنواع الكيانات إلى حقول الحسابات المحاسبية
     # يحدد هذا القاموس اسم الحقل الذي يحتوي على الحساب المحاسبي لكل نوع كيان
     ENTITY_ACCOUNT_FIELDS = {
+        # العملاء
+        'customer': 'financial_account',  # Customer.financial_account
+
         # الموردين
         'supplier': 'financial_account',  # Supplier.financial_account
-        
+
         # الموظفين - لا يحتاجون حساب محاسبي منفصل
-        # الرواتب تُسجل في حساب محاسبي واحد للشركة (مستحقات الرواتب)
         'employee': None,
     }
-    
-    # خريطة أسماء النماذج إلى أنواع الكيانات
-    # تستخدم للاستنتاج التلقائي لنوع الكيان من النموذج
+
     MODEL_TO_ENTITY_TYPE = {
+        'Customer': 'customer',
         'Supplier': 'supplier',
         'Employee': 'employee',
     }
@@ -43,7 +44,7 @@ class EntityAccountMapper:
         الحصول على الحساب المحاسبي للكيان
         
         Args:
-            entity: الكيان المالي (مثل Supplier, Employee, إلخ)
+            entity: الكيان المالي (مثل Customer, Supplier, Employee, إلخ)
             entity_type: نوع الكيان (اختياري، يُستنتج تلقائياً إذا لم يُحدد)
             account_field: حقل الحساب المحدد (اختياري، للحصول على حساب بديل)
             
@@ -54,6 +55,10 @@ class EntityAccountMapper:
             >>> supplier = Supplier.objects.get(id=1)
             >>> account = EntityAccountMapper.get_account(supplier, 'supplier')
             >>> # يعيد supplier.financial_account
+            
+            >>> fee_type = FeeType.objects.get(id=1)
+            >>> revenue_account = EntityAccountMapper.get_account(fee_type)
+            >>> # يعيد fee_type.get_revenue_account() (من التصنيف المالي)
         """
         if entity is None:
             logger.warning("تم تمرير كيان None إلى get_account")
@@ -84,8 +89,8 @@ class EntityAccountMapper:
         if account_field_path is None:
             logger.debug(f"لا يوجد حساب محاسبي محدد لنوع الكيان: {entity_type}")
             return None
-        
-        # التعامل مع المسارات المتداخلة (مثل parent.financial_account)
+
+        # التعامل مع المسارات المتداخلة
         try:
             account = entity
             for field_name in account_field_path.split('.'):
@@ -156,6 +161,20 @@ class EntityAccountMapper:
             
         Returns:
             dict: معلومات الكيان والحساب المحاسبي
+            
+        Example:
+            >>> supplier = Supplier.objects.get(id=1)
+            >>> info = EntityAccountMapper.get_entity_info(supplier)
+            >>> print(info)
+            {
+                'entity': <Supplier object>,
+                'entity_type': 'supplier',
+                'entity_name': 'شركة المورد',
+                'model_name': 'Supplier',
+                'account': <ChartOfAccounts object>,
+                'account_field_path': 'financial_account',
+                'has_account': True
+            }
         """
         # استنتاج نوع الكيان إذا لم يُحدد
         if entity_type is None:
@@ -194,6 +213,12 @@ class EntityAccountMapper:
             
         Returns:
             tuple: (is_valid: bool, message: str)
+            
+        Example:
+            >>> supplier = Supplier.objects.get(id=1)
+            >>> is_valid, message = EntityAccountMapper.validate_entity_account(supplier)
+            >>> if not is_valid:
+            ...     print(message)
         """
         if entity is None:
             return False, "الكيان غير موجود"
@@ -243,41 +268,6 @@ class EntityAccountMapper:
         return entity_type in cls.ENTITY_ACCOUNT_FIELDS
     
     @classmethod
-    def get_fee_type_accounts(cls, fee_type) -> dict:
-        """
-        الحصول على جميع الحسابات المحاسبية لنوع الرسوم
-        
-        Args:
-            fee_type: كيان FeeType
-            
-        Returns:
-            dict: قاموس يحتوي على الحسابات المحاسبية
-            {
-                'revenue_account': ChartOfAccounts or None,
-                'treasury_account': ChartOfAccounts or None
-            }
-            
-        Example:
-            >>> fee_type = FeeType.objects.get(id=1)
-            >>> accounts = EntityAccountMapper.get_fee_type_accounts(fee_type)
-            >>> print(accounts['revenue_account'])  # حساب الإيرادات (من التصنيف المالي)
-            >>> print(accounts['treasury_account'])  # حساب الخزنة
-        """
-        if fee_type is None:
-            return {'revenue_account': None, 'treasury_account': None}
-        
-        # التحقق من أن الكيان هو FeeType
-        entity_type = cls.detect_entity_type(fee_type)
-        if entity_type != 'fee_type':
-            logger.warning(f"الكيان ليس من نوع FeeType: {type(fee_type).__name__}")
-            return {'revenue_account': None, 'treasury_account': None}
-        
-        return {
-            'revenue_account': cls.get_account(fee_type, 'fee_type'),  # يستخدم get_revenue_account()
-            'treasury_account': None  # TODO: يمكن إضافة منطق للحصول من التصنيف المالي
-        }
-
-    @classmethod
     def get_entity_by_type(cls, entity_type: str, entity_id: int):
         """
         الحصول على الكيان حسب النوع والمعرف
@@ -293,19 +283,15 @@ class EntityAccountMapper:
             if entity_type == 'customer':
                 from client.models import Customer
                 return Customer.objects.get(id=entity_id)
-            
+
             elif entity_type == 'supplier':
                 from supplier.models import Supplier
                 return Supplier.objects.get(id=entity_id)
-            
+
             elif entity_type == 'employee':
                 from hr.models import Employee
                 return Employee.objects.get(id=entity_id)
-            
-            elif entity_type == 'product':
-                from product.models import Product
-                return Product.objects.get(id=entity_id)
-            
+
             else:
                 logger.warning(f"نوع كيان غير مدعوم: {entity_type}")
                 return None

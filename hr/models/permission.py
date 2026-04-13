@@ -82,7 +82,6 @@ class PermissionRequest(models.Model):
     
     # السبب
     reason = models.TextField(verbose_name='السبب')
-    is_emergency = models.BooleanField(default=False, verbose_name='ظرف طارئ')
     
     # سير العمل
     status = models.CharField(
@@ -94,6 +93,7 @@ class PermissionRequest(models.Model):
     
     # المراجعة
     requested_at = models.DateTimeField(auto_now_add=True, verbose_name='تاريخ الطلب')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='تاريخ آخر تعديل')
     requested_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
@@ -142,6 +142,17 @@ class PermissionRequest(models.Model):
         verbose_name='سجل الحضور'
     )
     
+    is_extra = models.BooleanField(default=False, verbose_name='إذن إضافي')
+    deduction_hours = models.DecimalField(
+        max_digits=4, decimal_places=2, null=True, blank=True,
+        verbose_name='ساعات الخصم'
+    )
+    is_deduction_exempt = models.BooleanField(
+        default=False,
+        verbose_name='معفي من الخصم',
+        help_text='تسجيل التأخير/الإذن بدون خصم مالي'
+    )
+    
     class Meta:
         verbose_name = 'إذن'
         verbose_name_plural = 'الأذونات'
@@ -154,12 +165,18 @@ class PermissionRequest(models.Model):
             ("can_approve_permissions", "اعتماد الأذونات"),
             ("can_view_all_permissions", "عرض جميع الأذونات"),
         ]
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(duration_hours__lte=8) & models.Q(duration_hours__gt=0),
+                name='permission_duration_valid'
+            ),
+        ]
     
     def __str__(self):
         return f"{self.employee.get_full_name_ar()} - {self.permission_type.name_ar} ({self.date})"
     
     def clean(self):
-        """التحقق من صحة البيانات"""
+        """التحقق من صحة البيانات الأساسية فقط - الحصة يتم التحقق منها عبر Signal"""
         from datetime import date
         errors = {}
         
@@ -173,33 +190,29 @@ class PermissionRequest(models.Model):
             end_datetime = datetime.combine(date.today(), self.end_time)
             duration = (end_datetime - start_datetime).total_seconds() / 3600
             
-            # التحقق من الحد الأقصى للإذن الواحد
-            if self.permission_type_id:
+            # التحقق من الحد الأقصى للإذن الواحد (لا ينطبق على الأذونات الإضافية)
+            if not self.is_extra and hasattr(self, 'permission_type') and self.permission_type_id:
                 max_hours = float(self.permission_type.max_hours_per_request)
                 if duration > max_hours:
                     errors['end_time'] = f'المدة تتجاوز الحد الأقصى ({max_hours} ساعة)'
         
         # التحقق من التاريخ
         if self.date:
-            # لا يمكن طلب إذن في الماضي البعيد (أكثر من 7 أيام)
+            # لا يمكن إدخال إذن قبل 26 من الشهر السابق
             if self.date < date.today() and not self.pk:
-                days_past = (date.today() - self.date).days
-                if days_past > 7:
-                    errors['date'] = 'لا يمكن طلب إذن قبل أكثر من 7 أيام'
+                from hr.utils import validate_entry_date
+                errors.update(validate_entry_date(self.date, 'date'))
         
-        # التحقق من الحصة الشهرية (on-the-fly)
-        if self.employee_id and self.date and not self.pk:
-            usage = self.get_monthly_usage(self.employee, self.date)
-            
-            # الحد الأقصى للأذونات الشهرية (4 أذونات)
-            if usage['total_count'] >= 4:
-                errors['date'] = 'تجاوزت الحد الأقصى للأذونات الشهرية (4 أذونات)'
-            
-            # الحد الأقصى لساعات الأذونات الشهرية (12 ساعة)
-            if self.duration_hours:
-                total_hours = (usage['total_hours'] or 0) + float(self.duration_hours)
-                if total_hours > 12:
-                    errors['duration_hours'] = f'تجاوزت الحد الأقصى لساعات الأذونات الشهرية (12 ساعة). المتبقي: {12 - (usage["total_hours"] or 0)} ساعة'
+        # التحقق من الأذونات الإضافية
+        if self.is_extra:
+            # لو مش معفي من الخصم، لازم يحدد ساعات الخصم
+            if not self.is_deduction_exempt:
+                if not self.deduction_hours or self.deduction_hours <= 0:
+                    errors['deduction_hours'] = 'يجب تحديد ساعات الخصم للأذونات الإضافية (أو تفعيل "معفي من الخصم")'
+        
+        # لو معفي من الخصم، نتأكد إن deduction_hours = 0
+        if self.is_deduction_exempt and self.deduction_hours and self.deduction_hours > 0:
+            errors['deduction_hours'] = 'لا يمكن تحديد ساعات خصم مع تفعيل "معفي من الخصم"'
         
         if errors:
             raise ValidationError(errors)
@@ -217,18 +230,22 @@ class PermissionRequest(models.Model):
     def get_monthly_usage(employee, month_date):
         """
         حساب الاستخدام الشهري للأذونات - بدلاً من PermissionQuota Model
+        الفلترة بالفترة الفعلية للدورة بدل الشهر الميلادي.
         
         Args:
             employee: الموظف
-            month_date: تاريخ في الشهر المطلوب
+            month_date: أول يوم في الشهر الأساسي للدورة
         
         Returns:
             dict: إجمالي العدد والساعات
         """
+        from hr.utils.payroll_helpers import get_payroll_period
+        period_start, period_end, _ = get_payroll_period(month_date)
+
         result = PermissionRequest.objects.filter(
             employee=employee,
-            date__year=month_date.year,
-            date__month=month_date.month,
+            date__gte=period_start,
+            date__lte=period_end,
             status='approved'
         ).aggregate(
             total_count=Count('id'),

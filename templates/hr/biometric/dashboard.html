@@ -55,6 +55,7 @@
 
 {% block content %}
 <div class="container-fluid">
+    {% csrf_token %}
     <!-- Page Header المركزي -->
     {% include "shared/page_header.html" %}
 
@@ -542,5 +543,49 @@ document.addEventListener('DOMContentLoaded', function() {
         location.reload();
     }, 30000);
 });
+
+function resetCurrentMonthProcessing() {
+    const now = new Date();
+    const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const monthDisplay = now.toLocaleString('ar-EG', { month: 'long', year: 'numeric' });
+
+    Swal.fire({
+        title: 'إعادة تعيين معالجة الشهر الحالي',
+        html: `سيتم إعادة تعيين علامات المعالجة لجميع بصمات <strong>${monthDisplay}</strong><br>
+               <small class="text-muted">يمكنك بعدها إعادة المعالجة من الصفر</small>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'نعم، إعادة التعيين',
+        cancelButtonText: 'إلغاء',
+        confirmButtonColor: '#f0ad4e',
+    }).then((result) => {
+        if (!result.isConfirmed) return;
+
+        fetch("{% url 'hr:api_reset_month_processing' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken'),
+            },
+            body: JSON.stringify({ month: monthStr })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                toastr.success(data.message);
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                toastr.error(data.error || 'حدث خطأ');
+            }
+        })
+        .catch(() => toastr.error('فشل الاتصال بالخادم'));
+    });
+}
+
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+}
 </script>
 {% endblock %}

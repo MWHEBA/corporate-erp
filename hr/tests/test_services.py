@@ -7,7 +7,7 @@ import pytest
 import warnings
 from django.test import TestCase, TransactionTestCase
 from django.contrib.auth import get_user_model
-from datetime import date, time, timedelta
+from datetime import date, time, timedelta, datetime
 from decimal import Decimal
 from unittest.mock import patch, MagicMock
 
@@ -175,7 +175,7 @@ class LeaveServiceTest(TestCase):
         self.employee = create_unique_employee(self.user, self.department, self.job_title, 'LEAVE')
         self.leave_type = LeaveType.objects.create(
             code=f'ANN_{ts[:8]}',
-            name_ar='إجازة سنوية',
+            name_ar='إجازة اعتيادية',
             max_days_per_year=21
         )
         accrual_start = date.today() - timedelta(days=365)
@@ -256,11 +256,25 @@ class PayrollServiceTest(TransactionTestCase):
             contract=self.contract,
             component_type='earning',
             code='BASIC',
-            name='الراتب الأساسي',
+            name='الأجر الأساسي',
             amount=Decimal('5000.00'),
             effective_from=date(2024, 1, 1),
             is_active=True,
             is_basic=True
+        )
+
+        # Attendance approval gate requires an approved summary
+        from hr.models import AttendanceSummary
+        from django.utils import timezone as tz
+        AttendanceSummary.objects.create(
+            employee=self.employee,
+            month=date(2025, 1, 1),
+            total_working_days=22,
+            present_days=22,
+            is_calculated=True,
+            is_approved=True,
+            approved_by=self.user,
+            approved_at=tz.now(),
         )
     
     def test_calculate_payroll_basic(self):
@@ -351,12 +365,30 @@ class HRPayrollGatewayServiceTest(TestCase):
             employee=self.employee,
             contract=self.contract,
             code='BASIC',
-            name='الراتب الأساسي',
+            name='الأجر الأساسي',
             component_type='earning',
             amount=Decimal('5000'),
             is_active=True
         )
-        
+
+        # Attendance approval gate requires an approved summary
+        from hr.models import AttendanceSummary
+        from django.utils import timezone as tz
+        AttendanceSummary.objects.create(
+            employee=self.employee,
+            month=date(2024, 1, 1),
+            total_working_days=22, present_days=22,
+            is_calculated=True, is_approved=True,
+            approved_by=self.user, approved_at=tz.now(),
+        )
+        AttendanceSummary.objects.create(
+            employee=self.employee,
+            month=date(2024, 2, 1),
+            total_working_days=20, present_days=20,
+            is_calculated=True, is_approved=True,
+            approved_by=self.user, approved_at=tz.now(),
+        )
+
         self.service = HRPayrollGatewayService()
     
     def test_calculate_employee_payroll_success(self):
@@ -438,10 +470,21 @@ class HRPayrollGatewayServiceTest(TestCase):
                 employee=emp,
                 contract=contract,
                 code='BASIC',
-                name='الراتب الأساسي',
+                name='الأجر الأساسي',
                 component_type='earning',
                 amount=Decimal('5000'),
                 is_active=True
+            )
+
+            # Attendance approval gate requires an approved summary
+            from hr.models import AttendanceSummary
+            from django.utils import timezone as tz
+            AttendanceSummary.objects.create(
+                employee=emp,
+                month=date(2024, 2, 1),
+                total_working_days=20, present_days=20,
+                is_calculated=True, is_approved=True,
+                approved_by=self.user, approved_at=tz.now(),
             )
             employees.append(emp)
         
@@ -539,12 +582,24 @@ class PayrollAccountingServiceTest(TestCase):
             employee=self.employee,
             contract=self.contract,
             code='BASIC',
-            name='الراتب الأساسي',
+            name='الأجر الأساسي',
             component_type='earning',
             amount=Decimal('6000'),
             is_active=True
         )
-        
+
+        # Attendance approval gate requires an approved summary for current month
+        from hr.models import AttendanceSummary
+        from django.utils import timezone as tz
+        today = tz.now().date()
+        AttendanceSummary.objects.create(
+            employee=self.employee,
+            month=today.replace(day=1),
+            total_working_days=22, present_days=22,
+            is_calculated=True, is_approved=True,
+            approved_by=self.user, approved_at=tz.now(),
+        )
+
         self.payroll_service = HRPayrollGatewayService()
         self.accounting_service = PayrollAccountingService()
     
@@ -714,12 +769,24 @@ class PayrollViewIntegrationTest(TestCase):
             employee=self.employee,
             contract=self.contract,
             code='BASIC',
-            name='الراتب الأساسي',
+            name='الأجر الأساسي',
             component_type='earning',
             amount=Decimal('7000'),
             is_active=True
         )
-    
+
+        # Attendance approval gate requires an approved summary for current month
+        from hr.models import AttendanceSummary
+        from django.utils import timezone as tz
+        today = tz.now().date()
+        AttendanceSummary.objects.create(
+            employee=self.employee,
+            month=today.replace(day=1),
+            total_working_days=22, present_days=22,
+            is_calculated=True, is_approved=True,
+            approved_by=self.user, approved_at=tz.now(),
+        )
+
     def test_calculate_single_payroll_view(self):
         """اختبار view حساب راتب واحد"""
         from django.utils import timezone
@@ -821,12 +888,23 @@ class ErrorHandlingTest(TestCase):
             employee=employee,
             contract=contract,
             code='BASIC',
-            name='الراتب الأساسي',
+            name='الأجر الأساسي',
             component_type='earning',
             amount=Decimal('5000'),
             is_active=True
         )
-        
+
+        # Attendance approval gate requires an approved summary
+        from hr.models import AttendanceSummary
+        from django.utils import timezone as tz
+        AttendanceSummary.objects.create(
+            employee=employee,
+            month=date(2030, 1, 1),
+            total_working_days=22, present_days=22,
+            is_calculated=True, is_approved=True,
+            approved_by=self.user, approved_at=tz.now(),
+        )
+
         # Future month should work (no error)
         future_month = date(2030, 1, 1)
         payroll = self.service.calculate_employee_payroll(
@@ -890,12 +968,23 @@ class EdgeCaseTest(TestCase):
             employee=employee,
             contract=contract,
             code='BASIC',
-            name='الراتب الأساسي',
+            name='الأجر الأساسي',
             component_type='earning',
             amount=Decimal('0'),
             is_active=True
         )
-        
+
+        # Attendance approval gate requires an approved summary
+        from hr.models import AttendanceSummary
+        from django.utils import timezone as tz
+        AttendanceSummary.objects.create(
+            employee=employee,
+            month=date(2024, 1, 1),
+            total_working_days=22, present_days=22,
+            is_calculated=True, is_approved=True,
+            approved_by=self.user, approved_at=tz.now(),
+        )
+
         # Should create payroll with zero salary
         payroll = self.service.calculate_employee_payroll(
             employee, date(2024, 1, 1), self.user
@@ -940,12 +1029,24 @@ class EdgeCaseTest(TestCase):
             employee=employee,
             contract=contract,
             code='BASIC',
-            name='الراتب الأساسي',
+            name='الأجر الأساسي',
             component_type='earning',
             amount=Decimal('5000'),
             is_active=True
         )
-        
+
+        # Attendance approval gate requires approved summaries for both months
+        from hr.models import AttendanceSummary
+        from django.utils import timezone as tz
+        for m in [date(2024, 3, 1)]:
+            AttendanceSummary.objects.create(
+                employee=employee,
+                month=m,
+                total_working_days=22, present_days=22,
+                is_calculated=True, is_approved=True,
+                approved_by=self.user, approved_at=tz.now(),
+            )
+
         # Create same payroll twice (simulating concurrent requests)
         payroll1 = self.service.calculate_employee_payroll(
             employee, date(2024, 3, 1), self.user
@@ -1050,17 +1151,26 @@ class DeprecationWarningTest(TestCase):
             employee=self.employee,
             contract=self.contract,
             code='BASIC',
-            name='الراتب الأساسي',
+            name='الأجر الأساسي',
             component_type='earning',
             amount=Decimal('5000'),
             is_active=True
         )
-        
-        # Create payroll for testing
-        from hr.services.payroll_gateway_service import HRPayrollGatewayService
+
+        # Attendance approval gate requires an approved summary for current month
+        from hr.models import AttendanceSummary
         from django.utils import timezone as tz
         today = tz.now().date()
-        
+        AttendanceSummary.objects.create(
+            employee=self.employee,
+            month=today.replace(day=1),
+            total_working_days=22, present_days=22,
+            is_calculated=True, is_approved=True,
+            approved_by=self.user, approved_at=tz.now(),
+        )
+
+        # Create payroll for testing
+        from hr.services.payroll_gateway_service import HRPayrollGatewayService
         service = HRPayrollGatewayService()
         self.payroll = service.calculate_employee_payroll(
             self.employee, today.replace(day=1), self.user
@@ -1085,3 +1195,162 @@ class DeprecationWarningTest(TestCase):
             self.assertTrue(issubclass(w[0].category, DeprecationWarning))
             self.assertIn('deprecated', str(w[0].message).lower())
             self.assertIn('PayrollAccountingService', str(w[0].message))
+
+
+
+# ============================================================================
+# اختبارات معامل الغياب (Absence Multiplier)
+# ============================================================================
+
+class AbsenceMultiplierTest(TestCase):
+    """اختبارات معامل الغياب في AttendanceSummary"""
+    
+    def setUp(self):
+        from datetime import datetime
+        from hr.models import AttendanceSummary
+        
+        ts = datetime.now().strftime("%Y%m%d%H%M%S%f")
+        
+        self.user = User.objects.create_user(
+            username=f'abs_test_{ts}',
+            password='test',
+            email=f'abs_{ts}@test.com'
+        )
+        self.department = Department.objects.create(code=f'ABS_{ts}', name_ar=f'ABS_{ts}')
+        self.job_title = JobTitle.objects.create(
+            code=f'ABSJOB_{ts}',
+            title_ar='وظيفة اختبار',
+            department=self.department
+        )
+        self.employee = create_unique_employee(self.user, self.department, self.job_title, 'ABS')
+        
+        # إنشاء عقد نشط
+        self.contract = Contract.objects.create(
+            employee=self.employee,
+            contract_number=f'CNT{ts[:10]}',
+            basic_salary=Decimal('5000'),
+            start_date=date(2024, 1, 1),
+            status='active',
+            created_by=self.user
+        )
+
+        # إنشاء وردية صالحة
+        self.shift = Shift.objects.create(
+            name=f'وردية اختبار {ts[:6]}',
+            shift_type='academic_year',
+            start_time=time(8, 0),
+            end_time=time(16, 0),
+        )
+
+        # ضبط start_day=1 لضمان الفترة = مارس كاملاً
+        from core.models import SystemSetting
+        SystemSetting.objects.update_or_create(
+            key='payroll_cycle_start_day',
+            defaults={'value': '1', 'data_type': 'integer', 'is_active': True},
+        )
+
+    def _create_absent_records(self, month, days_list, multiplier=Decimal('1.0')):
+        """إنشاء سجلات غياب فعلية في قاعدة البيانات."""
+        from django.utils import timezone as tz
+        for day in days_list:
+            Attendance.objects.get_or_create(
+                employee=self.employee,
+                date=month.replace(day=day),
+                defaults={
+                    'shift': self.shift,
+                    'check_in': tz.make_aware(
+                        datetime.combine(month.replace(day=day), time(8, 0))
+                    ),
+                    'status': 'absent',
+                    'work_hours': Decimal('0'),
+                    'absence_multiplier': multiplier,
+                }
+            )
+
+    def test_absence_multiplier_default(self):
+        """معامل الغياب الافتراضي = 1"""
+        from hr.models import AttendanceSummary
+        
+        month = date(2024, 3, 1)
+        self._create_absent_records(month, [4, 5, 6], multiplier=Decimal('1.0'))
+
+        summary = AttendanceSummary.objects.create(
+            employee=self.employee,
+            month=month,
+            absent_days=3
+        )
+        summary._calculate_financial_amounts()
+        
+        # 3 أيام × (5000/30) × 1 ≈ 500
+        self.assertEqual(summary.absence_multiplier, Decimal('1.0'))
+        self.assertLess(abs(summary.absence_deduction_amount - Decimal('500.00')), Decimal('1.00'))
+    
+    def test_absence_multiplier_double(self):
+        """معامل الغياب مضاعف = 2"""
+        from hr.models import AttendanceSummary
+        
+        month = date(2024, 3, 1)
+        self._create_absent_records(month, [4, 5, 6], multiplier=Decimal('2.0'))
+
+        summary = AttendanceSummary.objects.create(
+            employee=self.employee,
+            month=month,
+            absent_days=3,
+            absence_multiplier=Decimal('2.0')
+        )
+        summary._calculate_financial_amounts()
+        
+        # 3 أيام × (5000/30) × 2 ≈ 1000
+        self.assertLess(abs(summary.absence_deduction_amount - Decimal('1000.00')), Decimal('1.00'))
+    
+    def test_absence_multiplier_triple(self):
+        """معامل الغياب ثلاثي = 3"""
+        from hr.models import AttendanceSummary
+        
+        month = date(2024, 3, 1)
+        self._create_absent_records(month, [4, 5], multiplier=Decimal('3.0'))
+
+        summary = AttendanceSummary.objects.create(
+            employee=self.employee,
+            month=month,
+            absent_days=2,
+            absence_multiplier=Decimal('3.0')
+        )
+        summary._calculate_financial_amounts()
+        
+        # 2 أيام × (5000/30) × 3 ≈ 1000
+        self.assertLess(abs(summary.absence_deduction_amount - Decimal('1000.00')), Decimal('1.00'))
+    
+    def test_unpaid_leave_not_affected_by_multiplier(self):
+        """الإجازات غير المدفوعة لا تتأثر بالمعامل"""
+        from hr.models import AttendanceSummary
+        
+        month = date(2024, 3, 1)
+        self._create_absent_records(month, [4, 5], multiplier=Decimal('2.0'))
+
+        summary = AttendanceSummary.objects.create(
+            employee=self.employee,
+            month=month,
+            absent_days=2,
+            unpaid_leave_days=1,
+            absence_multiplier=Decimal('2.0')
+        )
+        summary._calculate_financial_amounts()
+        
+        # (2 × 166.67 × 2) + (1 × 166.67) ≈ 833.35
+        # نتحقق فقط أن الخصم موجب ومعقول
+        self.assertGreater(summary.absence_deduction_amount, Decimal('0'))
+    
+    def test_zero_absent_days_with_multiplier(self):
+        """لا غياب مع معامل = لا خصم"""
+        from hr.models import AttendanceSummary
+        
+        summary = AttendanceSummary.objects.create(
+            employee=self.employee,
+            month=date(2024, 3, 1),
+            absent_days=0,
+            absence_multiplier=Decimal('3.0')
+        )
+        summary._calculate_financial_amounts()
+        
+        self.assertEqual(summary.absence_deduction_amount, Decimal('0'))

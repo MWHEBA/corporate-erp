@@ -33,8 +33,9 @@ class ContractForm(forms.ModelForm):
         fields = ['contract_number', 'employee', 'contract_type', 'job_title', 'department',
                   'biometric_user_id', 'start_date', 'end_date', 
                   'probation_period_months', 'basic_salary',
-                  'has_annual_increase', 'annual_increase_percentage', 
-                  'increase_frequency', 'increase_start_reference',
+                  'is_social_insurance_enrolled', 'social_insurance_number', 'insurance_salary',
+                  'has_annual_increase', 'increase_type', 'annual_increase_percentage', 
+                  'annual_increase_amount', 'increase_frequency', 'increase_start_reference',
                   'auto_renew', 'terms_and_conditions', 'status', 'notes']
         widgets = {
             'contract_number': forms.TextInput(attrs={
@@ -75,8 +76,26 @@ class ContractForm(forms.ModelForm):
             }),
             'probation_period_months': forms.NumberInput(attrs={'class': 'form-control', 'value': '3'}),
             'basic_salary': forms.NumberInput(attrs={'class': 'form-control', 'id': 'id_basic_salary', 'step': '1'}),
+            'is_social_insurance_enrolled': forms.CheckboxInput(attrs={
+                'class': 'form-check-input',
+                'id': 'id_is_social_insurance_enrolled'
+            }),
+            'social_insurance_number': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'أدخل الرقم التأميني',
+                'id': 'id_social_insurance_number'
+            }),
+            'insurance_salary': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '1',
+                'min': '0',
+                'id': 'id_insurance_salary',
+                'placeholder': 'الأجر المسجل في التأمينات'
+            }),
             'has_annual_increase': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_has_annual_increase'}),
-            'annual_increase_percentage': forms.NumberInput(attrs={'class': 'form-control', 'step': '1', 'min': '0', 'max': '100'}),
+            'increase_type': forms.Select(attrs={'class': 'form-select', 'id': 'id_increase_type'}),
+            'annual_increase_percentage': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0', 'max': '100', 'id': 'id_annual_increase_percentage'}),
+            'annual_increase_amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '1', 'min': '0', 'id': 'id_annual_increase_amount'}),
             'increase_frequency': forms.Select(attrs={'class': 'form-select'}),
             'increase_start_reference': forms.Select(attrs={'class': 'form-select'}),
             'auto_renew': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_auto_renew'}),
@@ -93,9 +112,14 @@ class ContractForm(forms.ModelForm):
             'start_date': 'تاريخ البداية',
             'end_date': 'تاريخ النهاية',
             'probation_period_months': 'فترة التجربة (بالأشهر)',
-            'basic_salary': 'الراتب الأساسي',
+            'basic_salary': 'الأجر الأساسي',
+            'is_social_insurance_enrolled': 'مسجل في التأمينات الاجتماعية',
+            'social_insurance_number': 'الرقم التأميني',
+            'insurance_salary': 'الأجر التأميني',
             'has_annual_increase': 'يستحق زيادة سنوية',
+            'increase_type': 'نوع الزيادة',
             'annual_increase_percentage': 'نسبة الزيادة السنوية الإجمالية (%)',
+            'annual_increase_amount': 'قيمة الزيادة الثابتة',
             'increase_frequency': 'عدد مرات التطبيق في السنة',
             'increase_start_reference': 'بداية احتساب الزيادة',
             'auto_renew': 'تجديد تلقائي',
@@ -105,6 +129,8 @@ class ContractForm(forms.ModelForm):
         }
     
     def __init__(self, *args, **kwargs):
+        self.old_contract_pk = kwargs.pop('old_contract_pk', None)
+        self.is_activating = kwargs.pop('is_activating', False)
         super().__init__(*args, **kwargs)
         
         # إخفاء حقل الحالة دائماً (يتم التحكم فيه من خلال الأزرار)
@@ -324,10 +350,10 @@ class ContractForm(forms.ModelForm):
                 'end_date': 'تاريخ النهاية يجب أن يكون بعد تاريخ البداية'
             })
         
-        # التحقق من تداخل العقود (فقط للعقود الجديدة أو عند تغيير التواريخ)
-        if employee and start_date:
+        # التحقق من تداخل العقود (فقط عند التفعيل)
+        if employee and start_date and self.is_activating:
             # الحالات المسموح بها للعقود المتداخلة
-            allowed_statuses = ['expired', 'terminated', 'suspended', 'renewed']
+            allowed_statuses = ['expired', 'terminated', 'suspended', 'renewed', 'draft']
             
             # البحث عن عقود متداخلة
             overlapping_contracts = Contract.objects.filter(
@@ -339,6 +365,10 @@ class ContractForm(forms.ModelForm):
             # استثناء العقد الحالي عند التعديل
             if self.instance.pk:
                 overlapping_contracts = overlapping_contracts.exclude(pk=self.instance.pk)
+
+            # استثناء العقد القديم عند التجديد
+            if self.old_contract_pk:
+                overlapping_contracts = overlapping_contracts.exclude(pk=self.old_contract_pk)
             
             # التحقق من التداخل
             for contract in overlapping_contracts:
@@ -390,6 +420,42 @@ class ContractForm(forms.ModelForm):
                 else:
                     raise forms.ValidationError({
                         'department': 'القسم إلزامي. الموظف ليس لديه قسم محدد.'
+                    })
+        
+        # Validate social insurance enrollment
+        is_enrolled = cleaned_data.get('is_social_insurance_enrolled')
+        if is_enrolled:
+            has_insurable_in_post = any(
+                v == 'INSURABLE_SALARY'
+                for k, v in self.data.items()
+                if k.startswith('earning_code_')
+            )
+            has_insurable_in_db = (
+                self.instance.pk and
+                self.instance.salary_components.filter(code='INSURABLE_SALARY').exists()
+            )
+            if not has_insurable_in_post and not has_insurable_in_db:
+                raise forms.ValidationError({
+                    'is_social_insurance_enrolled':
+                    'يجب إدخال الأجر التأميني في بنود الراتب عند تفعيل التأمينات'
+                })
+        
+        # Validate annual increase fields
+        has_increase = cleaned_data.get('has_annual_increase')
+        if has_increase:
+            increase_type = cleaned_data.get('increase_type')
+            increase_percentage = cleaned_data.get('annual_increase_percentage')
+            increase_amount = cleaned_data.get('annual_increase_amount')
+            
+            if increase_type == 'percentage':
+                if not increase_percentage or increase_percentage <= 0:
+                    raise forms.ValidationError({
+                        'annual_increase_percentage': 'يجب إدخال نسبة الزيادة عند اختيار نوع الزيادة "نسبة من الأجر الأساسي"'
+                    })
+            elif increase_type == 'fixed':
+                if not increase_amount or increase_amount <= 0:
+                    raise forms.ValidationError({
+                        'annual_increase_amount': 'يجب إدخال قيمة الزيادة عند اختيار نوع الزيادة "قيمة ثابتة"'
                     })
         
         return cleaned_data

@@ -1,4 +1,4 @@
-{% extends 'base.html' %}
+﻿{% extends 'base.html' %}
 {% load static %}
 {% load i18n %}
 
@@ -34,7 +34,7 @@
                             <div class="card h-100">
                                 <div class="card-body text-center">
                                     <i class="fas fa-video fa-4x text-success mb-3"></i>
-                                    <h5 class="card-title">{% trans "فيديوهات تعليمية" %}</h5>
+                                    <h5 class="card-title">{% trans "فيديوهات توضيحية" %}</h5>
                                     <p class="card-text">{% trans "مجموعة من الفيديوهات التوضيحية لخطوات العمل على النظام" %}</p>
                                     <a href="#" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#tutorialVideosModal">
                                         <i class="fas fa-play"></i> {% trans "مشاهدة الفيديوهات" %}
@@ -122,12 +122,12 @@
     </div>
 </div>
 
-<!-- نافذة الفيديوهات التعليمية -->
+<!-- نافذة الفيديوهات التوضيحية -->
 <div class="modal fade" id="tutorialVideosModal" tabindex="-1" aria-labelledby="tutorialVideosModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="tutorialVideosModalLabel">{% trans "الفيديوهات التعليمية" %}</h5>
+                <h5 class="modal-title" id="tutorialVideosModalLabel">{% trans "الفيديوهات التوضيحية" %}</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
@@ -223,7 +223,7 @@
 {% block javascripts %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // معالج النقر على الفيديوهات التعليمية
+        // معالج النقر على الفيديوهات التوضيحية
         document.querySelectorAll('[data-video-id]').forEach(link => {
             link.addEventListener('click', function(e) {
                 e.preventDefault();

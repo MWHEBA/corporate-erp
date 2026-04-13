@@ -347,7 +347,6 @@ class ContractComponentService:
                     percentage=component.percentage,
                     formula=component.formula,
                     is_taxable=getattr(component, 'is_taxable', False),
-                    is_social_security=getattr(component, 'is_social_security', False),
                     notes=f'منسوخ من بند الموظف (ID: {component.id})',
                     order=getattr(component, 'order', 0)
                 )

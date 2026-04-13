@@ -77,7 +77,7 @@ class ImportSessionManager {
                     <strong>جلسة متوقفة:</strong> يوجد عملية استيراد متوقفة من ${this.formatDateTime(state.timestamp)}.
                     <br>
                     <small class="text-muted">
-                        التقدم: ${state.currentRecord || 0} من ${state.totalRecords || 0} طالب
+                        التقدم: ${state.currentRecord || 0} من ${state.totalRecords || 0} سجل
                         ${state.stats ? `(نجح: ${state.stats.successful || 0}, فشل: ${state.stats.failed || 0})` : ''}
                     </small>
                 </div>

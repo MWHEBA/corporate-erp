@@ -3,15 +3,17 @@
 """
 from .employee import Employee
 from .organization import Department, JobTitle
-from .attendance import Shift, Attendance
-from .leave import LeaveType, LeaveBalance, Leave
+from .attendance import Shift, Attendance, RamadanSettings, AttendancePenalty
+from .official_holiday import OfficialHoliday
+from .leave import LeaveType, LeaveBalance, Leave, LeaveEncashmentLog
 from .permission import PermissionType, PermissionRequest
-from .payroll import Payroll, Advance, AdvanceInstallment
+from .penalty_reward import PenaltyReward
+from .payroll import Payroll, Advance, AdvanceInstallment, PayrollAuditLog
 from .payroll_line import PayrollLine
 from .attendance_summary import AttendanceSummary
 from .leave_summary import LeaveSummary
-from .payroll_line import PayrollLine
 from .end_of_service import EndOfServiceBenefit
+from .insurance_payment import InsurancePayment
 from .attendance import *
 from .biometric import *
 from .biometric_mapping import *
@@ -35,11 +37,15 @@ __all__ = [
     'JobTitle',
     'Shift',
     'Attendance',
+    'RamadanSettings',
+    'AttendancePenalty',
     'LeaveType',
     'LeaveBalance',
     'Leave',
+    'LeaveEncashmentLog',
     'PermissionType',
     'PermissionRequest',
+    'PenaltyReward',
     'Payroll',
     'PayrollLine',
     'AttendanceSummary',
@@ -61,4 +67,6 @@ __all__ = [
     'BiometricSyncLog',
     'BiometricUserMapping',
     'EndOfServiceBenefit',
+    'InsurancePayment',
+    'OfficialHoliday',
 ]

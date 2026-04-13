@@ -8,7 +8,7 @@
    ======================================== */
 
 /* Inline critical styles for immediate rendering */
-.enhanced-student-profile {
+.enhanced-profile {
     contain: layout style paint;
     will-change: auto;
 }

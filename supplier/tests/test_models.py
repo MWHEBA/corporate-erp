@@ -1,4 +1,4 @@
-"""
+﻿"""
 اختبارات نماذج الموردين
 """
 
@@ -19,15 +19,15 @@ class SupplierModelTest(TestCase):
     def setUp(self):
         """إعداد بيانات الاختبار"""
         self.supplier_type = SupplierType.objects.create(
-            name="مورد تعليمي",
+            name="مورد متخصص",
             code="educational",
-            description="موردي الكتب والمواد التعليمية"
+            description="موردي المواد والمستلزمات"
         )
         
     def test_create_supplier(self):
         """اختبار إنشاء مورد جديد"""
         supplier = Supplier.objects.create(
-            name="مورد الكتب التعليمية",
+            name="مورد المواد المتخصصة",
             code="EDU001",
             primary_type=self.supplier_type,
             email="supplier@education.com",
@@ -35,7 +35,7 @@ class SupplierModelTest(TestCase):
             address="القاهرة، مصر"
         )
         
-        self.assertEqual(supplier.name, "مورد الكتب التعليمية")
+        self.assertEqual(supplier.name, "مورد المواد المتخصصة")
         self.assertEqual(supplier.primary_type, self.supplier_type)
         self.assertTrue(supplier.is_active)
         
@@ -81,12 +81,12 @@ class SupplierTypeTest(TestCase):
     def test_create_supplier_type(self):
         """اختبار إنشاء نوع مورد جديد"""
         supplier_type = SupplierType.objects.create(
-            name="مورد تعليمي",
+            name="مورد متخصص",
             code="educational",
-            description="موردي الكتب والمواد التعليمية"
+            description="موردي المواد والمستلزمات"
         )
         
-        self.assertEqual(supplier_type.name, "مورد تعليمي")
+        self.assertEqual(supplier_type.name, "مورد متخصص")
         self.assertEqual(supplier_type.code, "educational")
         self.assertTrue(supplier_type.is_active)
         

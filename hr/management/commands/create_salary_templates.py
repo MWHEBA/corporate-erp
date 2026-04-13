@@ -42,7 +42,7 @@ class Command(BaseCommand):
                 'formula': 'basic * 0.14',
                 'default_amount': Decimal('0.00'),
                 'default_account_code': '21031',
-                'description': 'التأمينات الاجتماعية 14% من الراتب الأساسي',
+                'description': 'التأمينات الاجتماعية 14% من الأجر الأساسي',
                 'order': 2,
                 'is_active': True
             },
@@ -53,7 +53,7 @@ class Command(BaseCommand):
                 'formula': 'basic * 0.10',
                 'default_amount': Decimal('0.00'),
                 'default_account_code': '21032',
-                'description': 'ضريبة الدخل 10% من الراتب الأساسي',
+                'description': 'ضريبة الدخل 10% من الأجر الأساسي',
                 'order': 3,
                 'is_active': True
             },
@@ -108,7 +108,7 @@ class Command(BaseCommand):
                 'formula': 'basic * 0.05',
                 'default_amount': Decimal('0.00'),
                 'default_account_code': '52022',
-                'description': 'الأجر الإضافي 5% من الراتب الأساسي',
+                'description': 'الأجر الإضافي 5% من الأجر الأساسي',
                 'order': 5,
                 'is_active': True
             },
@@ -140,7 +140,7 @@ class Command(BaseCommand):
                 'formula': 'basic * 0.25',
                 'default_amount': Decimal('0.00'),
                 'default_account_code': '52023',
-                'description': 'بدل السكن 25% من الراتب الأساسي',
+                'description': 'بدل السكن 25% من الأجر الأساسي',
                 'order': 8,
                 'is_active': True
             }

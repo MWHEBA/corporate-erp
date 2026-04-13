@@ -1,6 +1,6 @@
 """
 خدمة إنشاء الحسابات المحاسبية الموحدة
-تتعامل مع إنشاء حسابات العملاء والموردين بطريقة موحدة
+تتعامل مع إنشاء حسابات أولياء الأمور والموردين بطريقة موحدة
 """
 
 from django.db import transaction
@@ -19,10 +19,10 @@ class UnifiedAccountService:
     @classmethod
     def create_parent_account(cls, parent, user: Optional[User] = None) -> Optional[ChartOfAccounts]:
         """
-        إنشاء حساب محاسبي لالعميل
+        إنشاء حساب محاسبي لولي الأمر
         
         Args:
-            parent: نموذج العميل
+            parent: نموذج ولي الأمر
             user: المستخدم الذي ينشئ الحساب
             
         Returns:
@@ -32,13 +32,12 @@ class UnifiedAccountService:
             with transaction.atomic():
                 # التحقق من وجود حساب بالفعل
                 if hasattr(parent, 'financial_account') and parent.financial_account:
-                    logger.info(f"العميل {parent.name} لديه حساب محاسبي بالفعل: {parent.financial_account.code}")
                     return parent.financial_account
                 
-                # البحث عن الحساب الأساسي لالعملاء أو إنشاؤه
+                # البحث عن الحساب الأساسي لأولياء الأمور أو إنشاؤه
                 parents_account = cls._get_or_create_parents_main_account(user)
                 if not parents_account:
-                    logger.error("فشل في الحصول على الحساب الأساسي لالعملاء")
+                    logger.error("فشل في الحصول على الحساب الأساسي لأولياء الأمور")
                     return None
                 
                 # إنشاء كود فريد للحساب الجديد
@@ -56,19 +55,18 @@ class UnifiedAccountService:
                     account_type=parents_account.account_type,
                     is_active=True,
                     is_leaf=True,
-                    description=f"حساب محاسبي لالعميل: {parent.name}",
+                    description=f"حساب محاسبي لولي الأمر: {parent.name}",
                     created_by=user
                 )
                 
-                # ربط العميل بالحساب الجديد
+                # ربط ولي الأمر بالحساب الجديد
                 parent.financial_account = new_account
                 parent.save(update_fields=['financial_account'])
                 
-                logger.info(f"✅ تم إنشاء حساب محاسبي لالعميل: {new_account.code} - {new_account.name}")
                 return new_account
                 
         except Exception as e:
-            logger.error(f"❌ فشل في إنشاء حساب محاسبي لالعميل {parent.name}: {e}")
+            logger.error(f"❌ فشل في إنشاء حساب محاسبي لولي الأمر {parent.name}: {e}")
             import traceback
             logger.error(traceback.format_exc())
             return None
@@ -89,7 +87,6 @@ class UnifiedAccountService:
             with transaction.atomic():
                 # التحقق من وجود حساب بالفعل
                 if hasattr(supplier, 'financial_account') and supplier.financial_account:
-                    logger.info(f"المورد {supplier.name} لديه حساب محاسبي بالفعل: {supplier.financial_account.code}")
                     return supplier.financial_account
                 
                 # البحث عن الحساب الأساسي للموردين أو إنشاؤه
@@ -121,7 +118,6 @@ class UnifiedAccountService:
                 supplier.financial_account = new_account
                 supplier.save(update_fields=['financial_account'])
                 
-                logger.info(f"✅ تم إنشاء حساب محاسبي للمورد: {new_account.code} - {new_account.name}")
                 return new_account
                 
         except Exception as e:
@@ -132,7 +128,7 @@ class UnifiedAccountService:
     
     @classmethod
     def _get_or_create_parents_main_account(cls, user: Optional[User] = None) -> Optional[ChartOfAccounts]:
-        """الحصول على الحساب الأساسي لالعملاء أو إنشاؤه"""
+        """الحصول على الحساب الأساسي لأولياء الأمور أو إنشاؤه"""
         try:
             # البحث عن الحساب الموجود
             parents_account = ChartOfAccounts.objects.filter(code="10300").first()
@@ -156,24 +152,22 @@ class UnifiedAccountService:
                         is_system_type=True,
                         created_by=user
                     )
-                    logger.info("✅ تم إنشاء نوع حساب الذمم المدينة")
                 
                 # إنشاء الحساب الأساسي
                 parents_account = ChartOfAccounts.objects.create(
                     code="10300",
-                    name="العملاء",
+                    name="أولياء الأمور",
                     account_type=account_type,
                     is_active=True,
                     is_leaf=False,  # حساب أساسي يحتوي على حسابات فرعية
-                    description="الحساب الأساسي لجميع العملاء",
+                    description="الحساب الأساسي لجميع أولياء الأمور",
                     created_by=user
                 )
-                logger.info("✅ تم إنشاء الحساب الأساسي لالعملاء (10300)")
             
             return parents_account
             
         except Exception as e:
-            logger.error(f"❌ فشل في الحصول على الحساب الأساسي لالعملاء: {e}")
+            logger.error(f"❌ فشل في الحصول على الحساب الأساسي لأولياء الأمور: {e}")
             return None
     
     @classmethod
@@ -202,7 +196,6 @@ class UnifiedAccountService:
                         is_system_type=True,
                         created_by=user
                     )
-                    logger.info("✅ تم إنشاء نوع حساب الذمم الدائنة")
                 
                 # إنشاء الحساب الأساسي
                 suppliers_account = ChartOfAccounts.objects.create(
@@ -214,7 +207,6 @@ class UnifiedAccountService:
                     description="الحساب الأساسي لجميع الموردين",
                     created_by=user
                 )
-                logger.info("✅ تم إنشاء الحساب الأساسي للموردين (2101)")
             
             return suppliers_account
             
@@ -224,7 +216,7 @@ class UnifiedAccountService:
     
     @classmethod
     def _generate_parent_account_code(cls, parents_account: ChartOfAccounts) -> Optional[str]:
-        """توليد كود فريد لحساب العميل"""
+        """توليد كود فريد لحساب ولي الأمر"""
         try:
             # البحث عن آخر حساب فرعي
             last_account = ChartOfAccounts.objects.filter(
@@ -243,18 +235,22 @@ class UnifiedAccountService:
             else:
                 new_number = 1
             
-            # تكوين الكود الجديد - استخدام 4 أرقام للسماح بأكثر من 999 حساب
-            new_code = f"10300{new_number:04d}"
+            # تكوين الكود الجديد - استخدام 3 أرقام فقط (10300 + 3 = 8 أرقام max)
+            # يسمح بـ 999 حساب ولي أمر
+            new_code = f"10300{new_number:03d}"
             
             # التأكد من عدم وجود الكود
             while ChartOfAccounts.objects.filter(code=new_code).exists():
                 new_number += 1
-                new_code = f"10300{new_number:04d}"
+                if new_number > 999:
+                    logger.error("تم الوصول للحد الأقصى من حسابات أولياء الأمور (999)")
+                    return None
+                new_code = f"10300{new_number:03d}"
             
             return new_code
             
         except Exception as e:
-            logger.error(f"❌ فشل في توليد كود حساب العميل: {e}")
+            logger.error(f"❌ فشل في توليد كود حساب ولي الأمر: {e}")
             return None
     
     @classmethod
@@ -264,27 +260,30 @@ class UnifiedAccountService:
             # البحث عن آخر حساب فرعي
             last_account = ChartOfAccounts.objects.filter(
                 parent=suppliers_account,
-                code__regex=r'^2101\d{3}$'  # يبدأ بـ 2101 ويتبعه 3 أرقام
+                code__startswith="2101"  # يبدأ بـ 2101
             ).order_by('-code').first()
             
             if last_account:
                 try:
-                    last_number = int(last_account.code[-3:])
+                    # استخراج الجزء الرقمي بعد 2101
+                    code_suffix = last_account.code[4:]  # كل شيء بعد 2101
+                    last_number = int(code_suffix)
                     new_number = last_number + 1
                 except (ValueError, IndexError):
                     new_number = 1
             else:
                 new_number = 1
             
-            # تكوين الكود الجديد
-            new_code = f"2101{new_number:03d}"
+            # تكوين الكود الجديد - 2010 + 4 أرقام
+            new_code = f"2010{new_number:04d}"
             
             # التأكد من عدم وجود الكود
-            if ChartOfAccounts.objects.filter(code=new_code).exists():
-                # في حالة التضارب، استخدم timestamp
-                import time
-                timestamp_suffix = str(int(time.time()))[-3:]
-                new_code = f"2101{timestamp_suffix}"
+            while ChartOfAccounts.objects.filter(code=new_code).exists():
+                new_number += 1
+                if new_number > 9999:
+                    logger.error("تم الوصول للحد الأقصى من حسابات الموردين")
+                    return None
+                new_code = f"2010{new_number:04d}"
             
             return new_code
             

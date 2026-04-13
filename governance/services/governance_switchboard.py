@@ -20,8 +20,8 @@ CRITICAL GOVERNANCE DEFAULTS UPDATE (2026-01-28):
 - This ensures governance is active from first system startup
 - Components affected: accounting_gateway_enforcement, movement_service_enforcement,
   admin_lockdown_enforcement, authority_boundary_enforcement, idempotency_enforcement
-- Workflows affected: student_fee_to_journal_entry, stock_movement_to_journal_entry,
-  fee_payment_to_journal_entry, admin_direct_edit_prevention, cross_service_validation,
+- Workflows affected: customer_payment_to_journal_entry, stock_movement_to_journal_entry,
+  purchase_payment_to_journal_entry, admin_direct_edit_prevention, cross_service_validation,
   duplicate_operation_prevention
 - These changes implement the recommendations from the comprehensive critical issues analysis
 """
@@ -50,7 +50,7 @@ class GovernanceSwitchboard:
     
     Provides hierarchical control over:
     1. Component-level flags (AccountingGateway, MovementService, etc.)
-    2. Workflow-level flags (StudentFee→JournalEntry, etc.)
+    2. Workflow-level flags (StockMovement→JournalEntry, etc.)
     3. Emergency controls and safe rollback mechanisms
     """
     
@@ -63,9 +63,9 @@ class GovernanceSwitchboard:
             'critical': True,
             'dependencies': [],
             'affects_workflows': [
-                'student_fee_to_journal_entry',
+                'customer_payment_to_journal_entry',
                 'stock_movement_to_journal_entry', 
-                'fee_payment_to_journal_entry'
+                'purchase_payment_to_journal_entry'
             ]
         },
         'movement_service_enforcement': {
@@ -124,25 +124,6 @@ class GovernanceSwitchboard:
             'dependencies': [],
             'affects_workflows': ['duplicate_operation_prevention']
         },
-        'auto_fee_creation': {
-            'name': 'Automatic Fee Creation',
-            'description': 'Controls whether automatic fees are created for new students',
-            'default': True,  # ✅ مفعل بشكل افتراضي لضمان عمل النظام
-            'critical': False,
-            'dependencies': [],
-            'affects_workflows': ['student_creation']
-        },
-        'auto_account_creation': {
-            'name': 'Automatic Account Creation',
-            'description': 'Controls whether financial accounts are automatically created for parents',
-            'default': True,  # ✅ مفعل بشكل افتراضي لضمان عمل النظام
-            'critical': False,
-            'dependencies': [],
-            'affects_workflows': ['parent_account_creation']
-        },
-        # ============================================================================
-        # PAYROLL GOVERNANCE COMPONENTS
-        # ============================================================================
         'payroll_governance': {
             'name': 'Payroll Governance System',
             'description': 'Master switch for all payroll governance controls',
@@ -192,10 +173,10 @@ class GovernanceSwitchboard:
     
     # Workflow-level feature flags (Critical for Phase 2 & 5)
     WORKFLOW_FLAGS = {
-        'student_fee_to_journal_entry': {
-            'name': 'StudentFee → JournalEntry Workflow',
-            'description': 'Controls StudentFee to JournalEntry creation workflow enforcement',
-            'default': True,  # ✅ مفعل بشكل دائم حسب توصيات التقرير الشامل
+        'customer_payment_to_journal_entry': {
+            'name': 'CustomerPayment → JournalEntry Workflow',
+            'description': 'Controls CustomerPayment to JournalEntry creation workflow enforcement',
+            'default': True,
             'critical': True,
             'component_dependencies': ['accounting_gateway_enforcement'],
             'risk_level': 'HIGH',
@@ -204,16 +185,16 @@ class GovernanceSwitchboard:
         'stock_movement_to_journal_entry': {
             'name': 'StockMovement → JournalEntry Workflow', 
             'description': 'Controls StockMovement to JournalEntry creation workflow enforcement',
-            'default': True,  # ✅ مفعل بشكل دائم حسب توصيات التقرير الشامل
+            'default': True,
             'critical': True,
             'component_dependencies': ['movement_service_enforcement', 'accounting_gateway_enforcement'],
             'risk_level': 'HIGH',
             'corruption_prevention': ['negative_stock', 'orphaned_journal_entries']
         },
-        'fee_payment_to_journal_entry': {
-            'name': 'FeePayment → JournalEntry Workflow',
-            'description': 'Controls FeePayment to JournalEntry creation workflow enforcement',
-            'default': True,  # ✅ مفعل بشكل دائم حسب توصيات التقرير الشامل
+        'purchase_payment_to_journal_entry': {
+            'name': 'PurchasePayment → JournalEntry Workflow',
+            'description': 'Controls PurchasePayment to JournalEntry creation workflow enforcement',
+            'default': True,
             'critical': True,
             'component_dependencies': ['accounting_gateway_enforcement'],
             'risk_level': 'HIGH',
@@ -385,8 +366,9 @@ class GovernanceSwitchboard:
             'description': 'EMERGENCY: Disables all accounting-related governance',
             'default': False,
             'critical': True,
-            'affects': ['accounting_gateway_enforcement', 'student_fee_to_journal_entry', 
-                       'stock_movement_to_journal_entry', 'fee_payment_to_journal_entry']
+            'affects': ['accounting_gateway_enforcement', 'customer_payment_to_journal_entry',
+                       'stock_movement_to_journal_entry', 
+                       'purchase_payment_to_journal_entry']
         },
         'emergency_disable_stock': {
             'name': 'Emergency Disable Stock Controls',

@@ -1,5 +1,4 @@
-[
-  {
+[{
     "model": "users.role",
     "pk": 1,
     "fields": {
@@ -75,7 +74,7 @@
     "fields": {
       "name": "activities_coordinator",
       "display_name": "منسق أنشطة",
-      "description": "إدارة الأنشطة المدرسية والفعاليات",
+      "description": "إدارة الأنشطة والفعاليات",
       "is_system_role": true,
       "is_active": true,
       "created_at": "2025-01-01T00:00:00Z",
@@ -89,7 +88,7 @@
     "fields": {
       "name": "transportation_coordinator",
       "display_name": "منسق نقل",
-      "description": "إدارة خدمات النقل والباصات والمشرفات",
+      "description": "إدارة خدمات النقل والمشرفين",
       "is_system_role": true,
       "is_active": true,
       "created_at": "2025-01-01T00:00:00Z",
@@ -124,5 +123,4 @@
       "updated_at": "2025-01-01T00:00:00Z",
       "permissions": [32, 88, 120, 180, 212, 244, 326, 330, 426, 490, 510, 582, 717, 827]
     }
-  }
-]
+  }]

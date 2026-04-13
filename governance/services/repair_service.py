@@ -90,11 +90,11 @@ class CorruptionReport:
                 'policy': 'ADJUSTMENT',
                 'reason': 'Negative stock requires quantity adjustments'
             })
-        elif corruption_type == 'MULTIPLE_ACTIVE_ACADEMIC_YEARS':
+        elif corruption_type == 'MULTIPLE_ACTIVE_ACCOUNTING_PERIODS':
             self.recommendations.append({
                 'corruption_type': corruption_type,
                 'policy': 'REBUILD',
-                'reason': 'Multiple active years require rebuilding year status'
+                'reason': 'Multiple active accounting periods require rebuilding period status'
             })
     
     def get_summary(self) -> Dict:
@@ -144,7 +144,7 @@ class RepairPolicy:
             'MEDIUM_CONFIDENCE': ADJUSTMENT,
             'LOW_CONFIDENCE': QUARANTINE
         },
-        'MULTIPLE_ACTIVE_ACADEMIC_YEARS': {
+        'MULTIPLE_ACTIVE_ACCOUNTING_PERIODS': {
             'HIGH_CONFIDENCE': REBUILD,
             'MEDIUM_CONFIDENCE': REBUILD,
             'LOW_CONFIDENCE': QUARANTINE
@@ -233,7 +233,7 @@ class RepairService:
         self.scanners = {
             'ORPHANED_JOURNAL_ENTRIES': self._scan_orphaned_journal_entries,
             'NEGATIVE_STOCK': self._scan_negative_stock,
-            'MULTIPLE_ACTIVE_ACADEMIC_YEARS': self._scan_multiple_active_academic_years,
+            'MULTIPLE_ACTIVE_ACCOUNTING_PERIODS': self._scan_multiple_active_accounting_periods,
             'UNBALANCED_JOURNAL_ENTRIES': self._scan_unbalanced_journal_entries
         }
     
@@ -464,9 +464,9 @@ class RepairService:
         
         return issues, confidence, evidence
     
-    def _scan_multiple_active_academic_years(self) -> Tuple[List[Dict], str, Dict]:
+    def _scan_multiple_active_accounting_periods(self) -> Tuple[List[Dict], str, Dict]:
         """
-        Scan for multiple active academic years using ORM-based detection.
+        Scan for multiple active accounting periods using ORM-based detection.
         
         Returns:
             Tuple of (issues, confidence_level, evidence)
@@ -475,53 +475,41 @@ class RepairService:
         evidence = {}
         
         try:
-            # Get AcademicYear model
-            AcademicYear = apps.get_model('academic', 'AcademicYear')
+            AccountingPeriod = apps.get_model('financial', 'AccountingPeriod')
             
             with transaction.atomic():
-                # Use select_for_update for thread safety where supported
                 if connection.vendor == 'postgresql':
-                    active_years = AcademicYear.objects.select_for_update().filter(is_active=True)
+                    active_periods = AccountingPeriod.objects.select_for_update().filter(status='open')
                 else:
-                    # SQLite: Use atomic block
-                    active_years = AcademicYear.objects.filter(is_active=True)
+                    active_periods = AccountingPeriod.objects.filter(status='open')
                 
-                total_years = AcademicYear.objects.count()
-                active_count = active_years.count()
+                total_periods = AccountingPeriod.objects.count()
+                active_count = active_periods.count()
                 
                 if active_count > 1:
-                    for year in active_years:
+                    for period in active_periods:
                         issues.append({
-                            'year_id': year.id,
-                            'year_name': str(year),
-                            'start_date': getattr(year, 'start_date', None),
-                            'end_date': getattr(year, 'end_date', None),
-                            'is_active': getattr(year, 'is_active', None),
-                            'name': getattr(year, 'name', 'N/A')
+                            'period_id': period.id,
+                            'period_name': str(period),
+                            'start_date': getattr(period, 'start_date', None),
+                            'end_date': getattr(period, 'end_date', None),
+                            'status': getattr(period, 'status', None),
+                            'name': getattr(period, 'name', 'N/A')
                         })
-                elif active_count == 0:
-                    issues.append({
-                        'error': 'No active academic year found',
-                        'total_years': total_years,
-                        'year_id': 0,
-                        'year_name': 'No active year'
-                    })
                 
                 evidence = {
-                    'total_academic_years': total_years,
-                    'active_years_count': active_count,
+                    'total_accounting_periods': total_periods,
+                    'active_periods_count': active_count,
                     'expected_active_count': 1,
-                    'scan_method': 'ORM_based_is_active_filter'
+                    'scan_method': 'ORM_based_status_filter'
                 }
                 
-                # High confidence for academic year detection
                 confidence = 'HIGH'
-                
-                logger.info(f"Academic year scan: {active_count} active years (expected: 1)")
+                logger.info(f"Accounting period scan: {active_count} open periods (expected: 1)")
                 
         except Exception as e:
-            logger.error(f"Error scanning academic years: {e}", exc_info=True)
-            issues = [{'error': f"Scan failed: {str(e)}", 'year_id': 0, 'year_name': 'Error'}]
+            logger.error(f"Error scanning accounting periods: {e}", exc_info=True)
+            issues = [{'error': f"Scan failed: {str(e)}", 'period_id': 0, 'period_name': 'Error'}]
             confidence = 'LOW'
             evidence = {'error': str(e)}
         

@@ -2,17 +2,17 @@
 Management command to enable gradual governance enforcement for selected high-risk workflows.
 
 This command implements Task 21: Enable gradual governance enforcement (NO BIG-BANG)
-- Activates AccountingGateway enforcement for StudentFee → JournalEntry
+- Activates AccountingGateway enforcement for CustomerPayment → JournalEntry
 - Activates AccountingGateway enforcement for StockMovement → JournalEntry  
-- Activates AccountingGateway enforcement for FeePayment → JournalEntry
+- Activates AccountingGateway enforcement for PurchasePayment → JournalEntry
 - Activates MovementService enforcement for stock operations
 - Activates AuthorityService validation for high-risk models
 - Provides monitoring and rollback capabilities
 
 Usage:
-    python manage.py enable_gradual_governance --phase=1 --workflow=student_fee_to_journal_entry
+    python manage.py enable_gradual_governance --phase=1 --workflow=customer_payment_to_journal_entry
     python manage.py enable_gradual_governance --phase=2 --all-workflows
-    python manage.py enable_gradual_governance --rollback --workflow=student_fee_to_journal_entry
+    python manage.py enable_gradual_governance --rollback --workflow=customer_payment_to_journal_entry
     python manage.py enable_gradual_governance --status
 """
 
@@ -42,9 +42,9 @@ class Command(BaseCommand):
     
     # Selected high-risk workflows for Phase 5 activation
     SELECTED_WORKFLOWS = [
-        'student_fee_to_journal_entry',
+        'customer_payment_to_journal_entry',
         'stock_movement_to_journal_entry', 
-        'fee_payment_to_journal_entry'
+        'purchase_payment_to_journal_entry'
     ]
     
     # High-risk models for authority boundary enforcement
@@ -53,8 +53,8 @@ class Command(BaseCommand):
         'JournalEntryLine', 
         'Stock',
         'StockMovement',
-        'StudentFee',
-        'FeePayment'
+        'CustomerPayment',
+        'Sale'
     ]
     
     # Required components for the selected workflows
@@ -79,8 +79,7 @@ class Command(BaseCommand):
             type=str,
             choices=self.SELECTED_WORKFLOWS,
             help='Specific workflow to enable (required for phase 1)'
-        )
-        
+        )        
         parser.add_argument(
             '--all-workflows',
             action='store_true',
@@ -549,12 +548,12 @@ class Command(BaseCommand):
                     return False
             
             # Workflow-specific validation
-            if workflow == 'student_fee_to_journal_entry':
+            if workflow == 'customer_payment_to_journal_entry':
                 return self._validate_accounting_gateway_workflow()
             elif workflow == 'stock_movement_to_journal_entry':
                 return self._validate_movement_service_workflow()
-            elif workflow == 'fee_payment_to_journal_entry':
-                return self._validate_fee_payment_workflow()
+            elif workflow == 'purchase_payment_to_journal_entry':
+                return self._validate_purchase_payment_workflow()
             
             return True
             
@@ -580,11 +579,10 @@ class Command(BaseCommand):
         except Exception:
             return False
     
-    def _validate_fee_payment_workflow(self) -> bool:
-        """Validate FeePayment workflow is working"""
+    def _validate_purchase_payment_workflow(self) -> bool:
+        """Validate PurchasePayment workflow is working"""
         try:
             gateway = AccountingGateway()
-            # Basic validation - check if gateway is responsive for fee payments
             return True
         except Exception:
             return False

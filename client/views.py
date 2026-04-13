@@ -23,17 +23,40 @@ def customer_list(request):
     """
     عرض قائمة العملاء
     """
-    # جلب جميع العملاء (النشطين وغير النشطين)
-    customers = Customer.objects.all().order_by('-created_at')
-    active_customers = customers.filter(is_active=True).count()
-    inactive_customers = customers.filter(is_active=False).count()
+    status = request.GET.get('status', '')
+    has_debt = request.GET.get('has_debt', '')
+    search = request.GET.get('search', '')
 
-    # حساب إجمالي المديونية الفعلية
-    total_debt = 0
-    for customer in customers:
-        customer_debt = customer.actual_balance
-        if customer_debt > 0:  # فقط المديونية الموجبة
-            total_debt += customer_debt
+    customers_qs = Customer.objects.all().order_by('-created_at')
+
+    if status == 'active':
+        customers_qs = customers_qs.filter(is_active=True)
+    elif status == 'inactive':
+        customers_qs = customers_qs.filter(is_active=False)
+
+    if search:
+        customers_qs = customers_qs.filter(
+            Q(name__icontains=search) |
+            Q(phone_primary__icontains=search) |
+            Q(phone__icontains=search) |
+            Q(code__icontains=search)
+        )
+
+    if has_debt == '1':
+        customers_qs = customers_qs.filter(balance__gt=0)
+    elif has_debt == '0':
+        customers_qs = customers_qs.filter(balance__lte=0)
+
+    active_customers = Customer.objects.filter(is_active=True).count()
+    inactive_customers = Customer.objects.filter(is_active=False).count()
+    total_debt = customers_qs.aggregate(total=Sum('balance'))['total'] or 0
+
+    # DB-level pagination
+    from django.core.paginator import Paginator
+    paginator = Paginator(customers_qs, 25)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    customers = page_obj
 
     # تعريف أعمدة الجدول
     headers = [
@@ -74,8 +97,31 @@ def customer_list(request):
         },
     ]
 
+    # Ajax response - بعد تعريف headers و action_buttons
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        from django.template.loader import render_to_string
+        ctx = {
+            'customers': customers,
+            'page_obj': page_obj,
+            'paginator': paginator,
+            'headers': headers,
+            'action_buttons': action_buttons,
+        }
+        table_html = render_to_string('client/partials/customer_table.html', ctx, request=request)
+        pagination_html = render_to_string('partials/pagination.html', {
+            'page_obj': page_obj,
+            'align': 'center',
+        }, request=request) if paginator.num_pages > 1 else ''
+        return JsonResponse({
+            'table_html': table_html,
+            'pagination_html': pagination_html,
+            'count': paginator.count,
+        })
+
     context = {
         "customers": customers,
+        "page_obj": page_obj,
+        "paginator": paginator,
         "headers": headers,
         "action_buttons": action_buttons,
         "active_customers": active_customers,
@@ -92,6 +138,12 @@ def customer_list(request):
                 "icon": "fa-plus",
                 "text": "إضافة عميل",
                 "class": "btn-primary",
+            },
+            {
+                "onclick": "syncWithDaftra('clients')",
+                "icon": "fa-sync",
+                "text": "مزامنة دفترة",
+                "class": "btn-outline-info",
             },
         ],
         # البريدكرمب
@@ -965,7 +1017,7 @@ def customer_create_account(request, pk):
     if request.method == "POST":
         try:
             # البحث عن حساب العملاء الرئيسي
-            customers_account = ChartOfAccounts.objects.filter(code="11030").first()
+            customers_account = ChartOfAccounts.objects.filter(code="10300").first()
             
             if not customers_account:
                 error_msg = "لا يمكن العثور على حساب العملاء الرئيسي في النظام"
@@ -974,23 +1026,19 @@ def customer_create_account(request, pk):
                 messages.error(request, error_msg)
                 return redirect("client:customer_change_account", pk=customer.pk)
             
-            # إنشاء كود فريد للحساب الجديد
-            # البحث عن آخر حساب فرعي تحت حساب العملاء
-            # النمط المتوقع: 1103001, 1103002, 1103003...
+            # البحث عن آخر حساب فرعي تحت حساب العملاء - النمط: 1030XXXX
             last_customer_account = ChartOfAccounts.objects.filter(
                 parent=customers_account,
-                code__regex=r'^1103\d{3}$'  # يبدأ بـ 1103 ويتبعه 3 أرقام
-            ).order_by('-code').first()
+                code__startswith='1030'
+            ).exclude(code='10300').order_by('-code').first()
             
             if last_customer_account:
-                # استخراج الرقم التسلسلي من آخر 3 أرقام
-                last_number = int(last_customer_account.code[-3:])
+                last_number = int(last_customer_account.code[-4:])
                 new_number = last_number + 1
             else:
                 new_number = 1
             
-            # تكوين الكود الجديد: 1103 + رقم تسلسلي من 3 أرقام
-            new_code = f"1103{new_number:03d}"
+            new_code = f"1030{new_number:04d}"
             
             # إنشاء اسم مناسب للحساب
             account_name = f"عميل - {customer.name}"

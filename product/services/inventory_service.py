@@ -71,38 +71,25 @@ class InventoryService:
                 # تحديث المخزون حسب نوع الحركة
                 old_quantity = stock.quantity
 
-                # ✅ استخدام MovementService بدلاً من التحديث المباشر
-                from governance.services import MovementService
-                
-                movement_service = MovementService()
-                
-                # تحديد quantity_change حسب نوع الحركة
                 if movement_type in ["in", "return_in"]:
-                    quantity_change = quantity
+                    # دخول للمخزون
+                    stock.update_average_cost(quantity, unit_cost)
+                    new_quantity = stock.quantity
                 elif movement_type in ["out", "return_out", "damage", "expired"]:
-                    quantity_change = -quantity
+                    # خروج من المخزون
+                    if stock.quantity < quantity:
+                        raise ValueError(
+                            f"الكمية المطلوبة ({quantity}) أكبر من المتاح ({stock.quantity})"
+                        )
+
+                    stock.quantity -= quantity
+                    new_quantity = stock.quantity
+                    stock.save()
                 else:
                     # حركات أخرى (تحويل، تسوية)
-                    quantity_change = Decimal('0')
-                
-                # إنشاء حركة المخزون عبر MovementService
-                stock_movement = movement_service.process_movement(
-                    product_id=product.id,
-                    quantity_change=quantity_change,
-                    movement_type=movement_type,
-                    source_reference=reference_number,
-                    idempotency_key=f"inventory_service_{product.id}_{reference_number}_{timezone.now().timestamp()}",
-                    user=user,
-                    unit_cost=unit_cost,
-                    document_number=reference_number,
-                    notes=notes
-                )
-                
-                # الحصول على المخزون المحدث
-                stock.refresh_from_db()
-                new_quantity = stock.quantity
+                    new_quantity = old_quantity
 
-                # إنشاء سجل InventoryMovement للتوافق مع النظام المحسن
+                # إنشاء سجل الحركة
                 movement = InventoryMovement.objects.create(
                     product=product,
                     warehouse=warehouse,
@@ -120,12 +107,11 @@ class InventoryService:
 
                 # تحديث تاريخ آخر حركة
                 stock.last_movement_date = timezone.now()
-                stock.save(update_fields=['last_movement_date'])
+                stock.save()
 
                 # فحص تنبيهات المخزون المنخفض
                 InventoryService._check_low_stock_alert(product, stock)
 
-                logger.info(f"تم تسجيل حركة مخزون عبر MovementService: {movement}")
                 return movement
 
         except Exception as e:
@@ -146,7 +132,7 @@ class InventoryService:
                     is_active=True,
                 ).distinct()
 
-                status = "نفد" if stock.is_out_of_stock else "منخفض"
+                status = "نفذ" if stock.is_out_of_stock else "منخفض"
                 title = f"تنبيه مخزون {status}: {product.name}"
                 message = (
                     f"المنتج '{product.name}' في المخزن '{stock.warehouse.name}' {status}.\n"
@@ -264,7 +250,6 @@ class InventoryService:
                 adjustment.movement = movement
                 adjustment.save()
 
-                logger.info(f"تم إنشاء تسوية مخزون: {adjustment}")
                 return adjustment
 
         except Exception as e:
@@ -365,7 +350,6 @@ class InventoryService:
                     user=user,
                 )
 
-                logger.info(f"تم تحويل المخزون: {transfer}")
                 return transfer
 
         except Exception as e:
@@ -464,7 +448,6 @@ class InventoryService:
                         )
                         continue
 
-            logger.info(f"تم إنشاء {snapshots_created} لقطة مخزون جديدة ليوم {date}")
             return snapshots_created
 
         except Exception as e:

@@ -382,7 +382,6 @@ class FinancialDashboard {
             this.updateStatValue(0, stats.total_fees);
             this.updateStatValue(1, stats.total_paid);
             this.updateStatValue(2, stats.total_outstanding);
-            this.updateStatValue(3, stats.total_students);
         }
         
         // تحديث مؤشرات المخاطر

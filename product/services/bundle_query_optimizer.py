@@ -63,10 +63,6 @@ class BundleQueryOptimizer:
             components_prefetch
         ).annotate(
             component_count=Count('components'),
-            total_component_cost=Sum(
-                F('components__component_product__customer_selling_price') * 
-                F('components__required_quantity')
-            )
         )
     
     @classmethod
@@ -284,7 +280,6 @@ class BundleQueryOptimizer:
                         batch_size=100
                     )
                 
-                logger.info(f"تم تحديث مخزون {len(updated_bundles)} منتج مجمع بشكل مجمع")
                 return True
                 
         except Exception as e:

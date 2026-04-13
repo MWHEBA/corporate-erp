@@ -1,4 +1,4 @@
-"""
+﻿"""
 اختبارات شاملة لنماذج النظام المالي
 """
 from django.test import TestCase
@@ -364,7 +364,7 @@ class FinancialCategoryModelTest(TestCase):
         # إنشاء حسابات محاسبية
         self.revenue_account = ChartOfAccounts.objects.create(
             code='40100',
-            name='إيرادات الرسوم الدراسية',
+            name='إيرادات الرسوم الأساسية',
             account_type=self.revenue_type,
             is_leaf=True,
             created_by=self.user
@@ -381,15 +381,15 @@ class FinancialCategoryModelTest(TestCase):
     def test_create_category(self):
         """اختبار إنشاء تصنيف مالي"""
         category = FinancialCategory.objects.create(
-            code='tuition',
-            name='الرسوم الدراسية',
-            description='رسوم الدراسة للطلاب',
+            code='sales',
+            name='مبيعات',
+            description='مبيعات المنتجات والخدمات',
             default_revenue_account=self.revenue_account,
             display_order=1
         )
         
-        self.assertEqual(category.code, 'tuition')
-        self.assertEqual(category.name, 'الرسوم الدراسية')
+        self.assertEqual(category.code, 'sales')
+        self.assertEqual(category.name, 'رسوم الخدمات')
         self.assertEqual(category.default_revenue_account, self.revenue_account)
         self.assertTrue(category.is_active)
     

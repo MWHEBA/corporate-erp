@@ -76,7 +76,6 @@ class StockCalculationEngine:
                 
                 # التحقق من أن المنتج المكون نشط
                 if not component_product.is_active:
-                    logger.info(f"المكون {component_product.name} غير نشط، المخزون المجمع = 0")
                     return 0
                 
                 # الحصول على المخزون الحالي للمكون
@@ -84,7 +83,6 @@ class StockCalculationEngine:
                 
                 # إذا كان أي مكون بدون مخزون، فالمنتج المجمع غير متاح
                 if component_stock <= 0:
-                    logger.info(f"المكون {component_product.name} بدون مخزون، المخزون المجمع = 0")
                     return 0
                 
                 # حساب عدد الوحدات المجمعة الممكنة من هذا المكون
@@ -155,10 +153,6 @@ class StockCalculationEngine:
                     'recalculated_at': timezone.now()
                 })
                 
-                logger.info(
-                    f"إعادة حساب مخزون المنتج المجمع {bundle.name}: "
-                    f"{old_stock} → {new_stock} (بسبب تغيير {component_product.name})"
-                )
             
             return results
             
@@ -218,7 +212,6 @@ class StockCalculationEngine:
                         errors.append(error_msg)
                         logger.error(error_msg)
             
-            logger.info(f"تم إعادة حساب مخزون {total_processed} منتج مجمع بنجاح")
             
             return {
                 'total_processed': total_processed,

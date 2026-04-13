@@ -46,7 +46,8 @@ def _get_arabic_permission_name(permission):
         'invoice': 'الفواتير',
         'payment': 'المدفوعات',
         'fee': 'الرسوم',
-        'feepayment': 'مدفوعات الرسوم',
+        'customer': 'العملاء',
+        'customerpayment': 'دفعات العملاء',
         'account': 'الحسابات',
         'audittrail': 'سجلات التدقيق',
         'balanceauditlog': 'سجلات مراجعة الرصيد',
@@ -80,7 +81,7 @@ def _get_arabic_permission_name(permission):
         elif action_part == 'employees':
             return 'إدارة الموظفين'
         elif action_part == 'buses':
-            return 'إدارة الباصات'
+            return 'إدارة وسائل النقل'
         elif action_part == 'routes':
             return 'إدارة المسارات'
         elif action_part == 'enrollments':

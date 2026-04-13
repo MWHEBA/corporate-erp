@@ -47,6 +47,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
     age = serializers.IntegerField(read_only=True)
     years_of_service = serializers.IntegerField(read_only=True)
     biometric_user_id = serializers.SerializerMethodField()
+    shift = serializers.SerializerMethodField()
     
     # Sensitive fields with masking
     national_id = serializers.SerializerMethodField()
@@ -60,6 +61,41 @@ class EmployeeSerializer(serializers.ModelSerializer):
             mapping = BiometricUserMapping.objects.filter(employee=obj, is_active=True).first()
             return mapping.biometric_user_id if mapping else None
         except:
+            return None
+
+    def get_shift(self, obj):
+        """جلب بيانات الوردية مع مراعاة أوقات رمضان بناءً على تاريخ الإذن"""
+        if not obj.shift:
+            return None
+        try:
+            from .models.attendance import RamadanSettings
+            from datetime import date
+            # استخدام تاريخ الإذن إن وُجد، وإلا اليوم
+            request = self.context.get('request')
+            perm_date_str = request.query_params.get('perm_date') if request else None
+            if perm_date_str:
+                from datetime import datetime
+                target_date = datetime.strptime(perm_date_str, '%Y-%m-%d').date()
+            else:
+                target_date = date.today()
+
+            ramadan = RamadanSettings.objects.filter(
+                start_date__lte=target_date,
+                end_date__gte=target_date
+            ).first()
+            if ramadan and obj.shift.ramadan_start_time and obj.shift.ramadan_end_time:
+                start = obj.shift.ramadan_start_time.strftime('%H:%M')
+                end = obj.shift.ramadan_end_time.strftime('%H:%M')
+            else:
+                start = obj.shift.start_time.strftime('%H:%M')
+                end = obj.shift.end_time.strftime('%H:%M')
+            return {
+                'id': obj.shift.id,
+                'name': obj.shift.name,
+                'start_time': start,
+                'end_time': end,
+            }
+        except Exception:
             return None
     
     def _can_view_sensitive_data(self, obj):
@@ -135,7 +171,8 @@ class EmployeeSerializer(serializers.ModelSerializer):
             'emergency_contact_phone', 'department', 'department_name',
             'job_title', 'job_title_name', 'direct_manager', 'hire_date',
             'years_of_service', 'employment_type', 'status', 'termination_date',
-            'termination_reason', 'biometric_user_id', 'photo', 'created_by', 'created_at', 'updated_at'
+            'termination_reason', 'biometric_user_id', 'photo', 'created_by', 'created_at', 'updated_at',
+            'shift'
         ]
         read_only_fields = ['created_at', 'updated_at', 'age', 'years_of_service', 'full_name_ar']
 

@@ -117,9 +117,10 @@
                         
                         <div class="nav-divider"></div>
                         
+                        <li class="submenu-title">الإعدادات</li>
                         <li>
                             <a href="{% url 'supplier:supplier_type_settings_list' %}" class="submenu-link">
-                                <i class="fas fa-tags me-2"></i>{% trans "إعدادات أنواع الموردين" %}
+                                <i class="fas fa-cog me-2"></i>{% trans "إعدادات الموردين" %}
                             </a>
                         </li>
                     </ul>
@@ -336,6 +337,36 @@
                             </a>
                         </li>
                         
+                    </ul>
+                </li>
+                {% endif %}
+
+                <!-- نظام تسعير المطبوعات -->
+                {% is_module_enabled 'printing_pricing' as printing_pricing_enabled %}
+                {% if printing_pricing_enabled %}
+                <li class="sidebar-item">
+                    <a href="#printingPricingMenu" class="sidebar-link collapsed {% if active_menu == 'printing_pricing' %}active{% endif %}" data-bs-toggle="collapse" aria-expanded="false">
+                        <i class="fas fa-print sidebar-icon"></i>
+                        <span class="sidebar-text">{% trans "تسعير المطبوعات" %}</span>
+                        <i class="fas fa-chevron-down sidebar-arrow"></i>
+                    </a>
+                    <ul class="collapse list-unstyled submenu {% if active_menu == 'printing_pricing' %}show{% endif %}" id="printingPricingMenu">
+                        <li>
+                            <a href="{% url 'printing_pricing:order_list' %}" class="submenu-link">
+                                <i class="fas fa-print me-2"></i>{% trans "أوامر التسعير" %}
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{% url 'printing_pricing:order_create' %}" class="submenu-link">
+                                <i class="fas fa-plus-circle me-2"></i>{% trans "طلب جديد" %}
+                            </a>
+                        </li>
+                        <div class="nav-divider"></div>
+                        <li>
+                            <a href="{% url 'printing_pricing:settings_home' %}" class="submenu-link">
+                                <i class="fas fa-cog me-2"></i>{% trans "إعدادات التسعير" %}
+                            </a>
+                        </li>
                     </ul>
                 </li>
                 {% endif %}

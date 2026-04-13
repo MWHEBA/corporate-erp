@@ -37,6 +37,11 @@ def purchase_list(request):
     if supplier:
         purchases_query = purchases_query.filter(supplier_id=supplier)
 
+    # تصفية حسب المخزن
+    warehouse = request.GET.get("warehouse")
+    if warehouse:
+        purchases_query = purchases_query.filter(warehouse_id=warehouse)
+
     # تصفية حسب حالة الدفع
     payment_status = request.GET.get("payment_status")
     if payment_status:
@@ -65,8 +70,8 @@ def purchase_list(request):
 
     # التصفح والترقيم
     paginator = Paginator(purchases_query, 25)
-    page = request.GET.get("page")
-    purchases = paginator.get_page(page)
+    page_number = request.GET.get("page", 1)
+    purchases = paginator.get_page(page_number)
 
     # إحصائيات للعرض في الصفحة
     paid_purchases_count = Purchase.objects.filter(payment_status="paid").count()
@@ -89,7 +94,7 @@ def purchase_list(request):
     courses_count = Purchase.objects.filter(service_type='course').count()
 
     # الحصول على قائمة الموردين للفلترة
-    suppliers = Supplier.objects.filter(is_active=True).order_by("name")
+    suppliers = Supplier.objects.filter(id__in=Purchase.objects.values('supplier_id')).order_by("name")
 
     # تعريف عناوين أعمدة الجدول
     purchase_headers = [
@@ -109,16 +114,7 @@ def purchase_list(request):
             "class": "text-center",
             "format": "datetime_12h",
         },
-        {"key": "supplier.name", "label": _("المورد"), "sortable": True},
-        {
-            "key": "service_type_display",
-            "label": _("النوع"),
-            "sortable": True,
-            "class": "text-center",
-            "format": "badge",
-            "badge_class": "bg-success",
-            "default": "منتج",
-        },
+        {"key": "supplier.name", "label": _("المورد"), "sortable": True, "class": "fw-bold"},
         {"key": "warehouse.name", "label": _("المخزن"), "sortable": True},
         {
             "key": "total",
@@ -129,12 +125,14 @@ def purchase_list(request):
             "decimals": 2,
         },
         {
-            "key": "invoice_type",
-            "label": _("نوع الفاتورة"),
+            "key": "amount_due",
+            "label": _("المتبقي"),
             "sortable": True,
             "class": "text-center",
-            "template": "components/cells/purchase_payment_method.html",
+            "format": "currency",
+            "variant": "text-danger",
         },
+
         {
             "key": "payment_status",
             "label": _("حالة الدفع"),
@@ -142,12 +140,13 @@ def purchase_list(request):
             "class": "text-center",
             "format": "status",
         },
+
         {
-            "key": "return_status",
-            "label": _("حالة الإرجاع"),
-            "sortable": True,
-            "class": "text-center",
-            "format": "status",
+            "key": "actions",
+            "label": _(u"الإجراءات"),
+            "sortable": False,
+            "class": "text-center text-nowrap",
+            "width": "1%",
         },
     ]
 
@@ -187,24 +186,7 @@ def purchase_list(request):
     for purchase in purchases:
         # تحضير أزرار الإجراءات لكل فاتورة
         actions = []
-        
-        # زر العرض (دائماً متاح)
-        actions.append({
-            'url': reverse('purchase:purchase_detail', args=[purchase.pk]),
-            'icon': 'fas fa-eye',
-            'label': 'عرض',
-            'class': 'btn-outline-info btn-sm'
-        })
-        
-        # زر التعديل (إذا لم تكن مدفوعة بالكامل)
-        if purchase.payment_status != 'paid':
-            actions.append({
-                'url': reverse('purchase:purchase_edit', args=[purchase.pk]),
-                'icon': 'fas fa-edit',
-                'label': 'تعديل',
-                'class': 'btn-outline-primary btn-sm'
-            })
-        
+
         # زر إضافة دفعة (إذا لم تكن مدفوعة بالكامل)
         if purchase.payment_status != 'paid':
             actions.append({
@@ -213,16 +195,24 @@ def purchase_list(request):
                 'label': 'دفعة',
                 'class': 'btn-outline-success btn-sm'
             })
-        
-        # زر الحذف (إذا لم يكن لها دفعات مرحّلة)
-        has_posted_payments = purchase.payments.filter(status='posted').exists()
-        if not has_posted_payments:
+
+        # زر الطباعة (للفواتير المدفوعة فقط)
+        if purchase.payment_status == 'paid':
             actions.append({
-                'onclick': f'confirmDelete({purchase.pk})',
-                'icon': 'fas fa-trash',
-                'label': 'حذف',
-                'class': 'btn-outline-danger btn-sm'
+                'url': reverse('purchase:purchase_print', args=[purchase.pk]),
+                'icon': 'fas fa-print',
+                'label': 'طباعة',
+                'class': 'btn-outline-secondary btn-sm',
+                'target': '_blank',
             })
+
+        # زر نسخ الفاتورة
+        actions.append({
+            'url': reverse('purchase:purchase_duplicate', args=[purchase.pk]),
+            'icon': 'fas fa-copy',
+            'label': 'نسخ',
+            'class': 'btn-outline-primary btn-sm',
+        })
         
         # تحضير بيانات الصف
         row_data = {
@@ -230,18 +220,51 @@ def purchase_list(request):
             'number': purchase.number,
             'created_at': purchase.created_at,
             'supplier.name': purchase.supplier.name,
-            'service_type_display': purchase.get_service_type_display() if purchase.is_service else 'منتج',
             'warehouse.name': purchase.warehouse.name if purchase.warehouse else 'غير محدد',
             'total': purchase.total,
-            'invoice_type': 'cash' if purchase.payment_method not in ['credit', ''] else 'credit',
+            'amount_due': purchase.amount_due,
+
             'payment_status': purchase.payment_status,
-            'return_status': purchase.return_status if purchase.is_returned else '-',
             'actions': actions
         }
         table_data.append(row_data)
 
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        from django.template.loader import render_to_string
+        from django.http import JsonResponse
+        ctx = {
+            'table_id': 'purchases-table',
+            'headers': purchase_headers,
+            'data': table_data,
+            'empty_message': 'لا توجد فواتير مشتريات متاحة',
+            'primary_key': 'id',
+            'clickable_rows': True,
+            'row_click_url': '/purchases/0/',
+            'show_currency': True,
+            'currency_symbol': getattr(request, 'currency_symbol', 'ج.م'),
+            'disable_pagination': True,
+            'show_search': False,
+            'show_length_menu': False,
+            'sortable': False,
+        }
+        table_html = render_to_string('components/data_table.html', ctx, request=request)
+        pagination_html = ''
+        if paginator.num_pages > 1:
+            pagination_html = render_to_string('partials/pagination.html', {
+                'page_obj': purchases,
+                'align': 'center',
+            }, request=request)
+            
+        return JsonResponse({
+            'table_html': table_html,
+            'pagination_html': pagination_html,
+            'count': paginator.count,
+        })
+
     context = {
         "purchases": purchases,
+        "page_obj": purchases,
+        "paginator": paginator,
         "table_headers": purchase_headers,
         "table_data": table_data,
         "paid_purchases_count": paid_purchases_count,
@@ -250,6 +273,7 @@ def purchase_list(request):
         "returned_purchases_count": returned_purchases_count,
         "total_amount": total_amount,
         "suppliers": suppliers,
+        "warehouses": Warehouse.objects.filter(is_active=True).order_by("name"),
         "purchase_headers": purchase_headers,
         "purchase_actions": purchase_actions,
         "services_count": services_count,
@@ -371,6 +395,16 @@ def purchase_create(request, supplier_id=None):
                             )
                             item.save()
 
+                    # إنشاء حركات المخزون للفواتير غير الخدمية
+                    if not purchase.is_service:
+                        try:
+                            from purchase.services.purchase_service import PurchaseService
+                            PurchaseService._create_stock_movements(purchase, request.user)
+                            logger.info(f"✅ تم إنشاء حركات المخزون للفاتورة: {purchase.number}")
+                        except Exception as e:
+                            logger.error(f"❌ خطأ في إنشاء حركات المخزون: {str(e)}")
+                            raise
+
                     # إنشاء دفعة تلقائية للفواتير النقدية فقط (غير مرحلة)
                     if invoice_type == "cash" and purchase.payment_method not in ["credit", ""]:
                         # payment_method هو account code (مثل 10100)
@@ -441,6 +475,17 @@ def purchase_create(request, supplier_id=None):
     # جلب البيانات المطلوبة للقوائم المنسدلة (مطلوب في كل الحالات)
     suppliers = Supplier.objects.filter(is_active=True).order_by("name")
     warehouses = Warehouse.objects.filter(is_active=True).order_by("name")
+
+    # جلب التصنيفات للمودال
+    from product.models import Category
+    if is_service_invoice:
+        product_categories = Category.objects.filter(
+            is_active=True, products__is_active=True, products__is_service=True
+        ).distinct().order_by("name")
+    else:
+        product_categories = Category.objects.filter(
+            is_active=True, products__is_active=True, products__is_service=False, products__is_bundle=False
+        ).distinct().order_by("name")
     
     # إضافة أول مخزن متاح كافتراضي للنموذج الجديد
     if request.method == "GET" and warehouses.exists():
@@ -454,6 +499,7 @@ def purchase_create(request, supplier_id=None):
     context = {
         "form": form,
         "products": products,
+        "product_categories": product_categories,
         "suppliers": suppliers,
         "warehouses": warehouses,
         "next_purchase_number": next_purchase_number,
@@ -464,14 +510,14 @@ def purchase_create(request, supplier_id=None):
         "page_title": "إضافة فاتورة مشتريات" + (f" - {selected_supplier.name}" if selected_supplier else ""),
         "page_subtitle": "إضافة فاتورة مشتريات جديدة إلى النظام",
         "page_icon": "fas fa-plus-circle",
-        "header_buttons": [
+        "header_buttons": ([
             {
-                "url": reverse("supplier:supplier_detail", kwargs={"pk": selected_supplier.pk}) if selected_supplier else reverse("purchase:purchase_list"),
+                "url": reverse("supplier:supplier_detail", kwargs={"pk": selected_supplier.pk}),
                 "icon": "fa-arrow-right",
-                "text": "العودة لتفاصيل المورد" if selected_supplier else "العودة للقائمة",
+                "text": "العودة لتفاصيل المورد",
                 "class": "btn-secondary",
             },
-        ],
+        ] if selected_supplier else []),
         "breadcrumb_items": [
             {
                 "title": "الرئيسية",
@@ -531,6 +577,12 @@ def purchase_detail(request, pk):
             "text": "إضافة دفعة",
             "class": "btn-success",
         }] if purchase.payment_status != 'paid' else []) + [
+            {
+                "url": reverse("purchase:purchase_duplicate", kwargs={"pk": purchase.pk}),
+                "icon": "fa-copy",
+                "text": "نسخ",
+                "class": "btn-outline-primary",
+            },
             {
                 "url": "#",
                 "icon": "fa-ellipsis-v",
@@ -981,3 +1033,105 @@ def purchase_print(request, pk):
     }
 
     return render(request, "purchase/purchase_print.html", context)
+
+
+@login_required
+def purchase_duplicate(request, pk):
+    """
+    نسخ فاتورة مشتريات - فتح صفحة الإنشاء مع تحميل بيانات الفاتورة الأصلية
+    المستخدم يراجع ويعدّل ثم يحفظ
+    """
+    original = get_object_or_404(Purchase, pk=pk)
+
+    # تحديد نوع الفاتورة
+    is_service_invoice = original.is_service_invoice
+    selected_supplier = original.supplier
+
+    # فلترة المنتجات حسب نوع المورد
+    if is_service_invoice:
+        products = Product.objects.filter(is_active=True, is_service=True).order_by("name")
+    else:
+        products = Product.objects.filter(is_active=True, is_service=False, is_bundle=False).order_by("name")
+
+    suppliers = Supplier.objects.filter(is_active=True).order_by("name")
+    warehouses = Warehouse.objects.filter(is_active=True).order_by("name")
+
+    # جلب التصنيفات للمودال
+    from product.models import Category
+    if is_service_invoice:
+        product_categories = Category.objects.filter(
+            is_active=True, products__is_active=True, products__is_service=True
+        ).distinct().order_by("name")
+    else:
+        product_categories = Category.objects.filter(
+            is_active=True, products__is_active=True, products__is_service=False, products__is_bundle=False
+        ).distinct().order_by("name")
+
+    # رقم الفاتورة الجديد
+    last_purchase = Purchase.objects.order_by("-id").first()
+    next_purchase_number = f"PUR{(last_purchase.id + 1 if last_purchase else 1):04d}"
+
+    # تحضير بيانات البنود للـ template (float عشان JSON serialization)
+    import json
+    duplicate_items = json.dumps([
+        {
+            "product_id": item.product.id,
+            "quantity": item.quantity,
+            "unit_price": float(item.unit_price),
+            "discount": float(item.discount),
+            "total": float(item.total),
+        }
+        for item in original.items.all()
+    ])
+
+    # تحديد نوع الفاتورة (نقدي/آجل)
+    invoice_type = "credit" if original.payment_method == "credit" else "cash"
+
+    form = PurchaseForm(initial={
+        "date": timezone.now().date(),
+        "supplier": original.supplier,
+        "warehouse": original.warehouse,
+        "discount": original.discount,
+        "notes": original.notes,
+        "payment_method": original.payment_method,
+        "financial_category": original.financial_category,
+    })
+
+    context = {
+        "form": form,
+        "products": products,
+        "product_categories": product_categories,
+        "suppliers": suppliers,
+        "warehouses": warehouses,
+        "next_purchase_number": next_purchase_number,
+        "selected_supplier": selected_supplier,
+        "is_service_invoice": is_service_invoice,
+        "supplier_type_code": selected_supplier.get_primary_type_code() if selected_supplier else None,
+        "default_warehouse": original.warehouse or (warehouses.first() if warehouses.exists() else None),
+        # بيانات النسخ
+        "is_duplicate": True,
+        "duplicate_from": original.number,
+        "duplicate_items": duplicate_items,
+        "duplicate_invoice_type": invoice_type,
+        "duplicate_payment_method": original.payment_method,
+        "duplicate_financial_category_id": f"cat_{original.financial_category.id}" if original.financial_category else None,
+        "page_title": f"نسخ فاتورة - {original.number}",
+        "page_subtitle": f"نسخة من فاتورة {original.number} | {original.supplier.name}",
+        "page_icon": "fas fa-copy",
+        "header_buttons": [
+            {
+                "url": reverse("purchase:purchase_detail", kwargs={"pk": original.pk}),
+                "icon": "fa-arrow-right",
+                "text": "العودة للفاتورة الأصلية",
+                "class": "btn-secondary",
+            },
+        ],
+        "breadcrumb_items": [
+            {"title": "الرئيسية", "url": reverse("core:dashboard"), "icon": "fas fa-home"},
+            {"title": "المشتريات", "url": reverse("purchase:purchase_list"), "icon": "fas fa-shopping-bag"},
+            {"title": original.number, "url": reverse("purchase:purchase_detail", kwargs={"pk": original.pk}), "icon": "fas fa-file-invoice"},
+            {"title": "نسخ الفاتورة", "active": True},
+        ],
+    }
+
+    return render(request, "purchase/purchase_form.html", context)

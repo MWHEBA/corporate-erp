@@ -48,6 +48,7 @@ from .views.transaction_views import (
     journal_entries_post,
     transaction_list,
     transaction_detail,
+    manual_journal_entry_create,
     # transaction_create,  # تم حذفه - تحت التطوير
     # transaction_edit,  # تم حذفه - تحت التطوير
     # transaction_delete,  # تم حذفه - تحت التطوير

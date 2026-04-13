@@ -25,7 +25,7 @@
         altInput: true,
         altFormat: "d/m/Y",
         allowInput: true,
-        disableMobile: false,  // السماح بالعمل على الموبايل
+        disableMobile: true,  // على الموبايل: استخدام native date picker
         position: "auto right",
         // تعطيل تحويل الأرقام للعربية
         formatDate: function(date, format) {

@@ -132,7 +132,6 @@ class AccountBalanceCache(models.Model):
 
             self.save()
 
-            logger.info(f"تم تحديث كاش الرصيد للحساب {self.account.code}")
             return True
 
         except Exception as e:

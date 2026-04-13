@@ -35,7 +35,6 @@ class AdvancedBalanceValidationService:
         if not date_to:
             date_to = timezone.now().date()
 
-        logger.info(f"بدء التحقق من صحة الأرصدة حتى تاريخ {date_to}")
 
         results = {
             "validation_date": date_to,
@@ -84,9 +83,6 @@ class AdvancedBalanceValidationService:
         # حفظ نتائج التحقق
         cls._save_validation_results(results, date_to)
 
-        logger.info(
-            f"انتهى التحقق: {results['valid_accounts']} صحيح، {results['invalid_accounts']} خطأ"
-        )
         return results
 
     @classmethod
@@ -170,7 +166,6 @@ class AdvancedBalanceValidationService:
                 notes=f"إصلاح فرق الرصيد: {difference}",
             )
 
-            logger.info(f"تم إصلاح رصيد الحساب {account.code}")
             return True
 
         except Exception as e:
@@ -185,7 +180,6 @@ class AdvancedBalanceValidationService:
         if not date_to:
             date_to = timezone.now().date()
 
-        logger.info(f"التحقق من سلامة ميزان المراجعة حتى {date_to}")
 
         # الحصول على ميزان المراجعة
         trial_balance = EnhancedBalanceService.get_trial_balance_optimized(
@@ -233,7 +227,6 @@ class AdvancedBalanceValidationService:
             "status": "متوازن" if is_balanced else f"غير متوازن - الفرق: {difference}",
         }
 
-        logger.info(f"نتيجة التحقق: {result['status']}")
         return result
 
     @classmethod
@@ -329,7 +322,6 @@ class AdvancedBalanceValidationService:
         """
         تسوية رصيد الحساب مع رصيد خارجي
         """
-        logger.info(f"بدء تسوية الحساب {account.code} بتاريخ {reconciliation_date}")
 
         # حساب الرصيد من النظام
         system_balance = EnhancedBalanceService.get_account_balance_optimized(
@@ -377,9 +369,6 @@ class AdvancedBalanceValidationService:
             notes=f"تسوية مع رصيد خارجي {external_balance}",
         )
 
-        logger.info(
-            f"انتهت تسوية الحساب {account.code} - الحالة: {reconciliation.status}"
-        )
         return result
 
     @classmethod
@@ -411,11 +400,10 @@ class AdvancedBalanceValidationService:
         try:
             # يمكن إنشاء نموذج منفصل لحفظ نتائج التحقق
             # أو حفظها في ملف log
-            logger.info(f"نتائج التحقق من الأرصدة بتاريخ {validation_date}:")
-            logger.info(f"إجمالي الحسابات: {results['total_accounts']}")
-            logger.info(f"الحسابات الصحيحة: {results['valid_accounts']}")
-            logger.info(f"الحسابات الخاطئة: {results['invalid_accounts']}")
-            logger.info(f"إجمالي الفروقات: {results['total_discrepancy_amount']}")
+            pass  # Can be extended to save to database
+            
+        except Exception as e:
+            logger.error(f"خطأ في حفظ نتائج التحقق: {str(e)}")
 
         except Exception as e:
             logger.error(f"خطأ في حفظ نتائج التحقق: {str(e)}")
@@ -428,7 +416,6 @@ class AdvancedBalanceValidationService:
         if not date_to:
             date_to = timezone.now().date()
 
-        logger.info(f"إنشاء تقرير صحة الأرصدة لتاريخ {date_to}")
 
         # التحقق من جميع الأرصدة
         balance_validation = cls.validate_all_balances(date_to)
@@ -464,9 +451,6 @@ class AdvancedBalanceValidationService:
             ),
         }
 
-        logger.info(
-            f"تم إنشاء تقرير صحة الأرصدة - النتيجة: {report['health_score']}/100"
-        )
         return report
 
     @classmethod

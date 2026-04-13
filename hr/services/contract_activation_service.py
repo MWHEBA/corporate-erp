@@ -67,7 +67,7 @@ class ContractActivationService:
         contract.status = 'active'
         contract.save()
         
-        # 2.5. التأكد من وجود بند الراتب الأساسي
+        # 2.5. التأكد من وجود بند الأجر الأساسي
         if contract.basic_salary and contract.basic_salary > 0:
             basic_exists = ContractSalaryComponent.objects.filter(
                 contract=contract,
@@ -75,12 +75,12 @@ class ContractActivationService:
             ).exists()
             
             if not basic_exists:
-                # إضافة بند الراتب الأساسي تلقائياً
+                # إضافة بند الأجر الأساسي تلقائياً
                 ContractSalaryComponent.objects.create(
                     contract=contract,
                     component_type='earning',
                     code='BASIC_SALARY',
-                    name='الراتب الأساسي',
+                    name='الأجر الأساسي',
                     calculation_method='fixed',
                     amount=contract.basic_salary,
                     is_basic=True,

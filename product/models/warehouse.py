@@ -172,64 +172,38 @@ class StockTransfer(models.Model):
         return False
 
     def receive(self, user, received_quantity=None):
-        """
-        استلام التحويل
-        ✅ UNIFIED: Uses MovementService for stock updates
-        """
+        """استلام التحويل"""
         if self.can_receive():
-            from governance.services.movement_service import MovementService
-            
             received_qty = received_quantity or self.quantity
-            movement_service = MovementService()
 
+            # تحديث المخزون في المخزن المستلم
+            from .stock_management import Stock
+            to_stock, created = Stock.objects.get_or_create(
+                product=self.product,
+                warehouse=self.to_warehouse,
+                defaults={"quantity": 0, "average_cost": self.product.cost_price},
+            )
+            to_stock.quantity += received_qty
+            to_stock.last_movement_date = timezone.now()
+            to_stock.save()
+
+            # تحديث المخزون في المخزن المرسل
             try:
-                # ✅ خروج من المخزن المرسل
-                movement_service.process_movement(
-                    product_id=self.product.id,
-                    quantity_change=received_qty,
-                    movement_type='out',
-                    source_reference=f"TRANSFER_REQUEST:{self.id}",
-                    idempotency_key=f"SM:transfer_request:{self.id}:out",
-                    user=user,
-                    warehouse_id=self.from_warehouse.id,
-                    notes=f"تحويل إلى {self.to_warehouse.name}"
+                from .stock_management import Stock
+                from_stock = Stock.objects.get(
+                    product=self.product, warehouse=self.from_warehouse
                 )
-                
-                # ✅ دخول إلى المخزن المستلم
-                movement_service.process_movement(
-                    product_id=self.product.id,
-                    quantity_change=received_qty,
-                    movement_type='in',
-                    source_reference=f"TRANSFER_REQUEST:{self.id}",
-                    idempotency_key=f"SM:transfer_request:{self.id}:in",
-                    user=user,
-                    warehouse_id=self.to_warehouse.id,
-                    unit_cost=self.product.cost_price,
-                    notes=f"تحويل من {self.from_warehouse.name}"
-                )
+                from_stock.quantity -= received_qty
+                from_stock.release_quantity(received_qty)
+                from_stock.save()
+            except Stock.DoesNotExist:
+                pass
 
-                # إلغاء حجز الكمية من المخزن المرسل
-                try:
-                    from .stock_management import Stock
-                    from_stock = Stock.objects.get(
-                        product=self.product, warehouse=self.from_warehouse
-                    )
-                    from_stock.release_quantity(received_qty)
-                except Stock.DoesNotExist:
-                    pass
-
-                self.status = "completed"
-                self.received_by = user
-                self.receive_date = timezone.now()
-                self.save()
-                return True
-                
-            except Exception as e:
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.error(f"Error receiving transfer request {self.id}: {e}")
-                return False
-                
+            self.status = "completed"
+            self.received_by = user
+            self.receive_date = timezone.now()
+            self.save()
+            return True
         return False
 
     def cancel(self, user, reason=None):

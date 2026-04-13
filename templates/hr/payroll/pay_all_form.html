@@ -118,12 +118,11 @@
                                     <tr>
                                         <td class="text-center">{{ forloop.counter }}</td>
                                         <td class="text-center">{{ payroll.employee.get_full_name_ar }}</td>
-                                        <td class="text-center">{{ payroll.gross_salary|remove_trailing_zeros }} ج.م</td>
+                                        <td class="text-center">{{ payroll.correct_gross_salary|remove_trailing_zeros }} ج.م</td>
                                         <td class="text-center">{{ payroll.total_deductions|remove_trailing_zeros }} ج.م</td>
-                                        <td class="text-success fw-bold text-center">{{ payroll.net_salary|remove_trailing_zeros }} ج.م</td>
+                                        <td class="text-success fw-bold text-center">{{ payroll.correct_net_salary|remove_trailing_zeros }} ج.م</td>
                                     </tr>
-                                    {% endfor %}
-                                </tbody>
+                                    {% endfor %}                                </tbody>
                             </table>
                         </div>
                     </div>

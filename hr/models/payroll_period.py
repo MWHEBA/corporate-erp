@@ -163,12 +163,7 @@ class PayrollPeriod(models.Model):
             if self.start_date >= self.end_date:
                 errors['end_date'] = 'تاريخ النهاية يجب أن يكون بعد تاريخ البداية'
             
-            # التحقق من أن التواريخ في نفس الشهر والسنة
-            if (self.start_date.year != self.year or 
-                self.start_date.month != self.month or
-                self.end_date.year != self.year or 
-                self.end_date.month != self.month):
-                errors['start_date'] = 'التواريخ يجب أن تكون في نفس الشهر والسنة المحددين'
+            # ملاحظة: الدورة المرنة قد تمتد على شهرين، لذا لا نتحقق من نفس الشهر
         
         if errors:
             raise ValidationError(errors)
@@ -178,9 +173,9 @@ class PayrollPeriod(models.Model):
         
         # تعيين تواريخ البداية والنهاية تلقائياً إذا لم تكن محددة
         if not self.start_date or not self.end_date:
-            self.start_date = timezone.datetime(self.year, self.month, 1).date()
-            last_day = calendar.monthrange(self.year, self.month)[1]
-            self.end_date = timezone.datetime(self.year, self.month, last_day).date()
+            from hr.utils.payroll_helpers import get_payroll_period
+            month_date = timezone.datetime(self.year, self.month, 1).date()
+            self.start_date, self.end_date, _ = get_payroll_period(month_date)
         
         self.full_clean()
         super().save(*args, **kwargs)
@@ -217,11 +212,10 @@ class PayrollPeriod(models.Model):
     def calculate_totals(self):
         """حساب الإجماليات من قسائم الرواتب المرتبطة"""
         from .payroll import Payroll
+        from datetime import date
         
-        payrolls = Payroll.objects.filter(
-            month__year=self.year,
-            month__month=self.month
-        )
+        month_date = date(self.year, self.month, 1)
+        payrolls = Payroll.objects.filter(month=month_date)
         
         self.total_employees = payrolls.count()
         self.total_gross_salary = sum(p.gross_salary or Decimal('0') for p in payrolls)

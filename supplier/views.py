@@ -27,10 +27,9 @@ def supplier_list(request):
     # فلترة بناءً على المعايير
     status = request.GET.get("status", "")
     search = request.GET.get("search", "")
-    supplier_type = request.GET.get("supplier_type", "")
-    preferred = request.GET.get("preferred", "")
+    has_debt = request.GET.get("has_debt", "")
     order_by = request.GET.get("order_by", "balance")
-    order_dir = request.GET.get("order_dir", "desc")  # تنازلي افتراضيًا
+    order_dir = request.GET.get("order_dir", "desc")
 
     suppliers = Supplier.objects.select_related("primary_type__settings").all()
 
@@ -39,12 +38,6 @@ def supplier_list(request):
     elif status == "inactive":
         suppliers = suppliers.filter(is_active=False)
 
-    if supplier_type:
-        suppliers = suppliers.filter(primary_type__id=supplier_type)
-
-    if preferred == "1":
-        suppliers = suppliers.filter(is_preferred=True)
-
     if search:
         suppliers = suppliers.filter(
             models.Q(name__icontains=search)
@@ -52,27 +45,39 @@ def supplier_list(request):
             | models.Q(phone__icontains=search)
         )
 
+    if has_debt == "1":
+        suppliers = suppliers.filter(balance__gt=0)
+    elif has_debt == "0":
+        suppliers = suppliers.filter(balance__lte=0)
+
     # ترتيب النتائج
     if order_by:
-        order_field = order_by
-        if order_dir == "desc":
-            order_field = f"-{order_by}"
+        order_field = f"-{order_by}" if order_dir == "desc" else order_by
         suppliers = suppliers.order_by(order_field)
     else:
-        # ترتيب حسب الأعلى استحقاق افتراضيًا
         suppliers = suppliers.order_by("-balance")
+
+    # إضافة عدد الخدمات لكل مورد
+    from supplier.models import SupplierService
+    services_counts = {
+        row['supplier_id']: row['cnt']
+        for row in SupplierService.objects.filter(is_active=True).values('supplier_id').annotate(cnt=models.Count('id'))
+    }
+    for s in suppliers:
+        cnt = services_counts.get(s.pk, 0)
+        s.services_count = f'<span class="badge bg-{"warning text-dark" if cnt > 0 else "secondary"}">{cnt}</span>'
 
     active_suppliers = suppliers.filter(is_active=True).count()
     preferred_suppliers = suppliers.filter(is_preferred=True).count()
+    total_debt = suppliers.aggregate(total=models.Sum('balance'))['total'] or 0
+    total_purchases = 0
 
-    # حساب إجمالي الاستحقاق الفعلي
-    total_debt = 0
-    for supplier in suppliers:
-        supplier_debt = supplier.actual_balance
-        if supplier_debt > 0:  # فقط الاستحقاق الموجب
-            total_debt += supplier_debt
-
-    total_purchases = 0  # قد تحتاج لحساب إجمالي المشتريات من موديل آخر
+    # DB-level pagination
+    from django.core.paginator import Paginator
+    paginator = Paginator(suppliers, 25)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    suppliers = page_obj
 
     # جلب أنواع الموردين للفلتر من الإعدادات الديناميكية
     supplier_types = SupplierType.objects.filter(
@@ -114,6 +119,15 @@ def supplier_list(request):
         {"key": "is_active", "label": "الحالة", "sortable": True, "format": "boolean"},
     ]
 
+    # إضافة عمود عدد الخدمات
+    headers.insert(-1, {
+        "key": "services_count",
+        "label": "الخدمات",
+        "sortable": False,
+        "class": "text-center",
+        "format": "html",
+    })
+
     # تعريف أزرار الإجراءات
     action_buttons = [
         {
@@ -130,8 +144,27 @@ def supplier_list(request):
         },
     ]
 
+    # Ajax response - بعد تعريف headers و action_buttons
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        table_html = render_to_string('supplier/core/partials/supplier_table.html', {
+            'suppliers': suppliers,
+            'headers': headers,
+            'action_buttons': action_buttons,
+        }, request=request)
+        pagination_html = render_to_string('partials/pagination.html', {
+            'page_obj': page_obj,
+            'align': 'center',
+        }, request=request) if paginator.num_pages > 1 else ''
+        return JsonResponse({
+            'table_html': table_html,
+            'pagination_html': pagination_html,
+            'count': paginator.count,
+        })
+
     context = {
         "suppliers": suppliers,
+        "page_obj": page_obj,
+        "paginator": paginator,
         "headers": headers,
         "action_buttons": action_buttons,
         "active_suppliers": active_suppliers,
@@ -152,7 +185,13 @@ def supplier_list(request):
                 "icon": "fa-plus",
                 "text": "إضافة مورد",
                 "class": "btn-primary",
-            }
+            },
+            {
+                "onclick": "syncWithDaftra('suppliers')",
+                "icon": "fa-sync",
+                "text": "مزامنة دفترة",
+                "class": "btn-outline-info",
+            },
         ],
         # البريدكرمب
         "breadcrumb_items": [
@@ -164,17 +203,6 @@ def supplier_list(request):
             {"title": "الموردين", "active": True},
         ],
     }
-
-    # Ajax response
-    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-        return JsonResponse(
-            {
-                "html": render_to_string(
-                    "supplier/core/supplier_list.html", context, request
-                ),
-                "success": True,
-            }
-        )
 
     return render(request, "supplier/core/supplier_list.html", context)
 
@@ -1313,7 +1341,66 @@ def supplier_detail(request, pk):
         },
     ]
 
-    # تجميع الخدمات المتخصصة حسب الفئة للعرض (نفس طريقة regroup)
+    # جلب خدمات المورد — المرحلة الثانية
+    from supplier.models import SupplierService, ServiceType
+    supplier_services = SupplierService.objects.filter(
+        supplier=supplier
+    ).select_related('service_type').prefetch_related('price_tiers').order_by(
+        'service_type__order', 'name'
+    )
+    supplier_services_count = supplier_services.count()
+    service_types_available = ServiceType.objects.filter(is_active=True).order_by('order', 'name')
+
+    # تجميع الخدمات حسب نوعها
+    services_by_type = {}
+    for svc in supplier_services:
+        code = svc.service_type.code
+        if code not in services_by_type:
+            services_by_type[code] = {
+                'service_type': svc.service_type,
+                'services': [],
+            }
+        services_by_type[code]['services'].append(svc)
+
+    # أعمدة جدول الخدمات الموحد
+    supplier_services_headers = [
+        {'key': 'service_type_name', 'label': 'نوع الخدمة',  'sortable': True,  'class': 'text-center', 'format': 'html', 'width': '20%'},
+        {'key': 'name',              'label': 'اسم الخدمة',  'sortable': True,  'class': 'text-start',  'width': '35%'},
+        {'key': 'base_price',        'label': 'السعر الأساسي','sortable': True,  'class': 'text-center', 'format': 'currency', 'width': '18%'},
+        {'key': 'tiers_count',       'label': 'الشرائح',      'sortable': False, 'class': 'text-center', 'format': 'html',     'width': '12%'},
+        {'key': 'is_active',         'label': 'الحالة',       'sortable': True,  'class': 'text-center', 'format': 'status',   'width': '10%'},
+        {'key': 'actions',           'label': 'الإجراءات',    'sortable': False, 'class': 'text-center', 'width': '5%'},
+    ]
+
+    supplier_services_table_data = []
+    for svc in supplier_services:
+        tiers = svc.price_tiers.filter(is_active=True)
+        tiers_count = tiers.count()
+        detail_url = reverse("supplier:supplier_service_detail", kwargs={"pk": supplier.pk, "service_pk": svc.pk})
+        tiers_badge = (
+            f'<a href="{detail_url}" class="badge bg-info text-decoration-none">{tiers_count} شريحة</a>'
+            if tiers_count > 0
+            else f'<a href="{detail_url}" class="badge bg-secondary text-decoration-none">0</a>'
+        )
+        icon = svc.service_type.icon
+        type_badge = f'<span class="badge" style="background:var(--bs-primary);"><i class="{icon} me-1"></i>{svc.service_type.name}</span>'
+        actions_html = (
+            f'<a href="{reverse("supplier:supplier_service_edit", kwargs={"pk": supplier.pk, "service_pk": svc.pk})}" '
+            f'class="btn btn-sm btn-outline-primary" title="تعديل"><i class="fas fa-edit"></i></a>'
+        )
+        supplier_services_table_data.append({
+            'id':               svc.pk,
+            'service_type_name': type_badge,
+            'name':             svc.name,
+            'base_price':       svc.base_price,
+            'setup_cost':       svc.setup_cost,
+            'tiers_count':      tiers_badge,
+            'is_active':        svc.is_active,
+            'actions':          actions_html,
+            '_row_url':         reverse("supplier:supplier_service_detail", kwargs={"pk": supplier.pk, "service_pk": svc.pk}),
+        })
+
+    # تجميع الخدمات حسب الفئة للعرض (نفس طريقة regroup)
     # Note: Specialized services have been removed as part of supplier categories cleanup
     services_by_category = []
 
@@ -1332,9 +1419,14 @@ def supplier_detail(request, pk):
         "journal_entries": journal_entries,
         "journal_entries_count": journal_entries_count,
         "financial_account": financial_account,
-        "supplier_services_count": 0,  # عدد الخدمات الإجمالي - removed as part of cleanup
-        "supplier_service_categories_count": supplier_service_categories_count,  # عدد أنواع الخدمات (الفئات)
-        "services_by_category": services_by_category,  # الخدمات مجمعة حسب الفئة
+        "supplier_services_count": supplier_services_count,
+        "supplier_service_categories_count": supplier_service_categories_count,
+        "services_by_category": services_by_category,
+        "supplier_services": supplier_services,
+        "supplier_services_table_data": supplier_services_table_data,
+        "supplier_services_headers": supplier_services_headers,
+        "services_by_type": services_by_type,
+        "service_types_available": service_types_available,
         "purchase_headers": purchase_headers,  # أعمدة جدول المشتريات
         "purchase_action_buttons": purchase_action_buttons,  # أزرار إجراءات المشتريات
         "products_headers": products_headers,  # أعمدة جدول المنتجات
@@ -1558,23 +1650,19 @@ def supplier_create_account(request, pk):
                 messages.error(request, error_msg)
                 return redirect("supplier:supplier_change_account", pk=supplier.pk)
             
-            # إنشاء كود فريد للحساب الجديد
-            # البحث عن آخر حساب فرعي تحت حساب الموردين
-            # النمط المتوقع: 2010001, 2010002, 2010003...
+            # البحث عن آخر حساب فرعي تحت حساب الموردين - النمط: 2010XXXX
             last_supplier_account = ChartOfAccounts.objects.filter(
                 parent=suppliers_account,
-                code__regex=r'^2101\d{3}$'  # يبدأ بـ 2101 ويتبعه 3 أرقام
-            ).order_by('-code').first()
+                code__startswith='2010'
+            ).exclude(code='20100').order_by('-code').first()
             
             if last_supplier_account:
-                # استخراج الرقم التسلسلي من آخر 3 أرقام
-                last_number = int(last_supplier_account.code[-3:])
+                last_number = int(last_supplier_account.code[-4:])
                 new_number = last_number + 1
             else:
                 new_number = 1
             
-            # تكوين الكود الجديد: 2101 + رقم تسلسلي من 3 أرقام
-            new_code = f"2101{new_number:03d}"
+            new_code = f"2010{new_number:04d}"
             
             # إنشاء اسم مناسب للحساب
             account_name = f"مورد - {supplier.name}"
@@ -1644,3 +1732,531 @@ def supplier_create_account(request, pk):
 # - get_paper_price_api
 # - debug_paper_services_api
 # - root_cause_analysis_api
+
+
+# ===================================================================
+# خدمات الموردين — المرحلة الثانية
+# ===================================================================
+
+@login_required
+def supplier_service_add(request, pk):
+    """إضافة خدمة جديدة للمورد"""
+    supplier = get_object_or_404(Supplier, pk=pk)
+    from supplier.models import SupplierService, ServiceType
+
+    if request.method == 'POST':
+        service_type_id = request.POST.get('service_type')
+        name            = request.POST.get('name', '').strip()
+        base_price      = request.POST.get('base_price', '0') or '0'
+        setup_cost      = request.POST.get('setup_cost', '0') or '0'
+        notes           = request.POST.get('notes', '')
+        is_active       = request.POST.get('is_active') == 'on'
+
+        attributes = {}
+        for key, val in request.POST.items():
+            if key.startswith('attr_'):
+                attributes[key[5:]] = val
+
+        errors = {}
+        if not service_type_id:
+            errors['service_type'] = 'نوع الخدمة مطلوب'
+        if not name:
+            errors['name'] = 'اسم الخدمة مطلوب'
+
+        if not errors:
+            try:
+                service_type = ServiceType.objects.get(pk=service_type_id, is_active=True)
+                from decimal import Decimal, InvalidOperation
+                try:
+                    bp = Decimal(base_price)
+                    sc = Decimal(setup_cost)
+                except InvalidOperation:
+                    bp = Decimal('0')
+                    sc = Decimal('0')
+
+                SupplierService.objects.create(
+                    supplier=supplier,
+                    service_type=service_type,
+                    name=name,
+                    base_price=bp,
+                    setup_cost=sc,
+                    attributes=attributes,
+                    notes=notes,
+                    is_active=is_active,
+                )
+                messages.success(request, f'تم إضافة الخدمة "{name}" بنجاح')
+                return redirect(reverse('supplier:supplier_detail', kwargs={'pk': pk}) + '#services-tab-pane')
+            except ServiceType.DoesNotExist:
+                errors['service_type'] = 'نوع الخدمة غير موجود'
+            except Exception as e:
+                errors['__all__'] = str(e)
+
+        for field, msg in errors.items():
+            messages.error(request, msg)
+
+    service_types = ServiceType.objects.filter(is_active=True).order_by('order', 'name')
+
+    # تجميع حسب الفئة لعرض optgroups
+    from collections import defaultdict
+    category_labels = dict(ServiceType.CATEGORY_CHOICES)
+    _grouped = defaultdict(list)
+    for st in service_types:
+        _grouped[st.category].append(st)
+    service_types_grouped = [
+        {'category': cat, 'label': category_labels.get(cat, cat), 'types': types}
+        for cat, types in _grouped.items()
+    ]
+
+    form_data = {
+        'name':         request.POST.get('name', ''),
+        'base_price':   request.POST.get('base_price', '0'),
+        'setup_cost':   request.POST.get('setup_cost', '0'),
+        'notes':        request.POST.get('notes', ''),
+        'is_active':    True,
+        'service_type': request.POST.get('service_type', ''),
+    }
+    import json
+    context = {
+        'supplier':               supplier,
+        'service_types':          service_types,
+        'service_types_grouped':  service_types_grouped,
+        'service_types_schemas':  json.dumps({str(st.pk): st.attribute_schema for st in service_types}, ensure_ascii=False),
+        'form_data':              form_data,
+        'page_title':             f'إضافة خدمة — {supplier.name}',
+        'page_icon':              'fas fa-plus-circle',
+        'header_buttons': [
+            {'url': reverse('supplier:supplier_detail', kwargs={'pk': pk}), 'icon': 'fa-arrow-right', 'text': 'العودة', 'class': 'btn-secondary'},
+        ],
+        'breadcrumb_items': [
+            {'title': 'الرئيسية', 'url': reverse('core:dashboard'), 'icon': 'fas fa-home'},
+            {'title': 'الموردين', 'url': reverse('supplier:supplier_list'), 'icon': 'fas fa-truck'},
+            {'title': supplier.name, 'url': reverse('supplier:supplier_detail', kwargs={'pk': pk})},
+            {'title': 'إضافة خدمة', 'active': True},
+        ],
+    }
+    return render(request, 'supplier/services/service_form.html', context)
+
+
+@login_required
+def supplier_service_edit(request, pk, service_pk):
+    """تعديل خدمة مورد"""
+    supplier = get_object_or_404(Supplier, pk=pk)
+    from supplier.models import SupplierService, ServiceType
+    service = get_object_or_404(SupplierService, pk=service_pk, supplier=supplier)
+
+    if request.method == 'POST':
+        name       = request.POST.get('name', '').strip()
+        base_price = request.POST.get('base_price', '0') or '0'
+        setup_cost = request.POST.get('setup_cost', '0') or '0'
+        notes      = request.POST.get('notes', '')
+        is_active  = request.POST.get('is_active') == 'on'
+
+        attributes = {}
+        for key, val in request.POST.items():
+            if key.startswith('attr_'):
+                attributes[key[5:]] = val
+
+        if not name:
+            messages.error(request, 'اسم الخدمة مطلوب')
+        else:
+            try:
+                from decimal import Decimal
+                service.name       = name
+                service.base_price = Decimal(base_price) if base_price else Decimal('0')
+                service.setup_cost = Decimal(setup_cost) if setup_cost else Decimal('0')
+                service.attributes = attributes
+                service.notes      = notes
+                service.is_active  = is_active
+                service.save()
+                messages.success(request, f'تم تحديث الخدمة "{name}" بنجاح')
+                return redirect(reverse('supplier:supplier_detail', kwargs={'pk': pk}) + '#services-tab-pane')
+            except Exception as e:
+                messages.error(request, str(e))
+
+    service_types = ServiceType.objects.filter(is_active=True).order_by('order', 'name')
+    form_data = {
+        'name':       service.name,
+        'base_price': service.base_price,
+        'setup_cost': service.setup_cost,
+        'notes':      service.notes,
+        'is_active':  service.is_active,
+    }
+    import json
+    context = {
+        'supplier':       supplier,
+        'service':        service,
+        'service_types':  service_types,
+        'service_types_schemas': json.dumps({str(st.pk): st.attribute_schema for st in service_types}, ensure_ascii=False),
+        'form_data':      form_data,
+        'schema_sources': _get_schema_sources(service.service_type.attribute_schema),
+        'page_title':     f'تعديل خدمة — {supplier.name}',
+        'page_icon':      'fas fa-edit',
+        'header_buttons': [
+            {'url': reverse('supplier:supplier_detail', kwargs={'pk': pk}), 'icon': 'fa-arrow-right', 'text': 'العودة', 'class': 'btn-secondary'},
+        ],
+        'breadcrumb_items': [
+            {'title': 'الرئيسية', 'url': reverse('core:dashboard'), 'icon': 'fas fa-home'},
+            {'title': 'الموردين', 'url': reverse('supplier:supplier_list'), 'icon': 'fas fa-truck'},
+            {'title': supplier.name, 'url': reverse('supplier:supplier_detail', kwargs={'pk': pk})},
+            {'title': 'تعديل خدمة', 'active': True},
+        ],
+    }
+    return render(request, 'supplier/services/service_form.html', context)
+
+
+@login_required
+def supplier_service_delete(request, pk, service_pk):
+    """حذف خدمة مورد (POST فقط)"""
+    supplier = get_object_or_404(Supplier, pk=pk)
+    from supplier.models import SupplierService
+    service = get_object_or_404(SupplierService, pk=service_pk, supplier=supplier)
+
+    if request.method == 'POST':
+        name = service.name
+        service.delete()
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'success': True, 'message': f'تم حذف الخدمة "{name}" بنجاح'})
+        messages.success(request, f'تم حذف الخدمة "{name}" بنجاح')
+
+    return redirect(reverse('supplier:supplier_detail', kwargs={'pk': pk}) + '#services-tab-pane')
+
+
+@login_required
+def supplier_service_toggle(request, pk, service_pk):
+    """تفعيل/تعطيل خدمة مورد (AJAX POST)"""
+    supplier = get_object_or_404(Supplier, pk=pk)
+    from supplier.models import SupplierService
+    service = get_object_or_404(SupplierService, pk=service_pk, supplier=supplier)
+
+    if request.method == 'POST':
+        service.is_active = not service.is_active
+        service.save(update_fields=['is_active'])
+        status = 'نشطة' if service.is_active else 'معطلة'
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'success': True, 'is_active': service.is_active, 'message': f'الخدمة أصبحت {status}'})
+
+    return redirect(reverse('supplier:supplier_detail', kwargs={'pk': pk}) + '#services-tab-pane')
+
+
+@login_required
+def supplier_services_api(request, pk):
+    """API — جلب خدمات مورد معين (JSON)"""
+    supplier = get_object_or_404(Supplier, pk=pk)
+    from supplier.models import SupplierService
+    service_type_code = request.GET.get('service_type', '')
+
+    qs = SupplierService.objects.filter(supplier=supplier, is_active=True).select_related('service_type')
+    if service_type_code:
+        qs = qs.filter(service_type__code=service_type_code)
+
+    data = [
+        {
+            'id':           s.id,
+            'name':         s.name,
+            'service_type': s.service_type.code,
+            'base_price':   float(s.base_price),
+            'setup_cost':   float(s.setup_cost),
+            'attributes':   s.attributes,
+        }
+        for s in qs.order_by('service_type__order', 'name')
+    ]
+    return JsonResponse({'success': True, 'services': data, 'total_count': len(data)})
+
+
+# ================================================================
+# المرحلة 5 — الشرائح السعرية (ServicePriceTier)
+# ================================================================
+
+@login_required
+def supplier_service_detail(request, pk, service_pk):
+    """صفحة تفاصيل الخدمة مع جدول الشرائح السعرية"""
+    supplier = get_object_or_404(Supplier, pk=pk)
+    from supplier.models import SupplierService, ServicePriceTier
+    service = get_object_or_404(SupplierService, pk=service_pk, supplier=supplier)
+
+    tiers = service.price_tiers.all().order_by('min_quantity')
+
+    tiers_headers = [
+        {'key': 'min_quantity',   'label': 'الحد الأدنى',  'sortable': True,  'class': 'text-center', 'width': '20%'},
+        {'key': 'max_quantity',   'label': 'الحد الأقصى',  'sortable': True,  'class': 'text-center', 'width': '20%'},
+        {'key': 'price_per_unit', 'label': 'السعر/وحدة',   'sortable': True,  'class': 'text-center', 'format': 'currency', 'width': '20%'},
+        {'key': 'is_active',      'label': 'الحالة',        'sortable': True,  'class': 'text-center', 'format': 'status',   'width': '15%'},
+        {'key': 'actions',        'label': 'الإجراءات',     'sortable': False, 'class': 'text-center', 'width': '25%'},
+    ]
+
+    tiers_data = []
+    for tier in tiers:
+        max_q = tier.max_quantity if tier.max_quantity else '∞'
+        actions_html = (
+            f'<a href="{reverse("supplier:price_tier_edit", kwargs={"pk": pk, "service_pk": service_pk, "tier_pk": tier.pk})}" '
+            f'class="btn btn-sm btn-outline-primary me-1" title="تعديل"><i class="fas fa-edit"></i></a>'
+            f'<button onclick="deleteTier({tier.pk}, \'{tier.min_quantity}–{max_q}\')" '
+            f'class="btn btn-sm btn-outline-danger" title="حذف"><i class="fas fa-trash"></i></button>'
+        )
+        tiers_data.append({
+            'id':            tier.pk,
+            'min_quantity':  tier.min_quantity,
+            'max_quantity':  tier.max_quantity if tier.max_quantity else '—',
+            'price_per_unit': tier.price_per_unit,
+            'is_active':     tier.is_active,
+            'actions':       actions_html,
+        })
+
+    context = {
+        'supplier':    supplier,
+        'service':     service,
+        'tiers':       tiers,
+        'tiers_headers': tiers_headers,
+        'tiers_data':  tiers_data,
+        'title':       f'خدمة: {service.name}',
+        'page_icon':   service.service_type.icon,
+        'header_buttons': [
+            {'url': reverse('supplier:price_tier_add', kwargs={'pk': pk, 'service_pk': service_pk}), 'icon': 'fa-plus', 'text': 'إضافة شريحة', 'class': 'btn-success'},
+            {'url': reverse('supplier:supplier_service_edit', kwargs={'pk': pk, 'service_pk': service_pk}), 'icon': 'fa-edit', 'text': 'تعديل الخدمة', 'class': 'btn-primary'},
+            {'url': reverse('supplier:supplier_detail', kwargs={'pk': pk}) + '#services-tab-pane', 'icon': 'fa-arrow-right', 'text': 'العودة', 'class': 'btn-secondary'},
+        ],
+        'breadcrumb_items': [
+            {'title': 'الرئيسية', 'url': reverse('core:dashboard'), 'icon': 'fas fa-home'},
+            {'title': 'الموردين', 'url': reverse('supplier:supplier_list'), 'icon': 'fas fa-truck'},
+            {'title': supplier.name, 'url': reverse('supplier:supplier_detail', kwargs={'pk': pk})},
+            {'title': 'خدمات التسعير', 'url': reverse('supplier:supplier_detail', kwargs={'pk': pk}) + '#services-tab-pane'},
+            {'title': service.name, 'active': True},
+        ],
+    }
+    return render(request, 'supplier/services/service_detail.html', context)
+
+
+@login_required
+def price_tier_add(request, pk, service_pk):
+    """إضافة شريحة سعرية جديدة"""
+    supplier = get_object_or_404(Supplier, pk=pk)
+    from supplier.models import SupplierService, ServicePriceTier
+    from decimal import Decimal, InvalidOperation
+    service = get_object_or_404(SupplierService, pk=service_pk, supplier=supplier)
+
+    if request.method == 'POST':
+        min_q  = request.POST.get('min_quantity', '').strip()
+        max_q  = request.POST.get('max_quantity', '').strip()
+        price  = request.POST.get('price_per_unit', '').strip()
+        is_active = request.POST.get('is_active') == 'on'
+
+        errors = {}
+        if not min_q or not min_q.isdigit():
+            errors['min_quantity'] = 'الحد الأدنى مطلوب ويجب أن يكون رقماً صحيحاً'
+        if max_q and not max_q.isdigit():
+            errors['max_quantity'] = 'الحد الأقصى يجب أن يكون رقماً صحيحاً'
+        if max_q and min_q and int(max_q) < int(min_q):
+            errors['max_quantity'] = 'الحد الأقصى يجب أن يكون أكبر من أو يساوي الحد الأدنى'
+        try:
+            price_val = Decimal(price)
+            if price_val < 0:
+                errors['price_per_unit'] = 'السعر يجب أن يكون موجباً'
+        except (InvalidOperation, ValueError):
+            errors['price_per_unit'] = 'السعر مطلوب ويجب أن يكون رقماً'
+
+        if not errors:
+            ServicePriceTier.objects.create(
+                service=service,
+                min_quantity=int(min_q),
+                max_quantity=int(max_q) if max_q else None,
+                price_per_unit=price_val,
+                is_active=is_active,
+            )
+            messages.success(request, 'تم إضافة الشريحة السعرية بنجاح')
+            return redirect(reverse('supplier:supplier_service_detail', kwargs={'pk': pk, 'service_pk': service_pk}))
+
+        for msg in errors.values():
+            messages.error(request, msg)
+
+    context = {
+        'supplier': supplier,
+        'service':  service,
+        'form_data': {
+            'min_quantity':   request.POST.get('min_quantity', ''),
+            'max_quantity':   request.POST.get('max_quantity', ''),
+            'price_per_unit': request.POST.get('price_per_unit', ''),
+            'is_active':      True,
+        },
+        'is_edit':   False,
+        'title':     f'إضافة شريحة — {service.name}',
+        'page_icon': 'fas fa-plus-circle',
+        'header_buttons': [
+            {'url': reverse('supplier:supplier_service_detail', kwargs={'pk': pk, 'service_pk': service_pk}), 'icon': 'fa-arrow-right', 'text': 'العودة', 'class': 'btn-secondary'},
+        ],
+        'breadcrumb_items': [
+            {'title': 'الرئيسية', 'url': reverse('core:dashboard'), 'icon': 'fas fa-home'},
+            {'title': 'الموردين', 'url': reverse('supplier:supplier_list'), 'icon': 'fas fa-truck'},
+            {'title': supplier.name, 'url': reverse('supplier:supplier_detail', kwargs={'pk': pk})},
+            {'title': service.name, 'url': reverse('supplier:supplier_service_detail', kwargs={'pk': pk, 'service_pk': service_pk})},
+            {'title': 'إضافة شريحة', 'active': True},
+        ],
+    }
+    return render(request, 'supplier/services/price_tier_form.html', context)
+
+
+@login_required
+def price_tier_edit(request, pk, service_pk, tier_pk):
+    """تعديل شريحة سعرية"""
+    supplier = get_object_or_404(Supplier, pk=pk)
+    from supplier.models import SupplierService, ServicePriceTier
+    from decimal import Decimal, InvalidOperation
+    service = get_object_or_404(SupplierService, pk=service_pk, supplier=supplier)
+    tier    = get_object_or_404(ServicePriceTier, pk=tier_pk, service=service)
+
+    if request.method == 'POST':
+        min_q  = request.POST.get('min_quantity', '').strip()
+        max_q  = request.POST.get('max_quantity', '').strip()
+        price  = request.POST.get('price_per_unit', '').strip()
+        is_active = request.POST.get('is_active') == 'on'
+
+        errors = {}
+        if not min_q or not min_q.isdigit():
+            errors['min_quantity'] = 'الحد الأدنى مطلوب ويجب أن يكون رقماً صحيحاً'
+        if max_q and not max_q.isdigit():
+            errors['max_quantity'] = 'الحد الأقصى يجب أن يكون رقماً صحيحاً'
+        if max_q and min_q and int(max_q) < int(min_q):
+            errors['max_quantity'] = 'الحد الأقصى يجب أن يكون أكبر من أو يساوي الحد الأدنى'
+        try:
+            price_val = Decimal(price)
+            if price_val < 0:
+                errors['price_per_unit'] = 'السعر يجب أن يكون موجباً'
+        except (InvalidOperation, ValueError):
+            errors['price_per_unit'] = 'السعر مطلوب ويجب أن يكون رقماً'
+
+        if not errors:
+            tier.min_quantity   = int(min_q)
+            tier.max_quantity   = int(max_q) if max_q else None
+            tier.price_per_unit = price_val
+            tier.is_active      = is_active
+            tier.save()
+            messages.success(request, 'تم تحديث الشريحة السعرية بنجاح')
+            return redirect(reverse('supplier:supplier_service_detail', kwargs={'pk': pk, 'service_pk': service_pk}))
+
+        for msg in errors.values():
+            messages.error(request, msg)
+
+    context = {
+        'supplier': supplier,
+        'service':  service,
+        'tier':     tier,
+        'form_data': {
+            'min_quantity':   request.POST.get('min_quantity', tier.min_quantity),
+            'max_quantity':   request.POST.get('max_quantity', tier.max_quantity or ''),
+            'price_per_unit': request.POST.get('price_per_unit', tier.price_per_unit),
+            'is_active':      tier.is_active,
+        },
+        'is_edit':   True,
+        'title':     f'تعديل شريحة — {service.name}',
+        'page_icon': 'fas fa-edit',
+        'header_buttons': [
+            {'url': reverse('supplier:supplier_service_detail', kwargs={'pk': pk, 'service_pk': service_pk}), 'icon': 'fa-arrow-right', 'text': 'العودة', 'class': 'btn-secondary'},
+        ],
+        'breadcrumb_items': [
+            {'title': 'الرئيسية', 'url': reverse('core:dashboard'), 'icon': 'fas fa-home'},
+            {'title': 'الموردين', 'url': reverse('supplier:supplier_list'), 'icon': 'fas fa-truck'},
+            {'title': supplier.name, 'url': reverse('supplier:supplier_detail', kwargs={'pk': pk})},
+            {'title': service.name, 'url': reverse('supplier:supplier_service_detail', kwargs={'pk': pk, 'service_pk': service_pk})},
+            {'title': 'تعديل شريحة', 'active': True},
+        ],
+    }
+    return render(request, 'supplier/services/price_tier_form.html', context)
+
+
+@login_required
+def price_tier_delete(request, pk, service_pk, tier_pk):
+    """حذف شريحة سعرية (POST فقط)"""
+    supplier = get_object_or_404(Supplier, pk=pk)
+    from supplier.models import SupplierService, ServicePriceTier
+    service = get_object_or_404(SupplierService, pk=service_pk, supplier=supplier)
+    tier    = get_object_or_404(ServicePriceTier, pk=tier_pk, service=service)
+
+    if request.method == 'POST':
+        tier.delete()
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'success': True, 'message': 'تم حذف الشريحة بنجاح'})
+        messages.success(request, 'تم حذف الشريحة السعرية بنجاح')
+
+    return redirect(reverse('supplier:supplier_service_detail', kwargs={'pk': pk, 'service_pk': service_pk}))
+
+
+@login_required
+def price_tier_toggle(request, pk, service_pk, tier_pk):
+    """تفعيل/تعطيل شريحة سعرية (AJAX POST)"""
+    supplier = get_object_or_404(Supplier, pk=pk)
+    from supplier.models import SupplierService, ServicePriceTier
+    service = get_object_or_404(SupplierService, pk=service_pk, supplier=supplier)
+    tier    = get_object_or_404(ServicePriceTier, pk=tier_pk, service=service)
+
+    if request.method == 'POST':
+        tier.is_active = not tier.is_active
+        tier.save(update_fields=['is_active'])
+        status = 'نشطة' if tier.is_active else 'معطلة'
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'success': True, 'is_active': tier.is_active, 'message': f'الشريحة أصبحت {status}'})
+
+    return redirect(reverse('supplier:supplier_service_detail', kwargs={'pk': pk, 'service_pk': service_pk}))
+
+
+@login_required
+def service_price_api(request, service_pk):
+    """API — جلب سعر خدمة لكمية معينة"""
+    from supplier.services.supplier_service import SupplierService as SupplierServiceClass
+    quantity = int(request.GET.get('quantity', 1))
+    result = SupplierServiceClass.get_service_price(service_pk, quantity)
+    if result:
+        return JsonResponse({'success': True, **{k: float(v) if hasattr(v, '__float__') else v for k, v in result.items()}})
+    return JsonResponse({'success': False, 'message': 'الخدمة غير موجودة'}, status=404)
+
+
+def _get_schema_sources(schema):
+    """جلب خيارات حقول source من printing_pricing لاستخدامها في server-side rendering."""
+    sources = {}
+    try:
+        import printing_pricing.models.settings_models as sm
+        for key, defn in schema.items():
+            if defn.get('type') == 'select' and defn.get('source'):
+                src = defn['source']
+                if src not in sources:
+                    model = getattr(sm, src, None)
+                    if model:
+                        qs = model.objects.all()
+                        if hasattr(model, 'is_active'):
+                            qs = qs.filter(is_active=True)
+                        name_field = 'name' if hasattr(model, 'name') else 'pk'
+                        sources[src] = [str(obj) for obj in qs.order_by(name_field)]
+                    else:
+                        sources[src] = []
+    except Exception:
+        pass
+    return sources
+
+
+@login_required
+def service_type_schema_options_api(request):
+    """
+    API — جلب خيارات حقل source معين من printing_pricing.
+    GET /supplier/api/schema-options/?source=PaperType
+    """
+    source = request.GET.get('source', '').strip()
+    if not source:
+        return JsonResponse({'success': False, 'options': []})
+
+    try:
+        import printing_pricing.models.settings_models as sm
+        model = getattr(sm, source, None)
+        if not model:
+            return JsonResponse({'success': False, 'options': [], 'message': f'{source} غير موجود'})
+
+        qs = model.objects.all()
+        if hasattr(model, 'is_active'):
+            qs = qs.filter(is_active=True)
+
+        # محاولة جلب الاسم من حقل name أو __str__
+        name_field = 'name' if hasattr(model, 'name') else None
+        options = []
+        for obj in qs.order_by(name_field or 'pk'):
+            options.append({'value': str(obj), 'label': str(obj)})
+
+        return JsonResponse({'success': True, 'options': options})
+    except Exception as e:
+        return JsonResponse({'success': False, 'options': [], 'message': str(e)})

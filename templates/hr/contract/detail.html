@@ -136,6 +136,7 @@
     {% endif %}
 
     <!-- الإحصائيات -->
+    {% if not is_hr_only %}
     <div class="section-container">
         <h5 class="section-title"><i class="fas fa-chart-bar me-2"></i>الإحصائيات العامة</h5>
         <div class="row">
@@ -146,7 +147,7 @@
                         <div class="stats-card-icon">
                             <i class="fas fa-money-check"></i>
                         </div>
-                        <div class="stats-card-title">الراتب الأساسي</div>
+                        <div class="stats-card-title">الأجر الأساسي</div>
                         <div class="stats-card-value">{{ contract.basic_salary|custom_number_format }}</div>
                         <small class="text-muted">{% currency_symbol %}</small>
                     </div>
@@ -193,6 +194,7 @@
             </div>
         </div>
     </div>
+    {% endif %}
 
     <!-- Tabs للمحتوى -->
     <ul class="nav nav-tabs custom-tabs" role="tablist">
@@ -201,6 +203,7 @@
                 <i class="fas fa-info-circle me-1"></i>التفاصيل
             </button>
         </li>
+        {% if not is_hr_only %}
         <li class="nav-item">
             <button class="nav-link" data-bs-toggle="tab" data-bs-target="#salary-tab">
                 <i class="fas fa-money-bill-wave me-1"></i>الراتب
@@ -232,6 +235,7 @@
                 <i class="fas fa-file-alt me-1"></i>الشروط
             </button>
         </li>
+        {% endif %}
     </ul>
 
     <!-- Tab Content -->
@@ -354,9 +358,9 @@
                             <div class="col-md-6 mb-3">
                                 <small class="text-muted d-block">نوع الزيادة</small>
                                 <strong>
-                                    {% if contract.annual_increase_type == 'percentage' %}
+                                    {% if contract.increase_type == 'percentage' %}
                                         <i class="fas fa-percentage me-1 text-primary"></i>نسبة مئوية
-                                    {% elif contract.annual_increase_type == 'fixed' %}
+                                    {% elif contract.increase_type == 'fixed' %}
                                         <i class="fas fa-coins me-1 text-success"></i>مبلغ ثابت
                                     {% endif %}
                                 </strong>
@@ -364,24 +368,24 @@
                             <div class="col-md-6 mb-3">
                                 <small class="text-muted d-block">قيمة الزيادة</small>
                                 <strong class="text-success">
-                                    {% if contract.annual_increase_type == 'percentage' %}
+                                    {% if contract.increase_type == 'percentage' %}
                                         {{ contract.annual_increase_percentage|custom_number_format }}%
-                                    {% elif contract.annual_increase_type == 'fixed' %}
+                                    {% elif contract.increase_type == 'fixed' %}
                                         {{ contract.annual_increase_amount|custom_number_format }} {% currency_symbol %}
                                     {% endif %}
                                 </strong>
                             </div>
                             <div class="col-md-6 mb-3">
-                                <small class="text-muted d-block">شهر تطبيق الزيادة</small>
+                                <small class="text-muted d-block">بداية احتساب الزيادة</small>
                                 <strong>
                                     <i class="fas fa-calendar me-1 text-info"></i>
-                                    {{ contract.get_annual_increase_month_display }}
+                                    {{ contract.get_increase_start_reference_display }}
                                 </strong>
                             </div>
                             <div class="col-md-6 mb-3">
-                                <small class="text-muted d-block">الزيادة المحسوبة</small>
+                                <small class="text-muted d-block">تكرار الزيادة</small>
                                 <strong class="text-primary">
-                                    {{ contract.calculated_annual_increase|custom_number_format }} {% currency_symbol %}
+                                    {{ contract.get_increase_frequency_display }}
                                 </strong>
                             </div>
                             <div class="col-md-6 mb-3">
@@ -579,8 +583,18 @@
                         <h6 class="alert-heading"><i class="fas fa-check-circle me-2"></i>الزيادة السنوية مفعلة</h6>
                         <div class="row">
                             <div class="col-md-3">
-                                <small class="text-muted d-block">النسبة السنوية</small>
-                                <strong class="h5">{{ contract.annual_increase_percentage }}%</strong>
+                                <small class="text-muted d-block">نوع الزيادة</small>
+                                <strong class="h6">{{ contract.get_increase_type_display }}</strong>
+                            </div>
+                            <div class="col-md-3">
+                                <small class="text-muted d-block">قيمة الزيادة</small>
+                                <strong class="h5">
+                                    {% if contract.increase_type == 'percentage' %}
+                                        {{ contract.annual_increase_percentage }}%
+                                    {% else %}
+                                        {{ contract.annual_increase_amount|custom_number_format }} {% currency_symbol %}
+                                    {% endif %}
+                                </strong>
                             </div>
                             <div class="col-md-3">
                                 <small class="text-muted d-block">التكرار</small>
@@ -590,7 +604,9 @@
                                 <small class="text-muted d-block">بداية الاحتساب</small>
                                 <strong>{{ contract.get_increase_start_reference_display }}</strong>
                             </div>
-                            <div class="col-md-3">
+                        </div>
+                        <div class="row mt-2">
+                            <div class="col-md-12">
                                 <small class="text-muted d-block">الزيادة القادمة</small>
                                 <strong class="text-primary">
                                     {% if contract.next_increase_date %}
@@ -897,7 +913,7 @@ function deleteDocument(docId) {
 
 // دوال الزيادات
 function applyIncrease(increaseId) {
-    if (confirm('هل أنت متأكد من تطبيق هذه الزيادة؟ سيتم تحديث الراتب الأساسي للعقد.')) {
+    if (confirm('هل أنت متأكد من تطبيق هذه الزيادة؟ سيتم تحديث الأجر الأساسي للعقد.')) {
         fetch(`/hr/contracts/increases/${increaseId}/apply/`, {
             method: 'POST',
             headers: {

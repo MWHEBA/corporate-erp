@@ -40,7 +40,7 @@
         </div>
         <div class="table-container">
             <!-- استخدام الجدول الموحد - المكون يتعامل مع الحالة الفارغة تلقائياً -->
-            {% include "components/data_table.html" with table_id="warehouses-table" headers=warehouse_headers data=warehouses action_buttons=warehouse_actions empty_message="لا توجد مخازن متاحة" clickable_rows=True row_click_url="/products/warehouses/0/" show_export=True export_filename="warehouses" %}
+            {% include "components/data_table.html" with table_id="warehouses-table" headers=warehouse_headers data=warehouses empty_message="لا توجد مخازن متاحة" clickable_rows=True row_click_url="/products/warehouses/0/" show_export=True export_filename="warehouses" %}
         </div>
     </div>
 </div>

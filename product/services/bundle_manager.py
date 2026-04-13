@@ -82,9 +82,6 @@ class BundleManager:
                 if not integrity_check[0]:
                     raise ValidationError(integrity_check[1])
                 
-                logger.info(
-                    f"تم إنشاء المنتج المجمع {bundle_product.name} بنجاح مع {len(components)} مكونات"
-                )
                 
                 return True, bundle_product, None
                 
@@ -153,10 +150,6 @@ class BundleManager:
                 from .stock_calculation_engine import StockCalculationEngine
                 StockCalculationEngine.recalculate_affected_bundles(bundle_product)
                 
-                logger.info(
-                    f"تم تحديث مكونات المنتج المجمع {bundle_product.name}. "
-                    f"المكونات القديمة: {len(old_components)}, المكونات الجديدة: {len(new_component_objects)}"
-                )
                 
                 return True, None
                 
@@ -531,15 +524,14 @@ class BundleManager:
             discount_rate=product_data.get('discount_rate', 0),
             created_by=created_by,
             is_bundle=True,  # هذا هو الأهم - تعيين المنتج كمجمع
-            # حقول المنتج إذا كانت موجودة
+            # نوع المنتج وخصائصه
             item_type=product_data.get('item_type', 'general'),
-            product_size=product_data.get('product_size', ''),
-            product_color=product_data.get('product_color', ''),
-            product_material=product_data.get('product_material', ''),
-            is_safe=product_data.get('is_safe', True),
+            suitable_for_grades=product_data.get('suitable_for_grades', ''),
+            uniform_size=product_data.get('uniform_size', ''),
+            uniform_gender=product_data.get('uniform_gender', ''),
+            educational_subject=product_data.get('educational_subject', ''),
+            is_child_safe=product_data.get('is_child_safe', True),
             quality_certificate=product_data.get('quality_certificate', ''),
-            is_sold_to_customers=product_data.get('is_sold_to_customers', False),
-            customer_selling_price=product_data.get('customer_selling_price'),
         )
         
         return bundle_product
@@ -601,41 +593,21 @@ class BundleManager:
                 'destructive_changes': []
             }
             
-            # فحص طلبات المنتجات الموجودة
+            # فحص المبيعات من sale.models
             try:
-                from student_products.models import ProductRequest
+                from sale.models import SaleItem
                 
-                # البحث عن طلبات المنتج المجمع
-                product_requests = ProductRequest.objects.filter(
-                    product=bundle_product
-                ).select_related('student', 'delivery_receipt')
+                sale_items = SaleItem.objects.filter(product=bundle_product)
                 
-                if product_requests.exists():
+                if sale_items.exists():
                     usage_info['has_sales'] = True
-                    usage_info['sales_count'] = product_requests.count()
+                    usage_info['sales_count'] = sale_items.count()
                     usage_info['total_sold_quantity'] = sum(
-                        float(item.quantity) for item in product_requests
+                        float(item.quantity) for item in sale_items
                     )
-                    
-                    # آخر تاريخ تسليم
-                    latest_delivery = product_requests.filter(
-                        status='delivered'
-                    ).order_by('-delivered_at').first()
-                    if latest_delivery:
-                        usage_info['last_sale_date'] = latest_delivery.delivered_at.date()
-                    
-                    # فحص الطلبات المعلقة (غير المُسلمة)
-                    pending_requests = product_requests.filter(
-                        status='pending'
-                    )
-                    
-                    if pending_requests.exists():
-                        usage_info['has_pending_orders'] = True
-                        usage_info['pending_orders_count'] = pending_requests.count()
                 
             except ImportError:
-                # في حالة عدم وجود نموذج طلبات المنتجات
-                logger.info("نموذج طلبات المنتجات غير متاح")
+                logger.info("نموذج المبيعات غير متاح")
             
             # تحديد إمكانية التعديل الآمن
             if usage_info['has_sales'] or usage_info['has_pending_orders']:

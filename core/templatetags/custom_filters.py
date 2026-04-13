@@ -348,7 +348,6 @@ def has_module_access(context, module_name):
         "enhanced_financial": ["financial.view_account", "financial.view_transaction"],
         "advanced_reports": ["financial.view_account", "financial.view_transaction"],
         # "sales": ["sale.view_sale"],  # تم تعطيل المبيعات
-        "students": ["students.view_student"],
         "purchases": ["purchase.view_purchase"],
         "clients": ["client.view_customer"],
         "suppliers": ["supplier.view_supplier"],
@@ -875,22 +874,32 @@ def format_code_badge(code):
 @register.filter
 def remove_trailing_zeros(value):
     """
-    إزالة الأصفار الزائدة من نهاية الرقم العشري
+    إزالة الأصفار الزائدة من نهاية الرقم العشري مع إضافة فواصل الآلاف
+    مثال: 7.00 -> 7 | 7.50 -> 7.5 | 10000 -> 10,000 | 10000.50 -> 10,000.5
     """
     try:
         if value is None:
             return "0"
-        
-        # تحويل إلى float ثم إلى string
-        float_val = float(value)
-        
-        # إذا كان عدد صحيح، أرجعه بدون نقطة عشرية
-        if float_val == int(float_val):
-            return str(int(float_val))
-        
-        # إزالة الأصفار الزائدة
-        return str(float_val).rstrip('0').rstrip('.')
-    except (ValueError, TypeError):
+
+        from decimal import Decimal, InvalidOperation
+        if isinstance(value, str):
+            value = value.replace(',', '')
+
+        decimal_value = Decimal(str(value))
+        normalized = decimal_value.normalize()
+        str_value = str(normalized)
+
+        if "E" in str_value.upper():
+            str_value = f"{float(normalized):g}"
+
+        if '.' in str_value:
+            integer_part, decimal_part = str_value.split('.')
+            integer_part = f"{int(integer_part):,}"
+            return f"{integer_part}.{decimal_part}"
+        else:
+            return f"{int(str_value):,}"
+
+    except (ValueError, TypeError, Exception):
         return str(value)
 
 
@@ -923,3 +932,11 @@ def remove_prefix(value, prefix):
         return text[len(prefix):].strip()
     
     return text
+
+
+@register.filter
+def is_list(value):
+    """
+    تحقق مما إذا كانت القيمة عبارة عن قائمة أو tuple
+    """
+    return isinstance(value, (list, tuple))

@@ -1,5 +1,5 @@
 """
-اختبارات شاملة لـ APIs الموردين - تغطية 100%
+اختبارات شاملة لـ APIs الموردين
 """
 
 from django.test import TestCase, Client

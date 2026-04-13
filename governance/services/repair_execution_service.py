@@ -424,10 +424,8 @@ class RepairExecutionService:
         description = issue.get('description', '')
         
         # Attempt different relinking strategies based on entry type
-        if entry_type == 'parent_payment':
-            return self._relink_parent_payment(entry, description, result)
-        elif entry_type == 'fee':
-            return self._relink_fee_entry(entry, description, result)
+        if entry_type == 'customer_payment':
+            return self._relink_customer_payment(entry, description, result)
         elif entry_type == 'automatic' and 'Stock movement' in description:
             return self._relink_stock_movement(entry, description, result)
         elif entry_type == 'application_fee':
@@ -436,76 +434,36 @@ class RepairExecutionService:
             # Generic relinking attempt
             return self._generic_relink_attempt(entry, issue, result)
     
-    def _relink_parent_payment(self, entry, description: str, result: RepairExecutionResult) -> bool:
-        """Attempt to relink parent payment journal entry"""
+    def _relink_customer_payment(self, entry, description: str, result: RepairExecutionResult) -> bool:
+        """Attempt to relink customer payment journal entry"""
         try:
-            # Look for FeePayment records that might match
-            FeePayment = apps.get_model('students', 'FeePayment')
-            
-            # Try to find matching payment by description pattern or date
-            potential_payments = FeePayment.objects.filter(
+            CustomerPayment = apps.get_model('client', 'CustomerPayment')
+
+            potential_payments = CustomerPayment.objects.filter(
                 created_at__date=entry.date
             ).order_by('-created_at')
-            
+
             for payment in potential_payments:
-                # Check if this payment already has a journal entry
                 existing_entries = entry.__class__.objects.filter(
-                    source_module='students',
-                    source_model='FeePayment',
+                    source_module='client',
+                    source_model='CustomerPayment',
                     source_id=payment.id
                 ).exclude(id=entry.id)
-                
+
                 if not existing_entries.exists():
-                    # This payment doesn't have a journal entry, link to it
-                    entry.source_module = 'students'
-                    entry.source_model = 'FeePayment'
+                    entry.source_module = 'client'
+                    entry.source_model = 'CustomerPayment'
                     entry.source_id = payment.id
                     entry.save()
-                    
-                    logger.info(f"Successfully relinked journal entry {entry.id} to FeePayment {payment.id}")
+                    logger.info(f"Successfully relinked journal entry {entry.id} to CustomerPayment {payment.id}")
                     return True
-            
+
             return False
-            
+
         except Exception as e:
-            logger.error(f"Error relinking parent payment: {e}")
+            logger.error(f"Error relinking customer payment: {e}")
             return False
-    
-    def _relink_fee_entry(self, entry, description: str, result: RepairExecutionResult) -> bool:
-        """Attempt to relink fee journal entry"""
-        try:
-            # Look for StudentFee records that might match
-            StudentFee = apps.get_model('students', 'StudentFee')
-            
-            # Try to find matching fee by description pattern or date
-            potential_fees = StudentFee.objects.filter(
-                created_at__date=entry.date
-            ).order_by('-created_at')
-            
-            for fee in potential_fees:
-                # Check if this fee already has a journal entry
-                existing_entries = entry.__class__.objects.filter(
-                    source_module='students',
-                    source_model='StudentFee',
-                    source_id=fee.id
-                ).exclude(id=entry.id)
-                
-                if not existing_entries.exists():
-                    # This fee doesn't have a journal entry, link to it
-                    entry.source_module = 'students'
-                    entry.source_model = 'StudentFee'
-                    entry.source_id = fee.id
-                    entry.save()
-                    
-                    logger.info(f"Successfully relinked journal entry {entry.id} to StudentFee {fee.id}")
-                    return True
-            
-            return False
-            
-        except Exception as e:
-            logger.error(f"Error relinking fee entry: {e}")
-            return False
-    
+
     def _relink_stock_movement(self, entry, description: str, result: RepairExecutionResult) -> bool:
         """Attempt to relink stock movement journal entry"""
         try:

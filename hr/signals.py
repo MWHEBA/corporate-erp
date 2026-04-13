@@ -40,12 +40,104 @@ def auto_update_contract_status(sender, instance, **kwargs):
     if instance.end_date and instance.end_date < today:
         if instance.status != 'expired':
             instance.status = 'expired'
-            logger.info(f"تم تحديث حالة العقد {instance.contract_number} إلى 'منتهي'")
     
     # إذا بدأ العقد → active (فقط لو كان draft)
     elif instance.start_date <= today and instance.status == 'draft':
-        instance.status = 'active'
-        logger.info(f"تم تفعيل العقد {instance.contract_number} تلقائياً")
+        # لا نغير الحالة لو تم تعيين _keep_draft صراحةً (مثل الاستيراد الجماعي)
+        if not getattr(instance, '_keep_draft', False):
+            instance.status = 'active'
+
+
+@governed_signal_handler(
+    signal_name="track_contract_status_change",
+    critical=True,
+    description="تتبع تغيير حالة العقد قبل الحفظ"
+)
+@receiver(pre_save, sender='hr.Contract')
+def track_contract_status_change(sender, instance, **kwargs):
+    """
+    حفظ الحالة القديمة للعقد قبل الحفظ
+    يُستخدم لاكتشاف التحول إلى active في post_save
+    """
+    if instance.pk:
+        try:
+            old = sender.objects.get(pk=instance.pk)
+            instance._old_status = old.status
+        except sender.DoesNotExist:
+            instance._old_status = None
+    else:
+        instance._old_status = None
+
+
+@governed_signal_handler(
+    signal_name="copy_salary_components_on_activation",
+    critical=True,
+    description="نسخ بنود الراتب من العقد للموظف عند التفعيل"
+)
+@receiver(post_save, sender='hr.Contract')
+def copy_salary_components_on_activation(sender, instance, created, **kwargs):
+    """
+    نسخ بنود الراتب (ContractSalaryComponent) إلى بنود الموظف (SalaryComponent)
+    عند تفعيل العقد - سواء يدوياً أو تلقائياً عبر pre_save signal
+    """
+    # نتحقق إن العقد أصبح active الآن
+    if instance.status != 'active':
+        return
+
+    old_status = getattr(instance, '_old_status', None)
+
+    # لو كان active قبل كده (مش تغيير جديد) ومش عقد جديد، نتجاهل
+    # إلا لو العقد جديد وحالته active من الأول
+    if not created and old_status == 'active':
+        return
+
+    # لو الـ view بيتعامل مع النسخ بنفسه (save_activate)، نتجنب التكرار
+    # نتحقق من flag مؤقت يضعه الـ view
+    if getattr(instance, '_components_copied_by_view', False):
+        return
+
+    try:
+        with transaction.atomic():
+            from .models.contract_salary_component import ContractSalaryComponent
+            from .models.salary_component import SalaryComponent
+
+            contract_components = ContractSalaryComponent.objects.filter(
+                contract=instance
+            ).order_by('order')
+
+            if not contract_components.exists():
+                return
+
+            employee = instance.employee
+            employee_components = SalaryComponent.objects.filter(
+                employee=employee,
+                is_active=True
+            )
+
+            copied_count = 0
+            for contract_comp in contract_components:
+                # البحث عن بند مطابق عند الموظف
+                existing = employee_components.filter(
+                    source_contract_component=contract_comp,
+                    is_from_contract=True
+                ).first()
+
+                if not existing:
+                    # البند مش موجود - انسخه
+                    new_comp = contract_comp.copy_to_employee_component(employee)
+                    if new_comp:
+                        copied_count += 1
+
+            if copied_count > 0:
+                logger.info(
+                    f"تم نسخ {copied_count} بند راتب للموظف "
+                    f"{employee.get_full_name_ar()} من العقد {instance.contract_number}"
+                )
+
+    except Exception as e:
+        logger.error(
+            f"خطأ في نسخ بنود الراتب للعقد {instance.contract_number}: {str(e)}"
+        )
 
 
 @governed_signal_handler(
@@ -67,10 +159,6 @@ def track_hire_date_change(sender, instance, **kwargs):
                 instance._old_hire_date = old_instance.hire_date
                 instance._hire_date_changed = True
                 
-                logger.info(
-                    f"تم اكتشاف تغيير في تاريخ التعيين للموظف {instance.get_full_name_ar()}: "
-                    f"{old_instance.hire_date} → {instance.hire_date}"
-                )
         except sender.DoesNotExist:
             pass
 
@@ -102,10 +190,6 @@ def update_leave_accrual_on_hire_date_change(sender, instance, created, **kwargs
     if active_contract and active_contract.probation_end_date:
         today = timezone.now().date()
         if today < active_contract.probation_end_date:
-            logger.info(
-                f'⏳ Employee {instance.get_full_name_ar()} is in probation period. '
-                f'Leave accrual will be scheduled for {active_contract.probation_end_date}'
-            )
             # TODO: Schedule task for probation end date
             return
     
@@ -144,60 +228,41 @@ def update_leave_accrual_on_hire_date_change(sender, instance, created, **kwargs
                     # التحقق من إعداد الإنشاء التلقائي
                     from core.models import SystemSetting
                     auto_create = SystemSetting.get_setting('leave_auto_create_balances', True)
-                    
+
                     if not auto_create:
-                        logger.info(
-                            f"تم تخطي إنشاء أرصدة الإجازات للموظف {instance.get_full_name_ar()} - "
-                            f"الإنشاء التلقائي معطل في الإعدادات"
-                        )
                         return
-                    
-                    # إنشاء أرصدة جديدة
+
+                    # إنشاء أرصدة جديدة — single source of truth
                     from .models import LeaveType
-                    leave_types = LeaveType.objects.filter(is_active=True)
-                    
+                    leave_types = LeaveType.objects.filter(is_active=True, category__in=['annual', 'emergency'])
+
                     if leave_types.exists():
-                        months_worked = LeaveAccrualService.calculate_months_worked(instance.hire_date)
-                        accrual_percentage = LeaveAccrualService.get_accrual_percentage(months_worked)
-                        
-                        created_count = 0
                         for leave_type in leave_types:
-                            total_days = leave_type.max_days_per_year
-                            accrued_days = int(total_days * accrual_percentage)
-                            
+                            total_days = LeaveAccrualService.get_entitlement_for_employee(
+                                instance, leave_type
+                            )
                             LeaveBalance.objects.create(
                                 employee=instance,
                                 leave_type=leave_type,
                                 year=current_year,
                                 total_days=total_days,
-                                accrued_days=accrued_days,
+                                accrued_days=total_days,
                                 used_days=0,
-                                remaining_days=accrued_days,
+                                remaining_days=total_days,
                                 accrual_start_date=instance.hire_date,
                                 last_accrual_date=date.today()
                             )
-                            created_count += 1
-                        
-                        logger.info(
-                            f"تم إنشاء {created_count} رصيد إجازة للموظف {instance.get_full_name_ar()} - "
-                            f"السبب: {reason} - "
-                            f"نسبة الاستحقاق: {int(accrual_percentage*100)}%"
-                        )
+
                 else:
                     # تحديث الأرصدة الموجودة
-                    result = LeaveAccrualService.update_employee_accrual(instance, current_year)
-                    
+                    LeaveAccrualService.update_employee_accrual(instance, current_year)
+
                     # تحديث accrual_start_date في جميع الأرصدة
                     LeaveBalance.objects.filter(
                         employee=instance,
                         year=current_year
                     ).update(accrual_start_date=instance.hire_date)
                     
-                    logger.info(
-                        f"تم تحديث أرصدة الإجازات للموظف {instance.get_full_name_ar()} - "
-                        f"السبب: {reason} - "
-                        f"عدد الأرصدة المحدثة: {result['updated_count']}"
-                    )
                 
         except Exception as e:
             logger.error(
@@ -381,9 +446,8 @@ def sync_contract_with_attendance(sender, instance, created, **kwargs):
             if not created and mapping.biometric_user_id != str(instance.biometric_user_id):
                 mapping.biometric_user_id = str(instance.biometric_user_id)
                 mapping.save()
-                logger.info(f"تم تحديث رقم البصمة للموظف {instance.employee.get_full_name_ar()} من {mapping.biometric_user_id} إلى {instance.biometric_user_id}")
             elif created:
-                logger.info(f"تم إنشاء ربط بصمة جديد: {instance.employee.get_full_name_ar()} → {instance.biometric_user_id}")
+                pass
         
         # 2. تحديث بيانات الوظيفة فوراً (عند أي حفظ)
         updated_fields = []
@@ -394,7 +458,6 @@ def sync_contract_with_attendance(sender, instance, created, **kwargs):
             if old_job != instance.job_title:
                 instance.employee.job_title = instance.job_title
                 updated_fields.append('job_title')
-                logger.info(f"تم تحديث وظيفة الموظف {instance.employee.get_full_name_ar()} من {old_job} إلى {instance.job_title}")
                 
                 # تسجيل التغيير كـ Amendment (فقط عند التفعيل)
                 if instance.status == 'active' and old_job:
@@ -428,7 +491,6 @@ def sync_contract_with_attendance(sender, instance, created, **kwargs):
             if old_dept != instance.department:
                 instance.employee.department = instance.department
                 updated_fields.append('department')
-                logger.info(f"تم تحديث قسم الموظف {instance.employee.get_full_name_ar()} من {old_dept} إلى {instance.department}")
         
         # حفظ التحديثات
         if updated_fields:
@@ -443,8 +505,7 @@ def sync_contract_with_attendance(sender, instance, created, **kwargs):
                 devices = BiometricDevice.objects.filter(is_active=True)
                 for device in devices:
                     try:
-                        # هنا يمكن إضافة كود التفعيل الفعلي للبصمة
-                        logger.info(f"تم تفعيل الموظف {instance.employee.get_full_name_ar()} في جهاز البصمة {device.name}")
+                        pass
                     except Exception as e:
                         logger.error(f"خطأ في تفعيل البصمة للموظف {instance.employee.get_full_name_ar()}: {str(e)}")
         
@@ -465,19 +526,17 @@ def sync_contract_with_attendance(sender, instance, created, **kwargs):
                     BiometricUserMapping.objects.filter(
                         employee=instance.employee
                     ).update(is_active=False)
-                    logger.info(f"تم إلغاء تنشيط ربط البصمة للموظف {instance.employee.get_full_name_ar()}")
                     
                     # إيقاف في الأجهزة
                     from hr.models import BiometricDevice
                     devices = BiometricDevice.objects.filter(is_active=True)
                     for device in devices:
                         try:
-                            # هنا يمكن إضافة كود الإيقاف الفعلي للبصمة
-                            logger.info(f"تم إيقاف الموظف {instance.employee.get_full_name_ar()} في جهاز البصمة {device.name}")
+                            pass
                         except Exception as e:
                             logger.error(f"خطأ في إيقاف البصمة للموظف {instance.employee.get_full_name_ar()}: {str(e)}")
             else:
-                logger.info(f"لم يتم إيقاف البصمة للموظف {instance.employee.get_full_name_ar()} - يوجد عقد ساري آخر")
+                pass
             
             # حساب مستحقات نهاية الخدمة (إذا كان منهي)
             if instance.status == 'terminated':
@@ -520,10 +579,6 @@ def calculate_end_of_service_benefits(contract):
         
         total_benefit = daily_salary * Decimal(str(benefit_days))
         
-        logger.info(
-            f"مستحقات نهاية الخدمة للموظف {contract.employee.get_full_name_ar()}: "
-            f"{total_benefit} (مدة الخدمة: {service_years:.2f} سنة)"
-        )
         
         # يمكن حفظ المستحقات في جدول منفصل أو إنشاء سجل مالي
         
@@ -587,7 +642,7 @@ def track_contract_changes(sender, instance, **kwargs):
             'probation_end_date': 'تاريخ انتهاء التجربة',
             
             # الراتب
-            'basic_salary': 'الراتب الأساسي',
+            'basic_salary': 'الأجر الأساسي',
             
             # البنود والشروط
             'terms_and_conditions': 'البنود والشروط',
@@ -656,10 +711,6 @@ def track_contract_changes(sender, instance, **kwargs):
                     'new_value': new_str
                 })
                 
-                logger.info(
-                    f"تغيير في العقد {instance.contract_number}: "
-                    f"{field_label} من '{old_str}' إلى '{new_str}'"
-                )
     
     except sender.DoesNotExist:
         pass
@@ -750,7 +801,6 @@ def create_automatic_amendments(sender, instance, created, **kwargs):
                 created_by=user
             )
             
-            logger.info(f"تم إنشاء تعديل تلقائي {amendment_number} للعقد {instance.contract_number}")
         
         # مسح التغييرات المؤقتة
         delattr(instance, '_tracked_changes')
@@ -817,9 +867,9 @@ def track_salary_component_changes(sender, instance, created, **kwargs):
             component_type_display = instance.get_component_type_display()
             employee_number = instance.employee.employee_number if hasattr(instance, 'employee') and instance.employee else 'Unknown'
             if created:
-                logger.info(f"تم إضافة {component_type_display}: {instance.name} للموظف {employee_number} (بدون عقد نشط)")
+                logger.warning(f"No active contract found for employee {employee_number} when creating {component_type_display}")
             else:
-                logger.info(f"تم تعديل {component_type_display}: {instance.name} للموظف {employee_number} (بدون عقد نشط)")
+                logger.warning(f"No active contract found for employee {employee_number} when updating {component_type_display}")
             return
         
         # للإضافة الجديدة فقط
@@ -870,7 +920,6 @@ def track_salary_component_changes(sender, instance, created, **kwargs):
                     created_by=user
                 )
             
-            logger.info(f"تم تسجيل إضافة {component_type_display}: {instance.name} للعقد {contract.contract_number}")
         
         # للتعديل - تم التحقق من التغيير في البداية
         else:
@@ -923,7 +972,6 @@ def track_salary_component_changes(sender, instance, created, **kwargs):
                     created_by=user
                 )
             
-            logger.info(f"تم تسجيل تعديل {component_type_display}: {instance.name} للعقد {contract.contract_number}")
     
     except Exception as e:
         logger.error(f"خطأ في تتبع تغييرات مكونات الراتب: {str(e)}")
@@ -953,7 +1001,6 @@ def track_salary_component_deletion(sender, instance, **kwargs):
         if not contract:
             component_type_display = instance.get_component_type_display()
             employee_number = instance.employee.employee_number if hasattr(instance, 'employee') and instance.employee else 'Unknown'
-            logger.info(f"تم حذف {component_type_display}: {instance.name} للموظف {employee_number} (بدون عقد نشط)")
             return
         
         # الحصول على المستخدم الحالي
@@ -994,7 +1041,6 @@ def track_salary_component_deletion(sender, instance, **kwargs):
                 created_by=user
             )
         
-        logger.info(f"تم تسجيل حذف {component_type_display}: {instance.name} من العقد {contract.contract_number}")
     
     except Exception as e:
         logger.error(f"خطأ في تتبع حذف مكونات الراتب: {str(e)}")
